@@ -65,6 +65,12 @@
     settings.prefix = C.repos.prefix; save('settings', settings);
   }
   Object.keys(dirty).forEach(function (k) { if (projects[k]) { dirty[projects[k].id] = dirty[k]; delete dirty[k]; } });
+  (function () {   // a change marker for a project that isn't here has nothing to sync
+    var ids = {}; Object.keys(projects).forEach(function (k) { ids[projects[k].id] = 1; });
+    var gone = Object.keys(dirty).filter(function (k) { return k !== 'roster' && !ids[k]; });
+    gone.forEach(function (k) { delete dirty[k]; });
+    if (gone.length) save('dirty', dirty);
+  })();
   var pulledTemplates = load('templates', []);
   var lastSync = load('lastSync', null);    // { at, version, errors }
   var invitations = load('invitations', []);   // repository invitations waiting for this user
@@ -107,7 +113,16 @@
   function assignedContractors(projectId) {
     return M.liveUsers(roster).filter(function (u) { return u.role === 'contractor' && (u.projects || []).indexOf(projectId) >= 0; });
   }
-  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived }); }
+  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed }); }
+  // The sidebar slides over the page on narrow windows; on wide ones it collapses away and
+  // stays that way until opened again.
+  var narrow = window.matchMedia ? window.matchMedia('(max-width: 860px)') : { matches: false };
+  function toggleSidebar() {
+    if (narrow.matches) { $('#app').classList.toggle('nav-open'); return; }
+    ui.sideCollapsed = !ui.sideCollapsed;
+    $('#app').classList.toggle('side-collapsed', ui.sideCollapsed);
+    saveUi();
+  }
 
   // ── Small helpers ────────────────────────────────────────
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -240,7 +255,8 @@
     var archived = list.filter(function (p) { return p.meta.archived; });
     function row(p) {
       var st = M.projectStats(p, TEMPLATES);
-      return '<button class="proj' + (p.slug === ui.slug ? ' active' : '') + '" data-act="open-project" data-slug="' + esc(p.slug) + '">' +
+      var tip = [p.meta.name, [p.meta.client, p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · '), p.meta.stage].filter(Boolean).join('\n');
+      return '<button class="proj' + (p.slug === ui.slug ? ' active' : '') + '" data-act="open-project" data-slug="' + esc(p.slug) + '" title="' + esc(tip) + '">' +
         ring(st.pct, 26, 3.5) +
         '<span class="proj-body"><span class="proj-name">' + esc(p.meta.name) + '</span>' +
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
@@ -1067,32 +1083,50 @@
     var keys = Object.keys(dirty);
     if (!keys.length || syncing) return;
     var byId = stateNow().projects;
+    // A change marker for a project that no longer exists here (e.g. deleted after another
+    // tool marked it) has nothing to throw away: just clear it.
+    var orphans = keys.filter(function (k) { return k !== 'roster' && !byId[k]; });
     var ids = keys.filter(function (k) { return k !== 'roster' && byId[k]; });
+    if (!ids.length && !dirty.roster) {
+      orphans.forEach(function (k) { delete dirty[k]; });
+      persist(); render();
+      toast('Nothing to discard — cleared ' + plural(orphans.length, 'leftover change marker'));
+      return;
+    }
     var names = ids.map(function (id) { return '• ' + byId[id].meta.name; });
     if (dirty.roster) names.push('• People & access');
     if (!confirm('Discard unsynced changes?\n\n' + names.join('\n') + '\n\nThey go back to the last version on GitHub. A project that was never synced is removed from this browser. This can’t be undone.')) return;
-    // Projects never synced are just removed; anything with a copy on GitHub needs the token.
     var started = Object.assign({}, dirty);
+    orphans.forEach(function (k) { delete dirty[k]; });
     syncing = true; renderSyncState('busy');
     workspace().discard(stateNow(), ids, !!dirty.roster).then(function (res) {
       var removed = 0, restored = 0;
       Object.keys(res.projects).forEach(function (id) {
         if (dirty[id] !== started[id]) return;      // edited again while this ran: keep it
         var slug = Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0];
-        if (!slug) return;
+        if (!slug) { delete dirty[id]; return; }
         if (res.projects[id]) { projects[slug] = Object.assign({}, res.projects[id], { slug: slug }); restored++; }
         else { delete projects[slug]; delete homes[id]; removed++; if (ui.slug === slug) ui.slug = ''; }
         delete dirty[id];
       });
-      if (dirty.roster && dirty.roster === started.roster) { roster = res.roster || M.emptyRoster(); delete dirty.roster; restored++; }
+      if (res.roster && dirty.roster && dirty.roster === started.roster) { roster = res.roster; delete dirty.roster; restored++; }
       persist(); saveUi();
       syncing = false;
       selected = null; closeInspector();
       render();
-      toast('Discarded' + (restored ? ' — ' + plural(restored, 'item') + ' restored from GitHub' : '') + (removed ? (restored ? ', ' : ' — ') + plural(removed, 'unsynced project') + ' removed' : ''));
+      var parts = [];
+      if (restored) parts.push(plural(restored, 'item') + ' restored');
+      if (removed) parts.push(plural(removed, 'unsynced project') + ' removed');
+      if (res.failed.length) {
+        var what = res.failed.map(function (f) { return f.id === 'roster' ? 'People & access' : (byId[f.id] ? byId[f.id].meta.name : f.id); });
+        toast((parts.length ? 'Discarded ' + parts.join(', ') + '. ' : '') + 'Couldn’t reach GitHub for ' + what.join(', ') +
+          (getToken() ? ' (' + res.failed[0].message + ')' : ' — connect to GitHub in Settings') + '; ' + (what.length === 1 ? 'it was' : 'they were') + ' left unchanged.');
+      } else {
+        toast('Discarded' + (parts.length ? ' — ' + parts.join(', ') : ''));
+      }
     }).catch(function (err) {
-      syncing = false; renderSyncState();
-      toast('Couldn’t discard: ' + (getToken() ? err.message : 'connect to GitHub in Settings first') + '. Nothing was changed.');
+      syncing = false; render();
+      toast('Couldn’t discard: ' + err.message + '. Nothing was changed.');
     });
   }
 
@@ -1397,7 +1431,7 @@
       case 'close-report': $('#report').hidden = true; break;
       case 'print': window.print(); break;
       case 'export-csv': exportCsv(); break;
-      case 'nav': $('#app').classList.toggle('nav-open'); break;
+      case 'nav': toggleSidebar(); break;
       case 'project-menu':
         menu(el, (isFte() ? [['edit', 'Project details\u2026']] : []).concat([['report', 'Review report'], ['csv', 'Export findings (CSV)'], ['json', 'Export project (JSON)']],
           isFte() ? ['-', ['import', (C.legacyTabs || []).length ? 'Import project or old checklist\u2026' : 'Import project\u2026'], '-', ['archive', current().meta.archived ? 'Unarchive project' : 'Archive project', true]] : []))
@@ -1437,6 +1471,7 @@
       else select(selected, false);
     }
     else if (e.key === 'c' && selected) { select(selected, true); setTimeout(function () { var t = $('#comment-input'); if (t) t.focus(); }, 50); e.preventDefault(); }
+    else if (e.key === '[') { e.preventDefault(); toggleSidebar(); }
     else if (e.key === '/') { var s = $('#item-search') || $('#project-search'); if (s) { e.preventDefault(); s.focus(); } }
     else if (e.key === 'N' && isFte()) { projectSheet(null); }
   });
@@ -1477,6 +1512,7 @@
   function render() { renderSidebar(); renderSyncState(); renderPage(); renderInspector(); }
 
   applyTheme(settings.theme);
+  if (ui.sideCollapsed && !narrow.matches) $('#app').classList.add('side-collapsed');
   if (DEMO) {
     var banner = $('#demo-banner');
     banner.hidden = false;

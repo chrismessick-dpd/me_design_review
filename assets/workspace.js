@@ -143,11 +143,13 @@
 
   /* Throw away unsynced local changes: fetch what GitHub has now for each project in `ids`
      (and the People list when `roster` is true). Nothing is pushed. Resolves
-     { projects: { id: doc | null }, roster: rosterOrNull }; a null project was never synced,
-     so the caller removes it. Only cached blob shas are kept between syncs, so there's no
-     local "last synced" copy to fall back on; this needs the network. */
+     { projects: { id: doc | null }, roster: rosterOrNull, failed: [{ id, message }] }.
+     A null project was never synced, so the caller removes it; likewise a People list that
+     was never synced comes back empty. Only cached blob shas are kept between syncs, so
+     anything that was synced has to be fetched again. Each item succeeds or fails on its
+     own ('roster' stands for the People list in `failed`). */
   Workspace.prototype.discard = function (state, ids, roster) {
-    var ws = this, out = { projects: {}, roster: null }, snaps = {};
+    var ws = this, out = { projects: {}, roster: null, failed: [] }, snaps = {};
     function snap(repoFull) {
       if (!snaps[repoFull]) {
         var store = repoFull === ws.dataFull() ? ws.dataStore() : ws.store(repoFull);
@@ -167,14 +169,17 @@
       var dir = repo === ws.dataFull() ? ws.dataStore().dataDir() : '';
       return !!((state.cache || {})[repo] || {})[dir + 'projects/' + id + '.json'];
     }
+    function fail(id) { return function (err) { out.failed.push({ id: id, message: err.message, status: err.status }); }; }
     return ids.reduce(function (chain, id) {
       return chain.then(function () {
         if (!everSynced(id)) { out.projects[id] = null; return; }
-        return read(ws.homeOf(state, id), 'projects/' + id + '.json').then(function (doc) { out.projects[id] = doc; });
+        return read(ws.homeOf(state, id), 'projects/' + id + '.json').then(function (doc) { out.projects[id] = doc; }, fail(id));
       });
     }, Promise.resolve()).then(function () {
       if (!roster) return;
-      return read(ws.dataFull(), 'users.json').then(function (r) { out.roster = M.mergeRosters(M.emptyRoster(), r); });
+      var rosterPath = ws.dataStore().dataDir() + 'users.json';
+      if (!((state.cache || {})[ws.dataFull()] || {})[rosterPath]) { out.roster = M.emptyRoster(); return; }
+      return read(ws.dataFull(), 'users.json').then(function (r) { out.roster = M.mergeRosters(M.emptyRoster(), r); }, fail('roster'));
     }).then(function () { return out; });
   };
 
