@@ -230,6 +230,9 @@
       return push(1);
     }).then(function (res) {
       absorb(st, res, repoFull);
+      // Fabcheck runs and packages for this project move with it (docs/fabcheck-link.md).
+      return ws.moveFabcheck(projectId, ws.dataFull(), repoFull, log);
+    }).then(function () {
       var shared = Object.assign({}, st.roster.shared);
       shared[projectId] = M.stamp({ id: projectId, repo: repoFull, name: doc.meta.name }, st.login);
       st.roster = Object.assign({}, st.roster, { shared: shared });
@@ -239,6 +242,35 @@
       });
       return ws.inviteTo(repoFull, people, log).then(function (failed) {
         return { state: st, repo: repoFull, failedInvites: failed };
+      });
+    });
+  };
+
+  /* Copy a project's Fabcheck files (fabcheck/<id>/) from one repo to another, then delete
+     them from the first. Safe to repeat: files already there are skipped, and the source is
+     only cleared once the copy has landed. */
+  Workspace.prototype.moveFabcheck = function (projectId, fromFull, toFull, log) {
+    var ws = this;
+    log = log || function () {};
+    var src = fromFull === ws.dataFull() ? ws.dataStore() : ws.store(fromFull);
+    var dst = toFull === ws.dataFull() ? ws.dataStore() : ws.store(toFull);
+    var fromDir = src.dataDir() + 'fabcheck/' + projectId + '/', toDir = dst.dataDir() + 'fabcheck/' + projectId + '/';
+    return src.listTree(fromDir).then(function (list) {
+      if (!list.length) return;
+      log('Moving ' + list.length + ' Fabcheck file' + (list.length === 1 ? '' : 's') + ' to ' + toFull + '…');
+      var files = [], next = 0;
+      function worker() {
+        if (next >= list.length) return Promise.resolve();
+        var e = list[next++];
+        return src.blobBytes(e.sha).then(function (bytes) {
+          files.push({ path: toDir + e.path.slice(fromDir.length), bytes: bytes });
+          return worker();
+        });
+      }
+      return Promise.all([worker(), worker(), worker(), worker()]).then(function () {
+        return dst.putFiles(files, { message: 'Signoff: move Fabcheck runs for ' + projectId });
+      }).then(function () {
+        return src.putFiles(list.map(function (e) { return { path: e.path, remove: true }; }), { message: 'Signoff: Fabcheck runs for ' + projectId + ' moved to ' + toFull });
       });
     });
   };

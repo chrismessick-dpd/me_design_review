@@ -41,6 +41,26 @@
     });
   }
 
+  // Binary-safe versions, for files such as fab packages (assets: docs/fabcheck-link.md).
+  function bytesToB64(bytes) {
+    var bin = '', CH = 0x8000;
+    for (var i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+    return btoa(bin);
+  }
+  function b64ToBytes(b64) {
+    var bin = atob(String(b64).replace(/\s/g, '')), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  function gitBlobShaBytes(body) {
+    var head = new TextEncoder().encode('blob ' + body.length + '\0');
+    var all = new Uint8Array(head.length + body.length);
+    all.set(head, 0); all.set(body, head.length);
+    return crypto.subtle.digest('SHA-1', all).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    });
+  }
+
   function apiCall(fetchImpl, token, url, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
@@ -290,7 +310,9 @@
     return this.api('/git/trees', { method: 'POST', body: {
       base_tree: snap.tree,
       tree: changes.map(function (c) {
-        return c.remove ? { path: c.path, mode: '100644', type: 'blob', sha: null } : { path: c.path, mode: '100644', type: 'blob', content: c.text };
+        if (c.remove) return { path: c.path, mode: '100644', type: 'blob', sha: null };
+        if (c.blobSha) return { path: c.path, mode: '100644', type: 'blob', sha: c.blobSha };
+        return { path: c.path, mode: '100644', type: 'blob', content: c.text };
       })
     } }).then(function (tree) {
       return self.api('/git/commits', { method: 'POST', body: {
@@ -301,6 +323,80 @@
     }).then(function (commit) {
       return self.api('/git/refs/heads/' + encodeURIComponent(self.cfg.branch || 'main'), { method: 'PATCH', body: { sha: commit.sha, force: false } })
         .then(function () { return commit; });
+    });
+  };
+
+  // ── Files outside the review documents (Fabcheck packages and runs) ──
+
+  // Blob files under `prefix` on the branch: [{ path, sha, size }].
+  GitHubStore.prototype.listTree = function (prefix) {
+    return this.snapshot().then(function (s) {
+      return s.entries.filter(function (e) { return e.type === 'blob' && e.path.indexOf(prefix || '') === 0; })
+        .map(function (e) { return { path: e.path, sha: e.sha, size: e.size }; });
+    });
+  };
+  GitHubStore.prototype.blobBytes = function (sha) {
+    return this.api('/git/blobs/' + sha).then(function (b) { return b64ToBytes(b.content); });
+  };
+  // One file's bytes, or null if it isn't there. Pass `entries` from listTree to save a call.
+  GitHubStore.prototype.readBytes = function (path, entries) {
+    var self = this;
+    return (entries ? Promise.resolve(entries) : this.listTree(path)).then(function (list) {
+      var e = list.filter(function (x) { return x.path === path; })[0];
+      return e ? self.blobBytes(e.sha) : null;
+    });
+  };
+
+  /* Write several files in one commit.
+     files: [{ path, bytes: Uint8Array } | { path, text } | { path, remove: true }]
+     opts:  { message, onRetry(attempt), onProgress(done, total) }
+     Files whose content already matches are skipped, so writing the same package twice
+     uploads nothing. Binary content goes up as blobs first; the commit then uses
+     force:false and is retried on a non-fast-forward, like sync.
+     Resolves { pushed, skipped, commitUrl }. */
+  GitHubStore.prototype.putFiles = function (files, opts) {
+    var self = this, attempt = 0, uploaded = {};
+    opts = opts || {};
+    var items = files.map(function (f) {
+      return f.remove ? { path: f.path, remove: true } : { path: f.path, bytes: f.bytes || new TextEncoder().encode(f.text || '') };
+    });
+    return Promise.all(items.map(function (it) {
+      return it.remove ? it : gitBlobShaBytes(it.bytes).then(function (sha) { it.sha = sha; return it; });
+    })).then(function once() {
+      attempt++;
+      return self.snapshot().then(function (snap) {
+        var have = {};
+        snap.entries.forEach(function (e) { if (e.type === 'blob') have[e.path] = e.sha; });
+        var changes = items.filter(function (it) { return it.remove ? !!have[it.path] : have[it.path] !== it.sha; });
+        var skipped = items.length - changes.length;
+        if (!changes.length) return { pushed: 0, skipped: skipped };
+        var toUpload = changes.filter(function (it) { return !it.remove && !uploaded[it.sha]; });
+        var done = 0, next = 0;
+        function worker() {
+          if (next >= toUpload.length) return Promise.resolve();
+          var it = toUpload[next++];
+          return self.api('/git/blobs', { method: 'POST', body: { content: bytesToB64(it.bytes), encoding: 'base64' } }).then(function (b) {
+            if (b.sha !== it.sha) throw new Error('GitHub stored ' + it.path + ' with a different checksum');
+            uploaded[it.sha] = true;
+            done++;
+            if (opts.onProgress) opts.onProgress(done, toUpload.length);
+            return worker();
+          });
+        }
+        return Promise.all([worker(), worker(), worker(), worker()]).then(function () {
+          return self.commit(snap, changes.map(function (it) {
+            return it.remove ? { path: it.path, remove: true } : { path: it.path, blobSha: it.sha };
+          }), opts.message || 'Signoff: update files');
+        }).then(function (commit) {
+          return { pushed: changes.length, skipped: skipped, commitUrl: commit.html_url };
+        });
+      }).catch(function (err) {
+        if ((err.status === 422 || err.status === 409) && attempt < MAX_ATTEMPTS) {
+          if (opts.onRetry) opts.onRetry(attempt);
+          return once();
+        }
+        throw err;
+      });
     });
   };
 
@@ -332,5 +428,6 @@
 
   S.GitHubStore = GitHubStore;
   S.GitHubAccount = GitHubAccount;
-  S.github = { b64Encode: b64Encode, b64Decode: b64Decode, gitBlobSha: gitBlobSha };
+  S.github = { b64Encode: b64Encode, b64Decode: b64Decode, gitBlobSha: gitBlobSha,
+    bytesToB64: bytesToB64, b64ToBytes: b64ToBytes, gitBlobShaBytes: gitBlobShaBytes };
 })(window.Signoff = window.Signoff || {});

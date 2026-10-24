@@ -476,7 +476,7 @@
       if (r.state.assignee) sub += '<span>→ ' + esc(r.state.assignee) + '</span>';
     }
     if (r.auto === 'profile') sub += '<span class="tag">Outside profile</span>';
-    if (r.custom) sub += '<span class="tag">Project check</span>';
+    if (r.custom) sub += '<span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : 'Project check') + '</span>';
     (r.def.tags || []).forEach(function (tg) { sub += '<span class="tag">' + esc(tg) + '</span>'; });
     var stCls = r.status === 'open' ? '' : r.status;
     return '<div class="item st-' + r.status + (r.auto ? ' auto-na' : '') + (selected === r.id ? ' sel' : '') + '" data-act="select" data-id="' + esc(r.id) + '">' +
@@ -537,6 +537,48 @@
   }
   function closeInspector() { $('#inspector').classList.remove('open'); }
 
+  // ── Fabcheck runs (docs/fabcheck-link.md) ────────────────
+  function isFabcheck(def) { return !!(def && def.source && def.source.tool === 'fabcheck'); }
+
+  // Link that opens the run in Fabcheck, zoomed to a location when one is given. The repo is
+  // where the project lives now; a run stored before the project was shared moved with it.
+  function fabcheckUrl(p, src, loc) {
+    var run = src.run || {};
+    var q = ['run=' + encodeURIComponent(run.id || ''), 'project=' + encodeURIComponent(p.id), 'repo=' + encodeURIComponent(homeOf(p)), 'check=' + encodeURIComponent(src.check || '')];
+    if (loc) {
+      q.push('x=' + encodeURIComponent(loc.x), 'y=' + encodeURIComponent(loc.y));
+      if (loc.layer) q.push('layer=' + encodeURIComponent(loc.layer));
+    }
+    return '../pcb_dfm/index.html#/board?' + q.join('&');
+  }
+
+  function fabcheckBlock(p, def) {
+    if (!isFabcheck(def)) return '';
+    var src = def.source, run = src.run || null, locs = src.locations || [];
+    var canOpen = !DEMO && isFte() && run && run.id;
+    var stored = run && run.stored && run.stored.repo;
+    var h = '<div class="fab-card"><div class="fab-head"><b>From Fabcheck</b>' +
+      (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';
+    if (run) {
+      h += '<div class="fab-meta">' + esc(run.package && run.package.name || 'Package') +
+        (run.package && run.package.key ? ' <span class="muted">· ' + esc(run.package.key.slice(0, 8)) + '</span>' : '') + '<br>' +
+        esc([fmtDate(run.at), run.by, run.settings && run.settings.profile && run.settings.profile + ' profile'].filter(Boolean).join(' · ')) + '<br>' +
+        (stored ? 'Package and results saved with the project' : 'Run kept on ' + esc(run.by || 'the sender') + '’s computer only; others can drop the same package into Fabcheck to see it') + '</div>';
+    } else {
+      h += '<div class="fab-meta">Sent before Fabcheck kept runs. Run Fabcheck on the package again and send it to link this check to the board.</div>';
+    }
+    if (src.gone) h += '<div class="note" style="margin:6px 0 0">Not found in the latest Fabcheck run.</div>';
+    if (locs.length) {
+      h += '<div class="fab-locs">' + locs.map(function (l, i) {
+        var label = (l.label ? l.label + ' — ' : '') + Number(l.x).toFixed(2) + ', ' + Number(l.y).toFixed(2) + ' mm' + (l.layer ? ' · ' + l.layer : '');
+        return canOpen ? '<button class="fab-loc" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, l)) + '">' + esc(label) + '</button>'
+          : '<span class="fab-loc">' + esc(label) + '</span>';
+      }).join('') + '</div>';
+    }
+    if (def.hint) h += '<details class="fab-detail"><summary>Details</summary><div>' + esc(def.hint) + '</div></details>';
+    return h + '</div>';
+  }
+
   function renderInspector() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
@@ -556,7 +598,8 @@
       '<button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<div class="insp-title"' + (d.custom ? ' contenteditable="true" data-edit-custom="' + esc(selected) + '"' : '') + '>' + esc(d.def.text) + '</div>' +
-      (d.def.hint ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
+      fabcheckBlock(p, d.def) +
+      (d.def.hint && !isFabcheck(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
       (row && row.auto ? '<div class="note" style="margin:-4px 0 12px">' + (row.auto === 'section' ? 'Counted as N/A because the section is marked N/A.' : 'Counted as N/A: outside this ' + W.thing + '’s profile (' + esc((d.def.tags || d.section.tags || []).join(', ')) + '). Set a status to review it anyway.') + '</div>' : '') +
       '<div class="field"><span class="field-label">Status</span><div class="seg full">' + statusBtn('open', 'To review') + statusBtn('pass', 'Pass') + statusBtn('issue', 'Issue') + statusBtn('na', 'N/A') + '</div></div>' +
       (status === 'issue' ? '<div class="issue-box">' +
@@ -1302,6 +1345,7 @@
         select(id, true); break;
       }
       case 'discard': discard(); break;
+      case 'open-fabcheck': { var w = window.open(el.dataset.href, 'dovetail-fabcheck'); if (w) w.focus(); break; }
       case 'sync': if (!DEMO && lastError && el.id === 'sync-pill' && !syncing) toast(lastError); sync(); break;
       case 'settings': settingsSheet(); break;
       case 'theme': toggleTheme(); break;
