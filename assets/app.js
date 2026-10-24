@@ -305,9 +305,13 @@
     }));
     views.push({ id: 'findings', label: 'Findings', extra: st.issue ? '<span class="count">' + st.issue + '</span>' : '' });
     if (views.map(function (v) { return v.id; }).indexOf(ui.view) < 0) ui.view = 'overview';
+    var segLeft = seg.scrollLeft;   // a narrow window scrolls the tabs sideways; keep the place
     seg.innerHTML = views.map(function (v) {
       return '<button role="tab" class="' + (v.id === ui.view ? 'on' : '') + '" data-act="view" data-view="' + v.id + '">' + esc(v.label) + (v.extra || '') + '</button>';
     }).join('');
+    seg.scrollLeft = segLeft;
+    var onTab = seg.querySelector('.on');   // ...but bring the current tab into view if it's hidden
+    if (onTab) onTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     acts.innerHTML = syncButtons() +
       '<button class="btn" data-act="report" title="Review report">' + ICON.doc + '<span class="btn-label">Report</span></button>' +
       '<button class="icon-btn" data-act="project-menu" title="More" aria-label="More">' + ICON.more + '</button>';
@@ -593,6 +597,13 @@
     var comments = M.liveComments(p, selected);
     var draft = el.querySelector('#comment-input');
     var draftText = draft ? draft.value : '';
+    // Redrawing the same check (a status or field change) keeps where the panel was scrolled
+    // and what was expanded; opening a different check starts at the top.
+    var keep = el.dataset.item === selected ? {
+      body: (el.querySelector('.insp-body') || {}).scrollTop || 0,
+      locs: (el.querySelector('.fab-locs') || {}).scrollTop || 0,
+      details: !!(el.querySelector('.fab-detail') || {}).open
+    } : null;
     var statusBtn = function (s, label) { return '<button class="s-' + s + (status === s ? ' on' : '') + '" data-act="set" data-status="' + s + '" data-id="' + esc(selected) + '">' + label + '</button>'; };
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">' + esc(d.template ? d.template.short + ' › ' + (d.section ? d.section.title : '') : 'Retired check') + '</div>' +
       '<button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
@@ -622,6 +633,14 @@
       '</div></div>' +
       '<div class="composer"><textarea class="input" id="comment-input" placeholder="Add a comment…" rows="2">' + esc(draftText) + '</textarea>' +
       '<div class="composer-foot"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span><button class="btn btn-primary" data-act="post-comment">Comment</button></div></div>';
+    el.dataset.item = selected;
+    if (keep) {
+      var det = el.querySelector('.fab-detail');
+      if (det && keep.details) det.open = true;
+      var locs = el.querySelector('.fab-locs');
+      if (locs) locs.scrollTop = keep.locs;
+      el.querySelector('.insp-body').scrollTop = keep.body;
+    }
   }
 
   // ── Sheets ───────────────────────────────────────────────
