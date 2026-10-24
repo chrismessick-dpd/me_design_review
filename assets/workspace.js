@@ -141,6 +141,43 @@
       .then(function () { out.state = st; out.errors = errors; return out; });
   };
 
+  /* Throw away unsynced local changes: fetch what GitHub has now for each project in `ids`
+     (and the People list when `roster` is true). Nothing is pushed. Resolves
+     { projects: { id: doc | null }, roster: rosterOrNull }; a null project was never synced,
+     so the caller removes it. Only cached blob shas are kept between syncs, so there's no
+     local "last synced" copy to fall back on; this needs the network. */
+  Workspace.prototype.discard = function (state, ids, roster) {
+    var ws = this, out = { projects: {}, roster: null }, snaps = {};
+    function snap(repoFull) {
+      if (!snaps[repoFull]) {
+        var store = repoFull === ws.dataFull() ? ws.dataStore() : ws.store(repoFull);
+        snaps[repoFull] = store.snapshot().then(function (s) { return { store: store, entries: s.entries }; });
+      }
+      return snaps[repoFull];
+    }
+    function read(repoFull, path) {
+      return snap(repoFull).then(function (s) {
+        var e = s.entries.filter(function (x) { return x.path === s.store.dataDir() + path; })[0];
+        return e ? s.store.blob(e.sha).then(function (t) { return JSON.parse(t); }) : null;
+      });
+    }
+    // Synced at least once = the last sync recorded its file. Anything else only ever lived here.
+    function everSynced(id) {
+      var repo = ws.homeOf(state, id);
+      var dir = repo === ws.dataFull() ? ws.dataStore().dataDir() : '';
+      return !!((state.cache || {})[repo] || {})[dir + 'projects/' + id + '.json'];
+    }
+    return ids.reduce(function (chain, id) {
+      return chain.then(function () {
+        if (!everSynced(id)) { out.projects[id] = null; return; }
+        return read(ws.homeOf(state, id), 'projects/' + id + '.json').then(function (doc) { out.projects[id] = doc; });
+      });
+    }, Promise.resolve()).then(function () {
+      if (!roster) return;
+      return read(ws.dataFull(), 'users.json').then(function (r) { out.roster = M.mergeRosters(M.emptyRoster(), r); });
+    }).then(function () { return out; });
+  };
+
   /* Move a project into its own private repository and invite people to it.
      Steps, each safe to repeat if a later one fails:
        1. create <prefix><name> (or adopt it if it already holds this project)

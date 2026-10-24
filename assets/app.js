@@ -143,6 +143,7 @@
     more: '<svg viewBox="0 0 20 20" fill="currentColor"><circle cx="5" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="15" cy="10" r="1.5"/></svg>',
     doc: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 2.5h6.5L15 6v11.5H5z"/><path d="M11.5 2.5V6H15M7.5 10h5M7.5 13h5"/></svg>',
     sync: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 00-10.6-2.6L4 7M4 12a6 6 0 0010.6 2.6L16 13"/><path d="M4 3.5V7h3.5M16 16.5V13h-3.5"/></svg>',
+    undo: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5L3.5 8 7 11.5"/><path d="M3.5 8H12a4.5 4.5 0 010 9H8"/></svg>',
     moon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M16.2 12.4A6.6 6.6 0 017.6 3.8a6.6 6.6 0 108.6 8.6z"/></svg>',
     sun: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.4"/><path d="M10 2v1.8M10 16.2V18M2 10h1.8M16.2 10H18M4.3 4.3l1.3 1.3M14.4 14.4l1.3 1.3M15.7 4.3l-1.3 1.3M5.6 14.4l-1.3 1.3"/></svg>',
     clipboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4.5M8.5 17h7"/></svg>'
@@ -281,14 +282,20 @@
   }
 
   // ── Toolbar ──────────────────────────────────────────────
+  // Sync, plus Discard while there are unsynced changes.
+  function syncButtons() {
+    if (DEMO) return '';
+    var n = Object.keys(dirty).length;
+    return '<button class="btn" data-act="sync" title="Sync with GitHub (Ctrl+S)">' + ICON.sync + '<span class="btn-label">Sync</span>' + (n ? '<span class="badge">' + n + '</span>' : '') + '</button>' +
+      (n ? '<button class="btn" data-act="discard" title="Throw away unsynced changes and go back to what’s on GitHub">' + ICON.undo + '<span class="btn-label">Discard</span></button>' : '');
+  }
   function renderToolbar() {
     var p = current();
     $('#toolbar-title').textContent = p ? p.meta.name : '';
     var seg = $('#view-seg'), acts = $('#toolbar-actions');
     if (!p || ui.page === 'people') {
       seg.innerHTML = '';
-      var dn = Object.keys(dirty).length;
-      acts.innerHTML = DEMO ? '' : '<button class="btn" data-act="sync" title="Sync with GitHub (Ctrl+S)">' + ICON.sync + '<span class="btn-label">Sync</span>' + (dn ? '<span class="badge">' + dn + '</span>' : '') + '</button>';
+      acts.innerHTML = syncButtons();
       return;
     }
     var st = M.projectStats(p, TEMPLATES);
@@ -301,9 +308,7 @@
     seg.innerHTML = views.map(function (v) {
       return '<button role="tab" class="' + (v.id === ui.view ? 'on' : '') + '" data-act="view" data-view="' + v.id + '">' + esc(v.label) + (v.extra || '') + '</button>';
     }).join('');
-    var n = Object.keys(dirty).length;
-    acts.innerHTML =
-      '<button class="btn" data-act="sync" title="Sync with GitHub (Ctrl+S)">' + ICON.sync + '<span class="btn-label">Sync</span>' + (n && !DEMO ? '<span class="badge">' + n + '</span>' : '') + '</button>' +
+    acts.innerHTML = syncButtons() +
       '<button class="btn" data-act="report" title="Review report">' + ICON.doc + '<span class="btn-label">Report</span></button>' +
       '<button class="icon-btn" data-act="project-menu" title="More" aria-label="More">' + ICON.more + '</button>';
   }
@@ -993,6 +998,42 @@
       .catch(function (err) { toast('Couldn’t accept: ' + err.message); });
   }
 
+  // ── Discard ──────────────────────────────────────────────
+  // Throw away unsynced changes: each changed project goes back to the copy on GitHub, and a
+  // project that was never synced is removed from this browser. Nothing is pushed.
+  function discard() {
+    var keys = Object.keys(dirty);
+    if (!keys.length || syncing) return;
+    var byId = stateNow().projects;
+    var ids = keys.filter(function (k) { return k !== 'roster' && byId[k]; });
+    var names = ids.map(function (id) { return '• ' + byId[id].meta.name; });
+    if (dirty.roster) names.push('• People & access');
+    if (!confirm('Discard unsynced changes?\n\n' + names.join('\n') + '\n\nThey go back to the last version on GitHub. A project that was never synced is removed from this browser. This can’t be undone.')) return;
+    // Projects never synced are just removed; anything with a copy on GitHub needs the token.
+    var started = Object.assign({}, dirty);
+    syncing = true; renderSyncState('busy');
+    workspace().discard(stateNow(), ids, !!dirty.roster).then(function (res) {
+      var removed = 0, restored = 0;
+      Object.keys(res.projects).forEach(function (id) {
+        if (dirty[id] !== started[id]) return;      // edited again while this ran: keep it
+        var slug = Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0];
+        if (!slug) return;
+        if (res.projects[id]) { projects[slug] = Object.assign({}, res.projects[id], { slug: slug }); restored++; }
+        else { delete projects[slug]; delete homes[id]; removed++; if (ui.slug === slug) ui.slug = ''; }
+        delete dirty[id];
+      });
+      if (dirty.roster && dirty.roster === started.roster) { roster = res.roster || M.emptyRoster(); delete dirty.roster; restored++; }
+      persist(); saveUi();
+      syncing = false;
+      selected = null; closeInspector();
+      render();
+      toast('Discarded' + (restored ? ' — ' + plural(restored, 'item') + ' restored from GitHub' : '') + (removed ? (restored ? ', ' : ' — ') + plural(removed, 'unsynced project') + ' removed' : ''));
+    }).catch(function (err) {
+      syncing = false; renderSyncState();
+      toast('Couldn’t discard: ' + (getToken() ? err.message : 'connect to GitHub in Settings first') + '. Nothing was changed.');
+    });
+  }
+
   // ── Sync ─────────────────────────────────────────────────
   var syncing = false, lastError = '';
   function sync() {
@@ -1260,6 +1301,7 @@
         if (d.template) { ui.view = d.template.id; ui.filter = 'all'; ui.query = ''; collapsed[(d.section || {}).id] = false; showHidden[(d.section || {}).id] = true; saveUi(); renderPage(); }
         select(id, true); break;
       }
+      case 'discard': discard(); break;
       case 'sync': if (!DEMO && lastError && el.id === 'sync-pill' && !syncing) toast(lastError); sync(); break;
       case 'settings': settingsSheet(); break;
       case 'theme': toggleTheme(); break;

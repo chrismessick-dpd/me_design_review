@@ -13,12 +13,10 @@
 <body>
 <div id="summary">Running…</div>
 <div id="out"></div>
-<script src="../assets/config.js"></script>
-<script src="../assets/templates.js"></script>
-<script src="../assets/model.js"></script>
-<script src="../assets/github.js"></script>
-<script src="../assets/workspace.js"></script>
-<script src="../assets/demo.js"></script>
+<script>
+// Load the engine fresh on every run, so a browser cache never tests old code.
+['config', 'templates', 'model', 'github', 'workspace', 'demo'].forEach(function (n) { document.write('<script src="../assets/' + n + '.js?t=' + Date.now() + '"><\/script>'); });
+</script>
 <script>
 /* Unit tests for the model and the GitHub sync, run against a fake GitHub API.
    Open this file in a browser; the title shows PASS or FAIL. */
@@ -320,6 +318,11 @@
   var noop = await bobStore.sync(warm.projects, null, warm.cache, {});
   var noopCalls = hub.calls.slice(before);
   ok(noop.pushed === 0 && !noopCalls.some(function (c) { return /(POST|PATCH)/.test(c) || /blobs/.test(c); }), 'an unchanged repo is neither downloaded nor committed', noopCalls.join(', '));
+
+  // The UI script isn't loaded here, so at least make sure it parses.
+  var appSrc = await (await fetch('../assets/app.js?t=' + Date.now())).text();
+  var appErr = ''; try { new Function(appSrc); } catch (e) { appErr = e.message; }
+  ok(!appErr, 'app.js parses', appErr);
 
   // ── Demo ──
   var demo = Signoff.demo.projects(T);
