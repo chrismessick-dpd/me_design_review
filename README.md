@@ -11,7 +11,7 @@ It runs on the same engine as [Signoff EE](https://github.com/chrismessick-dpd/e
 the electrical tool, and both sit under the Dovetail Signoff hub. Day-to-day use, keyboard
 shortcuts and how sync works are the same as in Signoff EE; its README covers them in full.
 
-- **860 checks in 9 checklists:** Requirements & Concept, Part Design & DFM, Tolerancing &
+- **845 checks in 9 checklists:** Requirements & Concept, Part Design & DFM, Tolerancing &
   GD&T, Assembly, Fastening & DFA, Materials & Finishes, Thermal & Structural Analysis,
   Enclosures, Sealing & IP, Drawings & Release, and Prototype, Test & Validation.
 - **Product profile:** tag a project by process (injection molded, sheet metal, machined, cast,

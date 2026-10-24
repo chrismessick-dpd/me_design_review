@@ -457,13 +457,6 @@
           "severity": "major"
         },
         {
-          "id": "enc-thm-3",
-          "text": "Touch temperatures of accessible surfaces stay within the limits of the applicable safety standard",
-          "hint": "Identify the applicable standard and limit for each touchable surface material and contact duration. Confirm by thermal simulation or measurement.",
-          "tags": [],
-          "severity": "critical"
-        },
-        {
           "id": "enc-thm-4",
           "text": "Vent openings, fans and air paths are not blocked by the product's mounting, users' hands or nearby surfaces in intended use",
           "hint": "Check vent placement against all use orientations and mounting. Cross-reference Thermal & Structural Analysis for the thermal model.",
@@ -637,13 +630,6 @@
           "id": "enc-hyg-2",
           "text": "Enclosure materials and seals are resistant to the specified cleaning and disinfecting agents over the required number of cycles",
           "hint": "Check chemical resistance per datasheet and plan chemical exposure testing under stress. Many plastics crack under the combination of disinfectant and molded-in stress.",
-          "tags": [],
-          "severity": "critical"
-        },
-        {
-          "id": "enc-hyg-3",
-          "text": "Materials in skin contact are biocompatible or skin-safe for the contact type and duration",
-          "hint": "For medical devices, follow the ISO 10993 biological evaluation. For wearables, check skin sensitizers and material declarations from suppliers.",
           "tags": [],
           "severity": "critical"
         },

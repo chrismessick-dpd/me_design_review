@@ -273,16 +273,6 @@
           "severity": "major"
         },
         {
-          "id": "mat-met-5",
-          "text": "Heat treatment is specified with the resulting hardness and a test location on the drawing",
-          "hint": "Name the process and hardness range per the heat treater's capability, and state whether machining happens before or after. Distortion after heat treatment can consume tight tolerances.",
-          "tags": [
-            "machined",
-            "cast"
-          ],
-          "severity": "major"
-        },
-        {
           "id": "mat-met-6",
           "text": "Carbon and alloy steel parts have a defined corrosion protection",
           "hint": "Bare steel rusts in storage and transport. Check the drawing for plating, coating or oil, and that it suits the environment.",

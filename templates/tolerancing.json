@@ -141,13 +141,6 @@
       "tags": [],
       "items": [
         {
-          "id": "tol-gdt-1",
-          "text": "The GD&T standard and edition are stated on the drawing (ASME Y14.5 or ISO GPS)",
-          "hint": "ASME Y14.5 and ISO GPS (ISO 1101 and related) interpret some symbols differently, and editions differ. Without the stated standard the supplier will pick one.",
-          "tags": [],
-          "severity": "major"
-        },
-        {
           "id": "tol-gdt-2",
           "text": "Hole and pin patterns are located with position tolerances rather than chained ± dimensions",
           "hint": "Position to a datum frame gives a cylindrical zone, enables bonus tolerance and avoids the accumulation of chained ± dimensions. Check bolt patterns, PCB mounting bosses and dowel patterns.",
@@ -459,13 +452,6 @@
         "sealed-ip"
       ],
       "items": [
-        {
-          "id": "tol-seal-1",
-          "text": "Gasket or O-ring compression is calculated at both minimum and maximum stack conditions",
-          "hint": "Compute groove depth, seal cross-section and part flatness variation at both ends. Compression must stay inside the seal manufacturer's recommended range per datasheet.",
-          "tags": [],
-          "severity": "critical"
-        },
         {
           "id": "tol-seal-2",
           "text": "Seal compression stack includes flange flatness and deflection between fasteners",

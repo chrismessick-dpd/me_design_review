@@ -116,13 +116,6 @@
           "severity": "critical"
         },
         {
-          "id": "pd-gen-4",
-          "text": "Datum features are real, stable, accessible surfaces designed into the part for fixturing and inspection",
-          "hint": "Confirm the primary, secondary and tertiary datums are flat or cylindrical features large enough to locate on, and are not draft faces or parting lines. See the tolerancing checklist for the datum scheme itself.",
-          "tags": [],
-          "severity": "major"
-        },
-        {
           "id": "pd-gen-5",
           "text": "Features that locate the part to its mating parts are explicit (pins, bosses, slots), not reliant on outer profile",
           "hint": "Trace how the part is located in the assembly in each direction. Locating on cosmetic outer surfaces or on drafted walls gives poor repeatability.",
@@ -134,15 +127,6 @@
           "text": "The part has a defined location and method for part marking (part number, revision, material ID, date code, cavity ID as required)",
           "hint": "Check the model for a marking pad or engraving area and confirm the method (molded-in, laser, label, stamp) suits the process and is not on a Class A surface.",
           "tags": [],
-          "severity": "minor"
-        },
-        {
-          "id": "pd-gen-7",
-          "text": "Plastic parts carry the resin identification marking where required by the program",
-          "hint": "Recycling and regulatory programs often need a resin code (e.g. per ISO 11469 style marking). Add it to the tool as a molded-in insert where it can be changed.",
-          "tags": [
-            "injection-molded"
-          ],
           "severity": "minor"
         },
         {
@@ -478,13 +462,6 @@
       ],
       "items": [
         {
-          "id": "pd-imf-1",
-          "text": "Every snap fit has calculated strain during assembly within the resin's allowable strain",
-          "hint": "Calculate peak strain with the cantilever snap formulas or FEA and compare with the allowable from the resin design guide. Over-strained snaps crack on first assembly or creep loose.",
-          "tags": [],
-          "severity": "critical"
-        },
-        {
           "id": "pd-imf-2",
           "text": "Snap fits are moldable without side actions, or the action is justified",
           "hint": "Use pass-through cores or windows beneath hooks where possible. Each snap with its own lifter adds cost and maintenance.",
@@ -532,13 +509,6 @@
           "hint": "Check stake post diameter and height, energy director geometry and clearance for the horn. Poor joint design gives weak or flashy joints.",
           "tags": [],
           "severity": "major"
-        },
-        {
-          "id": "pd-imf-9",
-          "text": "Overmold or 2K material pairs are bond-compatible per the material supplier",
-          "hint": "Check the TPE or second-shot supplier's adhesion data for the substrate grade. Incompatible pairs peel, so add mechanical interlocks either way.",
-          "tags": [],
-          "severity": "critical"
         },
         {
           "id": "pd-imf-10",
@@ -676,13 +646,6 @@
           "severity": "major"
         },
         {
-          "id": "pd-sm-15",
-          "text": "Burr direction is specified where it matters for safety, fit or cosmetics",
-          "hint": "Punching and some laser cutting leave a burr on one side. Call it out where edges are handled or mate with other parts.",
-          "tags": [],
-          "severity": "minor"
-        },
-        {
           "id": "pd-sm-16",
           "text": "Formed features (louvers, embosses, lances, extrusions) follow the fabricator's tooling dimensions",
           "hint": "Formed features need specific punch tooling. Use the fabricator's standard form tools where possible and keep them away from bends.",
@@ -767,13 +730,6 @@
           "id": "pd-mc-9",
           "text": "The part can be made in the minimum number of setups",
           "hint": "Count the faces that need machining and the orientations required. Each setup adds cost and a datum transfer that affects tolerances.",
-          "tags": [],
-          "severity": "major"
-        },
-        {
-          "id": "pd-mc-10",
-          "text": "Tight tolerances and fine surface finishes are applied only to functional features",
-          "hint": "Review each tolerance and Ra value against function. Tight blanket tolerances drive grinding, inspection and cost; see the tolerancing checklist.",
           "tags": [],
           "severity": "major"
         },
@@ -1109,13 +1065,6 @@
           "severity": "major"
         },
         {
-          "id": "pd-elb-2",
-          "text": "Gasket compression is within the supplier's recommended range across tolerance extremes",
-          "hint": "Calculate compression at minimum and maximum gap from the stack. Under-compressed gaskets leak; over-compressed ones take set or crack. See the enclosure checklist for the seal design.",
-          "tags": [],
-          "severity": "critical"
-        },
-        {
           "id": "pd-elb-3",
           "text": "Gasket groove volume accommodates the compressed elastomer without overfilling",
           "hint": "Elastomers are nearly incompressible. Check groove fill at maximum material condition per the seal supplier guide.",
@@ -1277,13 +1226,6 @@
           "hint": "Agree tool class and steel (e.g. hardened steel for high volume or glass-filled resin) with the toolmaker. Soft tools wear out early.",
           "tags": [],
           "severity": "major"
-        },
-        {
-          "id": "pd-vol-3",
-          "text": "Part consolidation opportunities have been considered",
-          "hint": "Ask whether two or more parts can become one without loss of function or serviceability. Fewer parts reduce tooling, assembly and inventory.",
-          "tags": [],
-          "severity": "minor"
         },
         {
           "id": "pd-vol-4",

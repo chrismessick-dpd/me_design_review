@@ -44,6 +44,10 @@
   var DEFAULT_SETTINGS = { user: '', owner: C.repos.owner, toolRepo: C.repos.toolRepo, dataRepo: C.repos.dataRepo, dataPath: '', prefix: C.repos.prefix, branch: 'main', templatePath: 'templates', theme: 'auto' };
   var settings = Object.assign({}, DEFAULT_SETTINGS, load('settings', {}), { suiteRepos: (C.repos.suite || []).slice() });
   settings.theme = sharedTheme() || settings.theme || 'auto';
+  if (!settings.user && !DEMO) {
+    // First visit to this tool: reuse the name given in another Signoff tool (EE's settings).
+    try { settings.user = (JSON.parse(localStorage.getItem(THEME_KEY) || '{}') || {}).user || ''; } catch (e) { /* ignore */ }
+  }
   if (settings.repo) {
     // Before the data repo existed, reviews lived in the tool repo's data/ folder.
     settings.toolRepo = settings.repo; settings.dataRepo = DEFAULT_SETTINGS.dataRepo; settings.dataPath = '';
@@ -717,7 +721,7 @@
     }
     function log(text, cls) { var l = w.querySelector('#s-log'); l.hidden = false; l.innerHTML += '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; l.scrollTop = 1e6; }
     w.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-theme]');
+      var t = e.target.closest('#s-theme [data-theme]');
       if (t) { theme = t.dataset.theme; w.querySelectorAll('#s-theme button').forEach(function (b) { b.classList.toggle('on', b === t); }); applyTheme(theme); return; }
       var b = e.target.closest('[data-sheet]');
       if (!b) return;

@@ -186,15 +186,6 @@
           "severity": "major"
         },
         {
-          "id": "asm-thr-5",
-          "text": "Thread-forming screws into plastic bosses follow the screw supplier's boss design guide for hole diameter, boss OD and engagement depth",
-          "hint": "Compare boss inner and outer diameters, depth and lead-in counterbore against the supplier's chart for that plastic. Undersized holes crack bosses; oversized holes strip.",
-          "tags": [
-            "injection-molded"
-          ],
-          "severity": "major"
-        },
-        {
           "id": "asm-thr-6",
           "text": "Thread-forming screws in plastic have a drive torque and strip torque with an adequate margin between them, and the assembly torque sits inside it",
           "hint": "Measure drive and strip torque on molded bosses at the extremes of hole size. Rule of thumb: strip-to-drive ratio of about 3:1 or more for reliable powered driving.",
@@ -320,15 +311,6 @@
           "hint": "Allowable strain for repeated cycles is lower than for one-time assembly. Cycle-test prototypes in the production material.",
           "tags": [],
           "severity": "minor"
-        },
-        {
-          "id": "asm-snap-6",
-          "text": "Snap fit cantilevers have a root radius to limit stress concentration",
-          "hint": "Sharp roots on a snap beam are the most common snap failure point. Rule of thumb: root radius of about 0.5× wall thickness or more, balanced against sink on the opposite face.",
-          "tags": [
-            "injection-molded"
-          ],
-          "severity": "major"
         },
         {
           "id": "asm-snap-7",
