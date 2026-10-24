@@ -1,0 +1,8 @@
+# Local editor / Claude settings
+.claude/
+__pycache__/
+*.pyc
+# Never commit credentials
+*token*.txt
+*access*.txt
+dist/

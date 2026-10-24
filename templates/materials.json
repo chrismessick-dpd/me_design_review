@@ -1,0 +1,804 @@
+{
+  "id": "materials",
+  "title": "Materials & Finishes",
+  "short": "Materials",
+  "version": 1,
+  "description": "Material selection, plastics, metals, elastomers, finishes and coatings, compliance, contact materials, sustainability and outdoor durability.",
+  "sections": [
+    {
+      "id": "mat-sel",
+      "title": "Material Selection",
+      "tags": [],
+      "items": [
+        {
+          "id": "mat-sel-1",
+          "text": "Every part has its material chosen against written requirements for strength, stiffness and operating temperature range",
+          "hint": "Trace each part's material back to the requirements list and load cases. A material picked by habit is the usual root cause of creep, cracking or softening found late in validation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-2",
+          "text": "Every part specifies a specific grade (manufacturer and grade name), not a generic family like \"ABS\" or \"aluminum\"",
+          "hint": "Check the drawing, BOM and CAD material field. Properties within one family vary widely, and a generic callout lets the supplier substitute whatever is cheapest.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-sel-3",
+          "text": "Properties used for design are taken from the datasheet at the maximum operating temperature, not at 23 °C",
+          "hint": "Look for modulus, yield and HDT versus temperature curves (e.g. on Campus or the supplier's data). Plastics can lose a large share of their stiffness well below their HDT.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-4",
+          "text": "Parts under sustained load have a material with documented creep or stress-relaxation behavior at the operating temperature",
+          "hint": "Ask for creep modulus or isochronous stress-strain data from the supplier. Bosses, press fits and clips under constant load are the usual victims.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-5",
+          "text": "Chemical exposure (cleaners, disinfectants, oils, sunscreen, fuels, process fluids) is listed and every exposed material is rated for it",
+          "hint": "Build the list from the use environment and cleaning instructions, then check the supplier's chemical resistance table for each pair. Mark any untested pair for an immersion or strain test.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-6",
+          "text": "Flammability requirement is identified and every part that needs it uses a material with the matching rating",
+          "hint": "Check the product safety standard for which parts must be flame rated (enclosures, parts near ignition sources). Cross-check with the compliance engineer before tooling.",
+          "tags": [
+            "regulatory",
+            "electronics"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-sel-7",
+          "text": "UV and light exposure is considered for every exposed part, including indoor exposure near windows or lighting",
+          "hint": "Unstabilized polymers yellow, chalk and embrittle. Check the datasheet for UV stabilization or plan a weathering test.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sel-8",
+          "text": "Every specified material is available from stock or with a confirmed lead time in the production region",
+          "hint": "Confirm with the molder, machine shop or distributor before release. Specialty grades and colors can carry long minimum order quantities and lead times.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-9",
+          "text": "Critical materials have an approved second source or an equivalent grade validated in advance",
+          "hint": "Record the alternate grade in the BOM with its approval status. Switching grades after a shortage without retesting is a common cause of field failures.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-sel-10",
+          "text": "Material cost per part is estimated and fits the cost target",
+          "hint": "Use part volume or mass, scrap or runner allowance and current price per kg from the supplier. Flame-retardant, glass-filled and high-performance grades can change the part cost significantly.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sel-11",
+          "text": "Density and resulting part mass are entered in CAD and the total mass meets the product requirement",
+          "hint": "Assign the real material to every part in CAD and check the mass report against the weight budget. Default CAD densities make mass rollups meaningless.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sel-12",
+          "text": "Material choices are recorded in a materials list with grade, supplier, color, finish and the reason for selection",
+          "hint": "One table per product, kept with the design record. It speeds up compliance declarations and later substitutions.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "mat-pl",
+      "title": "Plastics",
+      "tags": [
+        "injection-molded",
+        "additive"
+      ],
+      "items": [
+        {
+          "id": "mat-pl-1",
+          "text": "Resin grade and color are called out together as one orderable specification (grade plus color code)",
+          "hint": "A color code without a base grade, or a grade without a color, gets interpreted differently by each molder. Check the drawing title block and notes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-2",
+          "text": "Effects of glass or mineral fill on anisotropy, warpage and weld line strength are accounted for in the design",
+          "hint": "Filled grades have much lower strength across the flow direction and at weld lines. Review the gate location and mold flow fiber orientation results for loaded features.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-3",
+          "text": "Moisture absorption is accounted for in dimensions and properties for hygroscopic resins such as nylon",
+          "hint": "Nylon grows and softens as it conditions to ambient humidity. Use conditioned properties from the datasheet and check fits in both dry-as-molded and conditioned states.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-4",
+          "text": "Parts that see chemicals while under molded-in or assembly stress are checked for environmental stress cracking",
+          "hint": "Amorphous resins (PC, ABS, PC/ABS, acrylic) crack with cleaners, alcohols, oils and adhesives under strain. Use a strain jig or bent-strip test with the actual chemicals and the expected strain.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-pl-5",
+          "text": "Regrind policy (allowed or not, maximum percentage) is stated on the drawing or in the supply agreement",
+          "hint": "Regrind lowers impact and flame performance. Medical, flame-rated and highly loaded parts usually forbid it or cap it per the material supplier's guidance.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-6",
+          "text": "Colorant or masterbatch is confirmed not to degrade the required mechanical, flame or regulatory properties",
+          "hint": "Some pigments and carriers reduce impact strength or void a UL listing. Use a precolored compound listed by the supplier, or get the colorant approved in writing.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-7",
+          "text": "UL 94 rating is verified at the actual minimum wall thickness and in the actual color of the part",
+          "hint": "UL Yellow Cards list ratings per thickness and sometimes per color. A rating at 3 mm does not cover a 1.5 mm wall; check the thinnest section in CAD against the card.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-pl-8",
+          "text": "Drying requirements of the resin are passed to the molder in the material specification",
+          "hint": "Undried PC, PBT, PET and nylon hydrolyze during molding and become brittle with no visible defect. Reference the supplier's drying temperature and time.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-pl-9",
+          "text": "Temperature limits use the right property (HDT, RTI or Vicat) for the kind of exposure",
+          "hint": "HDT is a short-term deflection value, not a continuous use limit. For long-term elevated temperature use the relative thermal index or supplier aging data.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-10",
+          "text": "Material for living hinges, snap fits and press fits has enough elongation at yield for the design strain",
+          "hint": "Check allowable strain from the datasheet or supplier guidance for the specific grade. Glass-filled and amorphous brittle grades often cannot survive repeated deflection.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-11",
+          "text": "Overmold and two-shot material pairs are confirmed compatible for adhesion by the material supplier",
+          "hint": "TPE and LSR bond only to specific substrates. Get the supplier's compatibility chart or a peel test; otherwise design mechanical interlocks.",
+          "tags": [
+            "injection-molded",
+            "elastomer"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-12",
+          "text": "Additive parts specify process, material, build orientation and post-processing",
+          "hint": "SLS, MJF, SLA and FDM parts are anisotropic and orientation sensitive. Put the orientation and post-cure or annealing on the drawing or build sheet.",
+          "tags": [
+            "additive"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-pl-13",
+          "text": "Properties of additive materials used for design come from the printing vendor's data for the specific process and machine",
+          "hint": "Generic datasheet values often overstate z-direction strength. Ask the service bureau for tested values or test coupons in the build orientation.",
+          "tags": [
+            "additive"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-pl-14",
+          "text": "Transparent or light-pipe parts use an optical grade with defined transmission, haze and color stability",
+          "hint": "Check the light transmission and yellowing index data in the datasheet. General-purpose grades of PC or acrylic can yellow and cloud over time.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "mat-met",
+      "title": "Metals",
+      "tags": [
+        "machined",
+        "sheet-metal",
+        "cast",
+        "extruded"
+      ],
+      "items": [
+        {
+          "id": "mat-met-1",
+          "text": "Every metal part specifies alloy and temper or condition (e.g. 6061-T6, 304 annealed, 1/4 hard)",
+          "hint": "Temper drives yield strength, formability and machinability. A missing temper on the drawing lets the supplier ship the softest condition.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-met-2",
+          "text": "Sheet-metal alloy and temper are confirmed formable to the bend radii in the design",
+          "hint": "Hard tempers and some aluminum alloys crack on tight bends. Check minimum bend radius against the supplier's or material standard's table for that temper and thickness.",
+          "tags": [
+            "sheet-metal"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-3",
+          "text": "Every pair of dissimilar metals in contact is checked for galvanic corrosion in the expected environment",
+          "hint": "Use a galvanic series chart for the electrolyte (moisture, salt). Isolate with coatings, washers or sealant, or keep the anode area large relative to the cathode.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-4",
+          "text": "Stainless steel grade is chosen for the actual environment (e.g. 316 for chloride or marine exposure instead of 303 or 304)",
+          "hint": "Free-machining 303 and 400-series grades corrode much faster in chlorides. Check the corrosion requirement and cleaning chemicals.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-5",
+          "text": "Heat treatment is specified with the resulting hardness and a test location on the drawing",
+          "hint": "Name the process and hardness range per the heat treater's capability, and state whether machining happens before or after. Distortion after heat treatment can consume tight tolerances.",
+          "tags": [
+            "machined",
+            "cast"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-6",
+          "text": "Carbon and alloy steel parts have a defined corrosion protection",
+          "hint": "Bare steel rusts in storage and transport. Check the drawing for plating, coating or oil, and that it suits the environment.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-7",
+          "text": "Magnetic properties are checked where parts are near magnets, sensors, compasses or MRI",
+          "hint": "Austenitic stainless becomes partly magnetic after cold work or forming. Specify a low-permeability grade or annealing if it matters.",
+          "tags": [
+            "electronics",
+            "medical"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-met-8",
+          "text": "Die-cast alloy is chosen for the required ductility, corrosion resistance and finish",
+          "hint": "Common die-cast aluminum alloys trade ductility for castability, and porosity can affect plating, anodizing and pressure tightness. Confirm with the caster.",
+          "tags": [
+            "cast"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-9",
+          "text": "Extrusion alloy and temper are confirmed with the extruder for the profile shape and finish",
+          "hint": "Some alloys anodize poorly or show die lines. Ask the extruder which alloy suits the profile and the cosmetic requirement.",
+          "tags": [
+            "extruded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-met-10",
+          "text": "Weldable alloy and filler compatibility are confirmed for every welded joint",
+          "hint": "Some high-strength aluminum alloys are poorly weldable and lose temper in the heat-affected zone. Use the welded properties in analysis.",
+          "tags": [
+            "structural"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-met-11",
+          "text": "Spring materials (spring steel, stainless spring temper, music wire) are specified with temper and fatigue suitability",
+          "hint": "Check the spring supplier's guidance for the stress level and cycle count. Relaxation at elevated temperature is a common failure.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-elas",
+      "title": "Elastomers",
+      "tags": [
+        "elastomer"
+      ],
+      "items": [
+        {
+          "id": "mat-elas-1",
+          "text": "Elastomer compound is selected for compatibility with every fluid, lubricant and cleaner it contacts",
+          "hint": "Check the compound's chemical compatibility chart (EPDM swells in oils, NBR degrades with ozone and UV). Lubricants used during assembly count too.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-elas-2",
+          "text": "Elastomer compound is rated for the full operating and storage temperature range",
+          "hint": "Check both ends: low-temperature stiffening (TR10 or brittleness point) and high-temperature aging in the datasheet.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-elas-3",
+          "text": "Compression set at the operating temperature is acceptable for the sealing or preload function over the product life",
+          "hint": "Use compression set data at the right temperature and duration from the supplier. A gasket that takes a permanent set loses its seal.",
+          "tags": [
+            "sealed-ip"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-elas-4",
+          "text": "Durometer is specified with a tolerance consistent with supplier capability",
+          "hint": "Rule of thumb: ±5 Shore A is a common supplier tolerance. Make sure the design still works at both ends of the range.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-elas-5",
+          "text": "Elastomer compound is specified by compound name or supplier part number, not only by polymer and durometer",
+          "hint": "\"70A silicone\" can be many different compounds. Specify the compound or a material standard callout and require change notification.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-elas-6",
+          "text": "Keypad, grip and skin-contact elastomers are checked for tackiness, plasticizer migration and staining",
+          "hint": "Some TPEs bleed oils that mark adjacent plastics or feel sticky after heat aging. Ask for heat-aging data or run a contact stain test.",
+          "tags": [
+            "cosmetic",
+            "handheld"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-elas-7",
+          "text": "Elastomer is confirmed suitable for its ozone and UV exposure",
+          "hint": "Diene rubbers (NR, NBR, SBR) crack under ozone and UV. Silicone, EPDM and fluoroelastomers resist it better.",
+          "tags": [
+            "outdoor"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-fin",
+      "title": "Finishes & Coatings",
+      "tags": [],
+      "items": [
+        {
+          "id": "mat-fin-1",
+          "text": "Anodize is specified with type, class or color, and thickness range",
+          "hint": "Name the anodize type (e.g. sulfuric or hard coat), dye or clear, and thickness per the finisher's capability. An unspecified anodize gives inconsistent color and wear.",
+          "tags": [
+            "machined",
+            "sheet-metal",
+            "extruded",
+            "cast"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-2",
+          "text": "Dimensional growth of anodize, plating or coating is included in fits and tolerances",
+          "hint": "Anodize grows partly outward per surface, and hard anodize much more. State whether dimensions apply before or after finishing on the drawing.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-fin-3",
+          "text": "Masking areas are defined on the drawing for threads, bores, grounding points and mating faces that must stay bare",
+          "hint": "Show masking with a hatch or callout in a drawing view. Unmasked threads and fits are a common rework item after first finishing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-4",
+          "text": "Plating type and thickness are specified and suit the base metal and environment",
+          "hint": "Specify the plating (zinc, nickel, tin) with thickness and any post-treatment per the plater's capability. Check hydrogen embrittlement relief for high-strength steels.",
+          "tags": [
+            "machined",
+            "sheet-metal",
+            "cast"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-5",
+          "text": "Powder coat or paint thickness is accounted for at fits, holes and threaded features",
+          "hint": "Powder coat is thick and builds up at edges. Mask or oversize mating features and check stack-ups with the coating thickness per the coater's capability.",
+          "tags": [
+            "sheet-metal",
+            "cast",
+            "extruded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-6",
+          "text": "Paint or coating adhesion is specified with a test method and acceptance level",
+          "hint": "Reference a cross-hatch or tape adhesion test and the required rating in the finish specification. Plastics often need a primer or surface treatment.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-7",
+          "text": "Stainless steel parts are passivated after machining or forming where corrosion resistance matters",
+          "hint": "Free iron from tooling causes rust spots. Call out passivation and the method per the finisher's standard practice.",
+          "tags": [
+            "machined",
+            "sheet-metal"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-fin-8",
+          "text": "Grounding and bonding points have a conductive finish or a defined bare area",
+          "hint": "Anodize, powder coat and paint are insulators. Use conductive chromate conversion, mask the contact area, or use a star washer, and verify resistance on the prototype.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-fin-9",
+          "text": "Shielding coatings (conductive paint, plating on plastic) are specified with surface resistance and coverage area",
+          "hint": "Coordinate with the EE on the resistance requirement and the contact points to the PCB ground.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-10",
+          "text": "PVD or other decorative hard coatings are specified with color, thickness and substrate preparation",
+          "hint": "PVD replicates the substrate finish exactly, so polishing or blasting must be specified first. Confirm the wear and adhesion test with the supplier.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-fin-11",
+          "text": "Mold texture is specified by texture supplier reference and checked against draft on every textured face",
+          "hint": "Each texture needs a minimum draft angle per the texture supplier. Insufficient draft drags the texture and scuffs the part, and fixing it means retexturing the tool.",
+          "tags": [
+            "injection-molded",
+            "cosmetic"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-12",
+          "text": "Pad printing, screen printing and laser marking are specified with the durability test they must pass",
+          "hint": "Define abrasion, chemical rub (e.g. alcohol or cleaners) and adhesion tests in the artwork specification. Laser marking needs a laser-markable grade or additive.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-fin-13",
+          "text": "Colors are specified against a named standard (Pantone, RAL, NCS) or a physical color master with tolerance",
+          "hint": "Specify the measurement method, light source and allowed delta E. On-screen color is not a specification.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-fin-14",
+          "text": "Approved color and finish samples (boundary samples) exist and are held by both Dovetail and the supplier",
+          "hint": "Keep signed master and limit samples for color, gloss and texture. Without them cosmetic disputes at production start have no reference.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-fin-15",
+          "text": "Gloss level is specified with a measurement angle and range for cosmetic surfaces",
+          "hint": "Gloss mismatch between parts from different processes (molded, painted, metal) is very visible. Specify gloss units at a stated angle.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-fin-16",
+          "text": "Finish process is compatible with the base material temperature limits and part geometry",
+          "hint": "Powder curing, PVD and some plating processes run hot or need racking points. Confirm with the finisher that the part will not distort or soften.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-comp",
+      "title": "Compliance & Declarations",
+      "tags": [
+        "regulatory"
+      ],
+      "items": [
+        {
+          "id": "mat-comp-1",
+          "text": "Every material and finish is confirmed RoHS compliant with a supplier declaration on file",
+          "hint": "Collect declarations for each part number, including coatings, inks and adhesives. Hexavalent chromate conversion coatings and leaded brass are common misses.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-comp-2",
+          "text": "REACH SVHC content is checked against the current candidate list for every article",
+          "hint": "The candidate list is updated regularly. Request SVHC declarations from suppliers and re-check before each release.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-comp-3",
+          "text": "California Proposition 65 exposure is assessed where the product is sold in California",
+          "hint": "Common triggers include certain plasticizers, flame retardants and lead in brass. Decide on warning labels or substitution early.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-comp-4",
+          "text": "Conflict minerals (tin, tantalum, tungsten, gold) reporting needs are identified and supplier data is requested",
+          "hint": "Use the customer's reporting template and collect supplier responses before production start.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-comp-5",
+          "text": "Material declarations (full or IPC-1752 style) are requested from suppliers for every purchased and custom part",
+          "hint": "Make declarations a deliverable in the supplier quote request. Chasing them after launch delays certification and customer audits.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-comp-6",
+          "text": "Restricted substance requirements from the customer or target markets are listed and checked",
+          "hint": "Customers often have their own restricted substance lists beyond RoHS and REACH (e.g. PFAS, halogens). Check them before material selection is final.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-comp-7",
+          "text": "Flame-retardant additives in chosen grades are compatible with halogen-free or restricted substance requirements",
+          "hint": "Brominated flame retardants may be restricted by customer specs. Check the grade's composition statement.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-comp-8",
+          "text": "Materials used in safety-critical parts are on the certification body's accepted component list or have the required listing",
+          "hint": "Enclosure plastics usually need a UL-recognized grade; a substitute grade often triggers retesting. Record the file number.",
+          "tags": [],
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "mat-bio",
+      "title": "Skin & Patient Contact",
+      "tags": [
+        "medical",
+        "wearable"
+      ],
+      "items": [
+        {
+          "id": "mat-bio-1",
+          "text": "Every skin- or patient-contact material is identified with its contact type and duration",
+          "hint": "Classify contact per ISO 10993-1 (surface, external communicating, implant) and duration. This drives the biocompatibility test plan.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-bio-2",
+          "text": "Biocompatibility evidence per ISO 10993 exists or is planned for every contact material in its final processed form",
+          "hint": "Supplier data on the raw resin is not enough by itself: colorants, processing, coatings and sterilization change the result. Use supplier master files and a biological evaluation plan.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-bio-3",
+          "text": "Nickel release from metal parts in prolonged skin contact is assessed against the market requirement",
+          "hint": "Stainless, plated and nickel-containing alloys can cause allergic reactions. Check the alloy and plating, and test release if needed.",
+          "tags": [
+            "wearable"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-bio-4",
+          "text": "Materials are compatible with the specified sterilization or disinfection method",
+          "hint": "Gamma, EtO, autoclave and hydrogen peroxide each affect polymers differently (yellowing, embrittlement, crazing). Check supplier data and test after repeated cycles.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-bio-5",
+          "text": "Material change control is agreed with suppliers for every contact material",
+          "hint": "Require advance notification of any formula, site or process change in the supply agreement. Unannounced changes can invalidate biocompatibility.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-flu",
+      "title": "Fluid & Food Contact",
+      "tags": [
+        "fluidic"
+      ],
+      "items": [
+        {
+          "id": "mat-flu-1",
+          "text": "Every wetted material is checked for compatibility with every medium, including cleaning and flushing fluids",
+          "hint": "Build a wetted-materials matrix (tubing, seals, adhesives, housings, fittings) against media and temperature. Check swelling, extraction and stress cracking.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-flu-2",
+          "text": "Required contact approvals (food, potable water, medical fluid path) are identified and every wetted material has them",
+          "hint": "Identify which regulations apply in each market and get the supplier's compliance letter for the specific grade and color.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "mat-flu-3",
+          "text": "Leachables and extractables risk is assessed where fluid purity or taste matters",
+          "hint": "Plasticizers, lubricants and mold release agents can contaminate the fluid. Ask suppliers for extractables data or plan a test.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "mat-flu-4",
+          "text": "Permeation of gases or vapors through tubing and housings is acceptable for the application",
+          "hint": "Silicone and some TPEs are highly permeable. Check permeation data if the fluid can dry out, degas or absorb oxygen.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-flu-5",
+          "text": "Wetted metal parts are chosen to avoid corrosion and ion release into the fluid",
+          "hint": "Check the fluid chemistry (chlorides, pH) against the metal and its finish. Avoid platings that can flake into the fluid path.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-sus",
+      "title": "Sustainability & End of Life",
+      "tags": [],
+      "items": [
+        {
+          "id": "mat-sus-1",
+          "text": "Plastic parts carry a resin identification marking where space allows",
+          "hint": "Mark per the applicable resin coding convention (e.g. >PC+ABS<) in a non-cosmetic area, and include it on the drawing.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sus-2",
+          "text": "The number of different materials is minimized and dissimilar materials are separable at end of life",
+          "hint": "Review the materials list for near-duplicate grades that could be consolidated. Permanently bonded mixed materials are hard to recycle.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sus-3",
+          "text": "Recycled-content or bio-based material targets, if any, are met by grades with verified properties",
+          "hint": "Recycled grades vary lot to lot. Get supplier data and certificates, and test critical properties.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "mat-sus-4",
+          "text": "Battery and electronics removal for end-of-life treatment is possible without destroying the enclosure",
+          "hint": "Check against market requirements for removable batteries and WEEE treatment. Coordinate with the DFA review.",
+          "tags": [
+            "battery-pack",
+            "electronics"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "mat-out",
+      "title": "Outdoor Durability",
+      "tags": [
+        "outdoor"
+      ],
+      "items": [
+        {
+          "id": "mat-out-1",
+          "text": "Exposed plastics are UV-stabilized grades and the color is confirmed for UV stability",
+          "hint": "Check the datasheet for UV stabilization and ask the supplier for weathering data. Dark colors often hold up better; bright and light colors can fade or yellow.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-out-2",
+          "text": "Accelerated weathering test (xenon arc or UV fluorescent) is planned for exposed materials and finishes",
+          "hint": "Define the method, duration and acceptance (color change, gloss retention, property retention). Coordinate with the validation plan.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-out-3",
+          "text": "Salt spray or cyclic corrosion resistance is specified for metal parts and finishes where required",
+          "hint": "State the test method and duration per the product specification. Cyclic tests correlate better with real exposure than neutral salt spray alone.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-out-4",
+          "text": "Materials are rated for the outdoor temperature extremes including solar heating of dark surfaces",
+          "hint": "Dark surfaces in sun get much hotter than ambient air. Use the analysis or field data to set the material temperature rating.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "mat-out-5",
+          "text": "Fasteners and hardware exposed outdoors match the corrosion class of the parts they join",
+          "hint": "A zinc-plated screw in a stainless or anodized assembly rusts first and stains the product. Check the fastener finish in the BOM.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    }
+  ]
+}

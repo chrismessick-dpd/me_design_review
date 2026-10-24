@@ -1,0 +1,825 @@
+{
+  "id": "dfa",
+  "title": "Assembly, Fastening & DFA",
+  "short": "Assembly",
+  "version": 1,
+  "description": "Assembly review covering DFA principles, assembly sequence, threaded fasteners, snap fits, adhesives, permanent joints, cables, labeling, serviceability, high-volume assembly and mechanism retention.",
+  "sections": [
+    {
+      "id": "asm-prin",
+      "title": "DFA Principles",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-prin-1",
+          "text": "Every separate part has a reason to exist: it moves relative to its neighbors, must be a different material, or must come apart for service",
+          "hint": "Run a Boothroyd-Dewhurst style minimum-part-count test on the BOM. Parts that fail all three criteria are candidates for consolidation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-prin-2",
+          "text": "Part consolidation opportunities have been reviewed and the decisions recorded",
+          "hint": "List candidate merges (brackets into housings, separate clips into snaps, multi-piece covers) with the tooling cost and risk trade-off. Unreviewed consolidation is the usual source of avoidable assembly labor.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-prin-3",
+          "text": "The product assembles predominantly from one direction (top-down / Z-axis) onto a stable base part",
+          "hint": "Step through the assembly in CAD and count reorientations of the work in process. Each flip adds handling time and a chance to drop or misalign parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-prin-4",
+          "text": "Each part locates itself on its mating part before fastening (pins, bosses, ribs or lead-ins), with no reliance on the operator holding alignment",
+          "hint": "Check that the part is constrained in its final position before the first screw goes in. Parts that float until clamped end up assembled out of position.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-prin-5",
+          "text": "Mating features have lead-ins (chamfers or radii) so parts guide into place",
+          "hint": "Look for square-edged pins, holes and slots that must be aligned by eye. Rule of thumb: lead-ins of about 0.5 mm or more on insertion features, sized to the expected misalignment.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-prin-6",
+          "text": "Parts that look similar but are not interchangeable cannot be fitted in the wrong position or orientation (poka-yoke)",
+          "hint": "Try to assemble every part rotated 180° or swapped with its look-alike in CAD. Add a keying feature, asymmetric pin pattern or interference so the wrong assembly physically will not go together.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-prin-7",
+          "text": "Parts are either fully symmetric about their insertion axis or obviously asymmetric",
+          "hint": "Slightly asymmetric parts are the ones that get installed backward. Exaggerate the asymmetry or make the part symmetric so orientation stops mattering.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-prin-8",
+          "text": "Every fastener and joint has clear access for the specified tool, driver bit and hand during assembly",
+          "hint": "Sweep a driver and bit envelope (and a socket, if used) along each fastener axis in CAD with the neighboring parts in place. Check finger and hand clearance for connectors and clips too.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-prin-9",
+          "text": "Loose parts do not tangle, nest or stick together when handled or fed in bulk",
+          "hint": "Open springs, thin clips, and cups or covers that stack tightly cause line jams and miscounts. Close spring ends, add anti-nesting ribs, or specify tray packaging.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-prin-10",
+          "text": "Flexible, fragile or small parts are minimized, and those that remain have a defined handling method",
+          "hint": "Tiny or delicate parts (thin films, small springs, sub-M2 screws) need tweezers, fixtures or vision. Note how each will be picked and placed.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-prin-11",
+          "text": "Assembly does not depend on adjustment, shimming or selective fitting to meet its requirements",
+          "hint": "Adjustments add time, operator skill and a failure mode. If one is unavoidable, it has a documented procedure, a defined range and a lock after setting.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-seq",
+      "title": "Assembly Sequence & Fixturing",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-seq-1",
+          "text": "The assembly sequence is documented step by step and matches the CAD assembly structure",
+          "hint": "Produce an exploded sequence or assembly-step list and walk it through in CAD. Gaps in the sequence show up as parts that cannot be installed after their neighbors.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-seq-2",
+          "text": "No part in the sequence is trapped or blocked by a part installed earlier",
+          "hint": "Animate or step through the assembly in CAD with collision detection on. A blocked part found at the first build costs a tool change or a redesigned sequence.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-seq-3",
+          "text": "Sub-assemblies can be built and functionally tested on their own before final assembly",
+          "hint": "Group parts so that, for example, the PCBA with display or the drive train can be tested before closing the housing. Finding a defect after final assembly multiplies rework cost.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-seq-4",
+          "text": "Required assembly fixtures, nests and jigs are identified and listed with their purpose",
+          "hint": "List each fixture with the step it supports and its datum scheme. Fixtures are long-lead items and need to reference the same datums as the drawings.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-seq-5",
+          "text": "Sub-assemblies are stable and do not fall apart when handled or moved between stations",
+          "hint": "An unfastened stack held together only by gravity will come apart on the line. Add a temporary snap, a first screw or a carrier.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-seq-6",
+          "text": "The assembly can be disassembled for rework without damaging parts that must be reused",
+          "hint": "Walk through disassembly in reverse. Permanent joints (welds, adhesive, one-way snaps) on high-value parts should be deliberate decisions, not accidents.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-seq-7",
+          "text": "Critical assembly steps (torque, alignment, bonding, sealing) have an in-process check defined",
+          "hint": "Each critical step names how it is verified on the line: torque-monitored driver, go/no-go gauge, vision or functional test.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-seq-8",
+          "text": "Assembly stack-ups that drive fit or function have been checked across the full tolerance range",
+          "hint": "Confirm the assembly analysis exists for gaps, preload and clearances at worst-case and statistical limits. Cross-reference the Tolerancing & GD&T checklist for the analysis itself.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-thr",
+      "title": "Threaded Fasteners",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-thr-1",
+          "text": "The number of different fastener sizes, lengths and head styles across the product is minimized",
+          "hint": "Tabulate all fasteners from the BOM. Each unique screw is another bit change, feeder, part number and chance of using the wrong one.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-2",
+          "text": "Fasteners are metric (ISO) sizes unless a documented reason requires otherwise",
+          "hint": "Mixing inch and metric fasteners in one product invites cross-threading and wrong-part errors in assembly and service.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-thr-3",
+          "text": "Look-alike screws of different lengths are not used in the same assembly where a wrong choice causes damage",
+          "hint": "A screw 2 mm too long can punch through a cosmetic wall or a battery cell. Use a distinct diameter or head, or make every location take the same screw.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-thr-4",
+          "text": "Thread engagement length suits the internal thread material",
+          "hint": "Check engagement against the material and fastener grade so the bolt breaks before the threads strip. Rule of thumb: about 1×d in steel, 1.5×d in cast iron or brass, 2×d or more in aluminum; confirm with a calculation for loaded joints.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-5",
+          "text": "Thread-forming screws into plastic bosses follow the screw supplier's boss design guide for hole diameter, boss OD and engagement depth",
+          "hint": "Compare boss inner and outer diameters, depth and lead-in counterbore against the supplier's chart for that plastic. Undersized holes crack bosses; oversized holes strip.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-6",
+          "text": "Thread-forming screws in plastic have a drive torque and strip torque with an adequate margin between them, and the assembly torque sits inside it",
+          "hint": "Measure drive and strip torque on molded bosses at the extremes of hole size. Rule of thumb: strip-to-drive ratio of about 3:1 or more for reliable powered driving.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-7",
+          "text": "Every structural joint has a specified torque derived from the required clamp load",
+          "hint": "The torque spec should trace to a clamp-load requirement and a friction (nut factor) assumption, with joint material bearing stress checked. A torque copied from a generic chart is not a design.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-8",
+          "text": "Joints subject to vibration or thermal cycling have a defined anti-loosening method",
+          "hint": "Choose from preload with adequate grip length, thread-locker, prevailing-torque nuts or locking features. Split lock washers alone are not a reliable anti-loosening method.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-9",
+          "text": "Thread-locker grade, application zone and cure time are specified where thread-locker is used",
+          "hint": "Check compatibility with plastics: some anaerobic thread-lockers cause stress cracking in polycarbonate and similar plastics. Note whether the joint must be removable for service.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-10",
+          "text": "Fastener heads and nuts bearing on soft materials (plastics, soft aluminum, painted surfaces) use washers or flange heads sized to keep bearing stress acceptable",
+          "hint": "Compare under-head bearing stress to the material's compressive or creep limit per datasheet. Plastic under a small screw head creeps and loses preload.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-11",
+          "text": "Fastener and mating materials are galvanically compatible for the environment, or the joint is isolated",
+          "hint": "Check the anodic index difference of the pair (e.g. stainless screw in aluminum, steel in magnesium). In wet or salty service use coatings, isolating washers or a compatible fastener.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-12",
+          "text": "Captive screws or retention features are used wherever a dropped screw could fall into electronics or be lost in service",
+          "hint": "Service panels and lids opened by users or field technicians should keep their screws. A loose screw inside a powered product can short a board.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-13",
+          "text": "Threaded inserts (heat-set, ultrasonic, press-in or molded-in) have pull-out and torque-out values that exceed the joint loads with margin",
+          "hint": "Get pull-out and torque-out from the insert supplier for the specific plastic, then verify on molded parts. Inserts in glass-filled or thin bosses can crack the boss during installation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-14",
+          "text": "Self-tapping screws into sheet metal have the correct pilot hole and enough material thickness or an extruded hole for thread engagement",
+          "hint": "Thin sheet gives one or two threads; use an extruded (flanged) hole, clinch nut or a thicker gauge. Check the pilot hole against the screw supplier's table.",
+          "tags": [
+            "sheet-metal"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-15",
+          "text": "Clinch nuts, studs and standoffs in sheet metal suit the sheet thickness, hardness and edge distance per the hardware supplier",
+          "hint": "Verify minimum sheet thickness, hole size, distance to bends and edges, and that the sheet is softer than the hardware. Wrong hardness means the fastener spins out.",
+          "tags": [
+            "sheet-metal"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-thr-16",
+          "text": "Screw lengths leave clearance at the bottom of blind holes and bosses",
+          "hint": "A screw that bottoms out reaches torque without clamping. Check the stack in CAD at maximum screw length and minimum hole depth.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-snap",
+      "title": "Snap Fits & Clips",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-snap-1",
+          "text": "Every snap fit has its assembly (insertion) force calculated or measured and within the operator or machine limit",
+          "hint": "Calculate from beam deflection, lead-in angle and friction, or measure on prototypes. High insertion forces cause operator fatigue and incomplete engagement.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-snap-2",
+          "text": "Every snap fit has a retention force that meets the requirement, including drop and handling loads",
+          "hint": "Calculate or test retention force at the return angle; a 90° return is usually permanent. Check retention after the snap has aged at maximum temperature.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-snap-3",
+          "text": "Snap fit strain during assembly stays below the material's allowable strain per datasheet, including at worst-case tolerance",
+          "hint": "Use the maximum interference from the tolerance stack, not nominal. Reduce allowable strain for glass-filled grades and for snaps assembled more than once.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-snap-4",
+          "text": "Snaps that must release for service have a defined release method that does not require breaking parts",
+          "hint": "Provide a release slot, a tool access point or a ramped return. Show the service tool and its access in CAD.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-snap-5",
+          "text": "Snaps designed to be reused are rated for the required number of assembly cycles",
+          "hint": "Allowable strain for repeated cycles is lower than for one-time assembly. Cycle-test prototypes in the production material.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-snap-6",
+          "text": "Snap fit cantilevers have a root radius to limit stress concentration",
+          "hint": "Sharp roots on a snap beam are the most common snap failure point. Rule of thumb: root radius of about 0.5× wall thickness or more, balanced against sink on the opposite face.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-snap-7",
+          "text": "Snap fits do not stay deflected (preloaded) in the assembled state unless the material creep has been accounted for",
+          "hint": "A snap held under strain relaxes over time, especially at elevated temperature. Design for zero deflection once seated or check creep data per datasheet.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-snap-8",
+          "text": "Engagement of each snap can be confirmed by the assembler (audible click, visual flush, or a check feature)",
+          "hint": "A half-engaged snap passes assembly and fails in the field. Add a flush indicator or a gap that is visible only when not seated.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-snap-9",
+          "text": "Metal spring clips and retaining rings have groove dimensions and installation tools specified per the supplier",
+          "hint": "Check groove diameter, width and edge radius against the supplier catalog, and that the installation tool fits in the space available.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "asm-adh",
+      "title": "Adhesives & Tapes",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-adh-1",
+          "text": "The adhesive or tape is qualified for the surface energy of both substrates",
+          "hint": "Low-surface-energy plastics (PP, PE, POM, some TPEs, silicone) need a specific adhesive, primer or surface treatment. Check the adhesive supplier's substrate compatibility data.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-adh-2",
+          "text": "Surface preparation (cleaning, abrading, plasma, flame or primer) is specified and practical on the production line",
+          "hint": "Bond strength depends more on surface prep than on the adhesive. Specify the solvent or treatment, the time window to bonding, and how it is verified (e.g. dyne pens).",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-3",
+          "text": "Mold release agents and contamination from upstream processes are controlled on bonded surfaces",
+          "hint": "Silicone release agents and finger oils kill adhesion. Agree release-agent-free molding or a cleaning step with the molder for bonded parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-4",
+          "text": "Liquid adhesive bond line thickness is controlled by design (stand-offs, beads or spacer features)",
+          "hint": "Without a controlled gap the bond line varies from starved to thick. Use the adhesive supplier's recommended bond line range and add features to set it.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-5",
+          "text": "Adhesive cure time, temperature and fixture time fit the production cycle, and handling strength is reached before the next step",
+          "hint": "Check the supplier's cure profile. Moving parts before handling strength causes misaligned or weakened bonds.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-6",
+          "text": "Pressure-sensitive adhesive joints have specified application pressure and dwell time",
+          "hint": "PSA strength builds with pressure and time. Specify roller or press pressure and dwell, and the time before load is applied, per the tape supplier.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-7",
+          "text": "Adhesive and tape are rated for the full operating and storage temperature range, humidity and chemical exposure",
+          "hint": "Compare service temperature, humidity and cleaning agents against the supplier data. PSAs soften and creep at elevated temperature.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-8",
+          "text": "Bonded joints are loaded in shear or compression, not peel or cleavage",
+          "hint": "Adhesive peel strength is a small fraction of its shear strength. Add geometry so the load path avoids peel at bond edges.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-adh-9",
+          "text": "Adhesive or tape geometry (die-cut shape, bead path) is fully defined on a drawing",
+          "hint": "Die-cut tape needs a drawing with liner tabs and tolerances; dispensed beads need path, bead size and start/stop points.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-adh-10",
+          "text": "Bonded parts can be reworked or serviced where required, or the joint is intentionally permanent",
+          "hint": "Decide whether the bond must be separable (pull-tab adhesive strips, heat-release tape) and document the decision.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-adh-11",
+          "text": "Adhesive outgassing, corrosivity and compatibility with nearby electronics and optics are checked",
+          "hint": "Acetoxy-cure silicones release acetic acid that corrodes copper; some adhesives fog lenses. Use neutral-cure or low-outgassing grades near electronics or optics.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-join",
+      "title": "Welding, Staking, Riveting & Press Fits",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-join-1",
+          "text": "Ultrasonic weld joints use a joint design (energy director, shear joint) suited to the plastic and the welding supplier's recommendations",
+          "hint": "Amorphous plastics weld well with energy directors; semi-crystalline plastics usually need shear joints. Review the joint with the welding equipment supplier before tool release.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-join-2",
+          "text": "Ultrasonic or other plastic weld joints have flash traps or are hidden where flash would be visible or interfere",
+          "hint": "Weld flash on cosmetic or sealing surfaces is a frequent first-article rejection. Add flash traps or move the joint.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-join-3",
+          "text": "Ultrasonically welded assemblies keep sensitive components away from horn energy or have been tested for damage",
+          "hint": "Ultrasonic energy can crack crystal oscillators, MEMS sensors and solder joints. Test welded PCBAs functionally after welding.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-join-4",
+          "text": "Heat-stake and cold-stake boss geometry follows the staking equipment supplier's guide for boss diameter, height and head form",
+          "hint": "Check that boss height leaves enough material to form the head and that the head clamps the part without cracking. Verify pull-off strength on samples.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-join-5",
+          "text": "Rivet grip range matches the actual material stack, and hole sizes and edge distances follow the rivet supplier's guide",
+          "hint": "Check the stack at minimum and maximum tolerance. Blind rivets into plastics or thin sheet may need a large-flange or soft-set style.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-join-6",
+          "text": "Press-fit interference, assembly force and retention force have been calculated across the tolerance range",
+          "hint": "Compute hoop stress at maximum interference and retention at minimum interference. Check the press force against the available press and the part's strength.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-join-7",
+          "text": "Press fits into plastic account for creep and stress relaxation over the product life and temperature range",
+          "hint": "Plastic hubs relax and lose retention, especially when hot. Use knurls, ribs (crush ribs) or a metal insert, and check against creep data per datasheet.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-join-8",
+          "text": "Pressed and welded joints have a pass/fail criterion that can be checked in production (force-displacement window, weld depth, or pull test)",
+          "hint": "Monitor press force or displacement or weld collapse on the line. An unmonitored permanent joint cannot be screened for bad parts.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-cbl",
+      "title": "Cables & Harnesses",
+      "tags": [
+        "electronics"
+      ],
+      "items": [
+        {
+          "id": "asm-cbl-1",
+          "text": "Every cable and harness has a defined route in CAD with its retention points modeled",
+          "hint": "Model cables at real diameter and minimum bend radius. A cable left out of CAD ends up pinched or forced into space that does not exist.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-2",
+          "text": "Cable bend radius stays at or above the cable or FPC supplier's minimum at every bend, including dynamic bends",
+          "hint": "Check flex and FPC bends against the supplier's static and dynamic bend radius. FPCs that flex in use need a dynamic-rated construction.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-3",
+          "text": "Cables cannot be pinched between mating housings, fasteners or moving parts during assembly or in use",
+          "hint": "Check closing gaps and screw paths along the cable route. Pinched cables fail intermittently and are a common field return.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-cbl-4",
+          "text": "Cables are retained so they cannot migrate onto hot, sharp or moving parts",
+          "hint": "Use clips, guides, tape or tie points. Check sheet-metal edges along the route are deburred or protected with grommets.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-5",
+          "text": "Strain relief is provided so that pulls on external cables do not load solder joints, crimps or connectors",
+          "hint": "Pull on the external cable in the design review and trace the load path. It should end in the housing, not at the PCB.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-cbl-6",
+          "text": "Connectors can be mated and unmated with the required hand or tool access in the assembly sequence",
+          "hint": "Check that board-to-board and cable connectors can be seated with a straight push and inspected, and that latches can be released for service.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-7",
+          "text": "Connector mating is verifiable (latch click, full-seat feature or test) and cannot be mis-mated with a similar connector nearby",
+          "hint": "Use different keying, pin counts or colors for adjacent identical connectors. A partly seated connector passes initial test and fails after shipping.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-8",
+          "text": "Cable lengths have slack for assembly and service but not so much excess that it must be stuffed into the housing",
+          "hint": "Check the cable length with the housing open in the service position and closed. Excess loops press on components and block air flow.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-cbl-9",
+          "text": "Grounding connections to the chassis (bonding straps, ring terminals, grounding screws) have a defined assembly step and contact method",
+          "hint": "Specify star washers, thread-cutting screws or clean contact areas so the bond is made reliably. Coordinate the electrical requirement with EE.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-cbl-10",
+          "text": "Wire and cable insulation is protected where it passes through holes or over edges",
+          "hint": "Grommets, edge trim or rolled edges on every pass-through. Bare sheet-metal edges cut insulation under vibration.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-lbl",
+      "title": "Labels & Marking",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-lbl-1",
+          "text": "Every required label has a defined location, size and flat area that is accessible after assembly",
+          "hint": "Place the rating label, serial number and regulatory marks on a flat, unobstructed surface. Check visibility in the installed orientation.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-lbl-2",
+          "text": "Label materials and adhesives suit the substrate and the environment for the product life",
+          "hint": "Check abrasion, cleaning agents, UV and temperature against the label supplier's data. Regulatory labels must remain legible for the product life.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-lbl-3",
+          "text": "Parts that look alike carry an identifying mark (part number, cavity number, material code) molded or marked in a non-cosmetic area",
+          "hint": "Part and material identification supports traceability and recycling. Include cavity identification for multi-cavity molds.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-lbl-4",
+          "text": "Traceability marking (serial, date code or lot) is defined for parts and sub-assemblies that require it",
+          "hint": "Define what is marked, by what method (laser, label, mold date wheel) and where it is recorded. Medical and regulated products usually require this.",
+          "tags": [
+            "medical",
+            "regulatory"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-lbl-5",
+          "text": "Assembly orientation aids (arrows, alignment marks, color codes) are added where orientation is not obvious",
+          "hint": "Use these in addition to poka-yoke features, not as a substitute for them.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "asm-svc",
+      "title": "Service & Repair",
+      "tags": [],
+      "items": [
+        {
+          "id": "asm-svc-1",
+          "text": "Parts expected to fail or wear can be reached and replaced without disassembling unrelated parts",
+          "hint": "Rank parts by expected failure rate and count the steps to replace each. High-failure parts behind many others drive service cost.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-svc-2",
+          "text": "Consumable parts (filters, seals, batteries, brushes, blades) are replaceable by the intended user or technician with the intended tools",
+          "hint": "Check the replacement procedure against the user profile: no special tools for end users, defined tools for technicians.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-svc-3",
+          "text": "Whether the battery is user-replaceable, service-replaceable or not replaceable is a deliberate decision consistent with regulations in the target markets",
+          "hint": "Some markets require user-removable or replaceable portable batteries. Confirm the requirement with regulatory and record the decision.",
+          "tags": [
+            "battery-pack"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "asm-svc-4",
+          "text": "Battery disconnection or removal is possible before other service work where stored energy creates a hazard",
+          "hint": "Service steps should isolate the battery early. Check that the connector or tabs can be reached without passing tools across live conductors.",
+          "tags": [
+            "battery-pack"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-svc-5",
+          "text": "Service access does not require breaking seals, cosmetic parts or permanent joints that cannot be restored",
+          "hint": "If opening the product destroys a gasket, label or adhesive bond, the service kit and procedure must include its replacement.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-svc-6",
+          "text": "Fasteners used for service access are standard drives that the service organization has, or the special drive is a deliberate tamper-resistance decision",
+          "hint": "Security drives deter users but must be in the service toolkit. Record the decision.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-svc-7",
+          "text": "Service-replaceable parts are keyed or identified so that the correct part is fitted after repair",
+          "hint": "Field technicians lack factory fixtures and work instructions. Keying and clear marking prevent wrong-part or wrong-orientation repairs.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "asm-vol",
+      "title": "High-Volume Assembly",
+      "tags": [
+        "high-volume"
+      ],
+      "items": [
+        {
+          "id": "asm-vol-1",
+          "text": "Assembly time is estimated for each step and the total meets the cost target",
+          "hint": "Use a DFA time estimate or line study per step. Compare the total against the labor cost assumption in the business case.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-vol-2",
+          "text": "Parts intended for automated feeding or pick-and-place have consistent orientation features and gripper surfaces",
+          "hint": "Confirm with the automation integrator that each part can be fed (bowl, tray, tape) and gripped. Flat, featureless or tangled parts block automation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-vol-3",
+          "text": "Fasteners intended for automatic feeding are compatible with the feeder (head geometry, length-to-head ratio)",
+          "hint": "Short screws with large heads, or very small screws, may not feed reliably. Confirm with the feeder supplier.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-vol-4",
+          "text": "Parts are packaged and delivered to the line in an orientation that avoids extra handling",
+          "hint": "Specify trays, tape or kits for parts that are damaged or slow to orient from bulk. Include packaging in the supplier quotation.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-vol-5",
+          "text": "Station count and line balance are planned so that no single step limits throughput",
+          "hint": "Identify the longest step (often cure, test or welding) and plan parallel stations or a different method.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-vol-6",
+          "text": "End-of-line test coverage is defined for the functions the assembly process can affect",
+          "hint": "List the assembly-induced failure modes (missed fastener, unseated connector, leak) and map each to a test that detects it.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "asm-mov",
+      "title": "Moving Parts & Mechanisms",
+      "tags": [
+        "moving-parts"
+      ],
+      "items": [
+        {
+          "id": "asm-mov-1",
+          "text": "Bearings and bushings are axially and radially retained in their housings by a defined method (shoulder, retaining ring, press fit or adhesive)",
+          "hint": "Check that axial loads in both directions have a path to the housing. Bearings retained only by friction walk out under load or thermal cycling.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "asm-mov-2",
+          "text": "Bearing and bushing fits on shafts and housings follow the bearing supplier's recommended fit for the load case",
+          "hint": "Rotating inner ring loads usually need interference on the shaft; check the supplier's table. Wrong fits cause creep, fretting or lost clearance.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-mov-3",
+          "text": "Lubricant type and quantity are specified for every lubricated interface and are compatible with the adjacent plastics and elastomers",
+          "hint": "Some greases and oils swell elastomers or stress-crack plastics. Specify the grease by product name, amount and application area.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-mov-4",
+          "text": "Lubricant application is a controlled step (dispensed amount, location) in the assembly sequence",
+          "hint": "Hand-applied grease varies widely. Specify the dispensing method and how the amount is verified.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-mov-5",
+          "text": "Shaft end-play and axial position are controlled by design within a specified range",
+          "hint": "Check the axial stack across tolerance. Too little end-play binds when hot; too much causes noise and gear misalignment.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-mov-6",
+          "text": "Springs are captive so they cannot escape during assembly, service or failure",
+          "hint": "Use spring seats, posts or pockets. A loose spring is a launch hazard during service and a lost part on the line.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-mov-7",
+          "text": "Springs are preloaded during assembly in a way that does not require the operator to hold them compressed",
+          "hint": "Use a fixture, a ramp or an assembly order that compresses the spring as parts close. Operators holding springs leads to slips and injuries.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "asm-mov-8",
+          "text": "Hinge pins, pivots and slides have defined retention and wear surfaces suited to the required cycle life",
+          "hint": "Check retention of the pin (head, ring, stake) and the wear pair materials. Cross-reference the validation plan for cycle testing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "asm-mov-9",
+          "text": "Moving parts have clearance to adjacent parts and cables through their full range of motion",
+          "hint": "Run a motion study or check interference at the travel extremes, including tolerances and part deflection under load.",
+          "tags": [],
+          "severity": "critical"
+        }
+      ]
+    }
+  ]
+}

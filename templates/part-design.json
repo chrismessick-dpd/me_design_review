@@ -1,0 +1,1340 @@
+{
+  "id": "part-design",
+  "title": "Part Design & DFM",
+  "short": "Part DFM",
+  "version": 1,
+  "description": "Part-level design and manufacturability review covering CAD hygiene, general part design, and process rules for molding, sheet metal, machining, casting, additive, extrusion, elastomers, cosmetics and volume production.",
+  "sections": [
+    {
+      "id": "pd-cad",
+      "title": "CAD Model Hygiene",
+      "tags": [],
+      "items": [
+        {
+          "id": "pd-cad-1",
+          "text": "Every sketch and feature in released part models is fully constrained",
+          "hint": "Check the feature tree for under-defined sketches (minus sign or blue geometry in most CAD tools). Under-defined sketches move silently when a dimension upstream changes.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-2",
+          "text": "The feature tree captures design intent: key dimensions drive the model and follow-on features reference them, not arbitrary edges",
+          "hint": "Change a primary dimension (wall, overall length, boss spacing) and confirm the model updates sensibly. Models built on incidental edges fail or distort on the first ECO.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-3",
+          "text": "The model rebuilds with no errors, warnings or suppressed features left unexplained",
+          "hint": "Force a full rebuild and review the error list. Suppressed or failed features can hide geometry that the supplier never sees in the STEP.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cad-4",
+          "text": "Part bodies are single, closed solids with no zero-thickness geometry, slivers or self-intersections",
+          "hint": "Run the CAD geometry check (e.g. Check Entity / Validate Body) and an import check on the exported STEP. Broken geometry stops CAM, mold design and mold-flow meshing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cad-5",
+          "text": "Model units are millimeters and the part origin and principal planes follow the project convention",
+          "hint": "Check document units and confirm the origin sits on a meaningful datum (assembly origin or primary datum). Inconsistent units or origins cause scaled or misplaced parts at suppliers.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-6",
+          "text": "Modeled geometry is at nominal (or the agreed target such as mid-tolerance), and the convention is stated",
+          "hint": "Suppliers cut steel and program CAM from the model. If some features are modeled at a limit and others at nominal, state the rule on the drawing or in the model notes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cad-7",
+          "text": "No imported dumb solids or orphaned reference geometry remain in released part files",
+          "hint": "Remove or hide construction bodies, surface leftovers and imported reference parts, or move them to a clearly labeled folder. Stray bodies get exported and quoted as real parts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-8",
+          "text": "The material is assigned in the model and matches the material callout on the drawing and BOM",
+          "hint": "Open the material property in CAD and compare with the drawing title block and BOM. A default material gives wrong mass, wrong FEA and wrong quotes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cad-9",
+          "text": "Mass properties (mass, center of gravity) are checked against the budget and a sanity estimate",
+          "hint": "Read the CAD mass properties with the correct material density and compare with the mass budget. A large mismatch usually means a missing feature, wrong material or wrong units.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-10",
+          "text": "Part file names, part numbers and revision properties follow the project numbering scheme",
+          "hint": "Check the custom properties that populate the title block and BOM. Mismatched names and numbers cause wrong parts to be quoted or built.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cad-11",
+          "text": "Configurations or variants in the part file are named clearly and the released one is unambiguous",
+          "hint": "Confirm which configuration is exported and drawn. Exporting the wrong configuration (e.g. a simplified or prototype variant) is a common release error.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-gen",
+      "title": "General Part Design",
+      "tags": [],
+      "items": [
+        {
+          "id": "pd-gen-1",
+          "text": "Internal corners carrying load or bending stress have a radius, not a sharp corner",
+          "hint": "Inspect the model with a curvature or edge check for zero-radius internal edges in load paths. Sharp internal corners are the most common origin of cracks in plastic, cast and machined parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-2",
+          "text": "Stress concentrations at holes, notches, section changes and snap roots are identified and relieved",
+          "hint": "Mark the load path on the part and review every geometric discontinuity along it. Use the FEA from the analysis checklist to confirm peak stress where it matters.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-3",
+          "text": "Minimum wall, rib, hole and slot sizes are within the chosen process capability",
+          "hint": "Compare the thinnest and smallest features (use thickness analysis in CAD) with supplier or process design guides. Features below capability are either not made or made inconsistently.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-gen-4",
+          "text": "Datum features are real, stable, accessible surfaces designed into the part for fixturing and inspection",
+          "hint": "Confirm the primary, secondary and tertiary datums are flat or cylindrical features large enough to locate on, and are not draft faces or parting lines. See the tolerancing checklist for the datum scheme itself.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-5",
+          "text": "Features that locate the part to its mating parts are explicit (pins, bosses, slots), not reliant on outer profile",
+          "hint": "Trace how the part is located in the assembly in each direction. Locating on cosmetic outer surfaces or on drafted walls gives poor repeatability.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-6",
+          "text": "The part has a defined location and method for part marking (part number, revision, material ID, date code, cavity ID as required)",
+          "hint": "Check the model for a marking pad or engraving area and confirm the method (molded-in, laser, label, stamp) suits the process and is not on a Class A surface.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-gen-7",
+          "text": "Plastic parts carry the resin identification marking where required by the program",
+          "hint": "Recycling and regulatory programs often need a resin code (e.g. per ISO 11469 style marking). Add it to the tool as a molded-in insert where it can be changed.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-gen-8",
+          "text": "Features are oriented so the part can be made in the minimum number of setups, tool directions or forming steps",
+          "hint": "Review the direction of every feature against the tool pull, spindle or press direction. Each extra direction adds a side action, setup or operation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-9",
+          "text": "The part is not over-designed: thickness, features and precision are no more than the function needs",
+          "hint": "Challenge every thick section, tight tolerance and secondary operation in the review. Over-design drives mass, cycle time and cost without improving function.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-gen-10",
+          "text": "The part cannot be installed upside down or reversed if that would cause a failure, or misorientation is obvious",
+          "hint": "Check symmetric-looking parts for asymmetric function. Add a poka-yoke feature where needed; the assembly checklist owns the assembly sequence itself.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-11",
+          "text": "Edges a user or assembler touches are broken or radiused, with no sharp edges or burrs left by design",
+          "hint": "Review handled edges in the model and on the drawing for radius or chamfer callouts. Sharp edges are an injury risk and a common safety-review finding.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-12",
+          "text": "The selected manufacturing process for each part matches the production volume, cost target and geometry",
+          "hint": "Record the process for each part and the reason (e.g. machined for pilot, molded for volume). A process mismatch found late forces redesign of the part.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-13",
+          "text": "Parts that change process between prototype and production have a design intended for the production process",
+          "hint": "A part designed for machining or printing rarely molds or casts without changes to walls, draft and corners. Confirm the production design is the one being reviewed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-gen-14",
+          "text": "Clearances to mating parts, cables and moving parts are checked by interference detection in the assembly",
+          "hint": "Run interference and clearance checks in the top-level assembly, including at motion extremes. Zero-clearance contacts that are not intended are flagged.",
+          "tags": [],
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "pd-im",
+      "title": "Injection Molding: Walls, Draft, Ribs & Bosses",
+      "tags": [
+        "injection-molded"
+      ],
+      "items": [
+        {
+          "id": "pd-im-1",
+          "text": "Nominal wall thickness is uniform across the part, within the range the resin design guide recommends",
+          "hint": "Run a CAD thickness analysis and color-map the part. Rule of thumb: keep walls within about +/-10-15% of nominal; thick spots sink and void, thin spots short-shot.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-2",
+          "text": "Wall thickness transitions are gradual, not step changes",
+          "hint": "Rule of thumb: taper transitions over a length of about three times the thickness change. Abrupt steps cause sink, warp, flow hesitation and stress concentration.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-3",
+          "text": "Every face parallel to the draw direction has draft",
+          "hint": "Run a draft analysis for the pull direction of each half and every side action. Zero-draft faces scuff, stick or need costly tool changes. Rule of thumb: 1° or more per side for untextured surfaces.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-im-4",
+          "text": "Textured faces have draft sized for the specified texture depth",
+          "hint": "Get the required draft per texture from the texture supplier or molder. Rule of thumb: about 1° per side extra for each 0.025 mm of texture depth; too little draft drags and streaks the texture.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-5",
+          "text": "Draft direction is chosen so critical dimensions and fits are controlled where they matter",
+          "hint": "Decide whether a fit or seal dimension is controlled at the top or base of the draft and note it on the drawing. Draft can eat most of a tight clearance on tall walls.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-6",
+          "text": "Rib thickness is a fraction of the adjoining wall thickness to avoid sink",
+          "hint": "Rule of thumb: rib thickness 40-60% of the wall, lower for high-shrink or cosmetic parts; check the resin design guide. Thick ribs sink on the opposite face.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-7",
+          "text": "Rib height and spacing are within moldable limits",
+          "hint": "Rule of thumb: rib height no more than about three times wall thickness and spacing at least two times wall thickness. Tall thin ribs short-shot, stick in the tool and are hard to cool.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-8",
+          "text": "Ribs and walls have a root radius",
+          "hint": "Rule of thumb: root radius about 25-50% of wall thickness. No radius concentrates stress; too large a radius creates a thick spot that sinks.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-9",
+          "text": "Bosses are cored out so their wall matches the nominal wall guideline",
+          "hint": "Rule of thumb: boss wall about 50-70% of nominal wall. Solid bosses sink, void and lengthen cycle time.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-10",
+          "text": "Tall or loaded bosses are supported by gussets or connected to nearby walls with ribs",
+          "hint": "Freestanding bosses crack, lean and fill poorly. Connect them with ribs or gussets that follow the rib thickness rule.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-11",
+          "text": "Bosses near walls are attached to the wall by a rib, or spaced away, not merged into a thick section",
+          "hint": "Merging a boss into a wall creates a thick spot. Check thickness analysis around every boss.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-12",
+          "text": "Screw boss dimensions (hole, outer diameter, depth) follow the fastener supplier guide for the resin",
+          "hint": "Thread-forming screw suppliers publish boss geometry per resin. Wrong pilot size strips or cracks bosses; confirm with a torque-to-strip test (see the validation checklist).",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-im-13",
+          "text": "Holes and cores are sized and spaced to resist core deflection and breakage",
+          "hint": "Rule of thumb: blind core length no more than about two to three times diameter for small cores; check with the molder. Long slender cores bend under melt pressure.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-14",
+          "text": "Thick sections that cannot be avoided are cored out from the non-cosmetic side",
+          "hint": "Check thickness analysis for local thick spots at boss bases, corners and intersections. Core them out to the nominal wall where possible.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-15",
+          "text": "Sink and void risk areas are identified and accepted or eliminated",
+          "hint": "Use thickness analysis and mold-flow sink prediction. Agree with the molder which areas may show sink and whether they matter functionally or cosmetically.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-16",
+          "text": "Outside corners have a radius equal to the inside radius plus wall thickness",
+          "hint": "Concentric radii keep the wall uniform through the corner. Sharp outside with radiused inside (or the reverse) creates thick or thin spots.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-im-17",
+          "text": "Holes and windows near edges leave enough material for flow and strength",
+          "hint": "Rule of thumb: hole-to-edge and hole-to-hole distance at least two times wall thickness. Narrow webs short-shot, knit badly and crack.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-im-18",
+          "text": "The resin supplier's design guide has been reviewed for the selected grade",
+          "hint": "Most resin suppliers publish design guides covering walls, ribs, bosses, snaps and shrink. Note any recommendation the design departs from and why.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-tool",
+      "title": "Injection Molding: Tooling & Process",
+      "tags": [
+        "injection-molded"
+      ],
+      "items": [
+        {
+          "id": "pd-tool-1",
+          "text": "Parting line location is agreed with the molder and shown on the model or drawing",
+          "hint": "Review the parting line with the toolmaker before kick-off. A late parting-line change is a tooling recut.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-tool-2",
+          "text": "Gate location and type are agreed with the molder for each part",
+          "hint": "Confirm the gate type (edge, sub, hot tip, valve) and location against fill, cosmetics and degating. Gate location drives knit lines, warp and fiber orientation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-3",
+          "text": "Weld/knit lines are predicted and are not in high-stress areas",
+          "hint": "Use mold-flow results to locate knit lines and overlay them on the load path. Knit lines can be far weaker than the bulk material, especially in glass-filled resins.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-4",
+          "text": "Ejector pin locations are agreed with the molder and avoid cosmetic and sealing faces",
+          "hint": "Ask the toolmaker for an ejector layout. Witness marks and pin height tolerance (proud or recessed) must be acceptable where they land.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-5",
+          "text": "Ejection is feasible: the part has enough flat area or ribs for ejectors and will not stick on the wrong half",
+          "hint": "Deep cores, low draft and textures on the ejector side cause sticking and distortion. Confirm with the toolmaker which half the part stays on.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-6",
+          "text": "Every undercut is justified, and the side action, lifter or collapsible core needed for it is agreed with the toolmaker",
+          "hint": "List all undercuts from a draft analysis. Each action adds tool cost, maintenance and cycle time; remove undercuts that a pass-through core or redesign can avoid.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-tool-7",
+          "text": "Lifters and slides have travel space and do not hit other features during ejection",
+          "hint": "Ask the toolmaker to confirm travel and clearance for each action. Lifters need clear space behind the undercut equal to their travel.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-8",
+          "text": "Shut-off surfaces have adequate angle to avoid galling and flash",
+          "hint": "Rule of thumb: shut-offs at least about 3-5° from the pull direction, per toolmaker preference. Vertical shut-offs wear quickly and flash.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-9",
+          "text": "Features likely to need tuning are designed steel-safe",
+          "hint": "Model critical fits so that tuning removes steel (adds plastic): e.g. snap engagement, boss diameters and mating clearances. Adding steel is costly welding.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-10",
+          "text": "Shrink rate used for the tool is agreed with the molder for the specific resin grade",
+          "hint": "Get the shrink value from the resin datasheet and molder experience, including flow and cross-flow values for filled resins. Wrong shrink scales every dimension.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-tool-11",
+          "text": "Warp risk is assessed, including anisotropic shrink in glass- or fiber-filled resins",
+          "hint": "Filled resins shrink differently along and across flow. Use mold-flow warp prediction for long, flat or thin parts and adjust gating or geometry.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-12",
+          "text": "Mold-flow analysis is done for critical, large, thin-walled or cosmetic parts",
+          "hint": "Review fill, pack, weld lines, air traps, sink and warp. Run it before tool steel is cut; skip only for small simple parts where the molder agrees.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-13",
+          "text": "Air traps are identified and venting is planned at end of fill",
+          "hint": "Mold-flow air-trap results and the toolmaker's venting plan should agree. Unvented ends of fill burn (dieseling) and short-shot.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-14",
+          "text": "Flow length to wall thickness ratio is within the resin's capability",
+          "hint": "Check the resin's flow data or spiral-flow length for the nominal wall. Long thin flows need more gates or thicker walls.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-15",
+          "text": "Inserts or molded-in metal parts are designed for placement, retention in the tool and resin shrink around them",
+          "hint": "Confirm insert loading method, tolerance and knurl or undercut for retention. Resin shrinking around metal can crack the boss; check the wall around the insert.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-16",
+          "text": "Multi-cavity or family tool layout is agreed, including cavity balancing and cavity ID marking",
+          "hint": "Family tools fill unevenly when parts differ in volume. Add cavity numbers so defects can be traced.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-17",
+          "text": "Cooling and cycle time have been estimated for the thickest section and are consistent with the cost target",
+          "hint": "Cycle time is roughly driven by the square of the thickest wall. Ask the molder for a cycle estimate and confirm critical cooling (e.g. inside deep cores).",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "pd-tool-18",
+          "text": "Tool texture or polish spec is defined per surface, and draft supports it",
+          "hint": "Specify texture or polish finish (e.g. a supplier texture code or SPI-style polish) for each face on the drawing or a texture map. Undefined finish is cut as the toolmaker sees fit.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-imf",
+      "title": "Injection Molding: Snaps, Hinges, Threads & Overmolds",
+      "tags": [
+        "injection-molded"
+      ],
+      "items": [
+        {
+          "id": "pd-imf-1",
+          "text": "Every snap fit has calculated strain during assembly within the resin's allowable strain",
+          "hint": "Calculate peak strain with the cantilever snap formulas or FEA and compare with the allowable from the resin design guide. Over-strained snaps crack on first assembly or creep loose.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-imf-2",
+          "text": "Snap fits are moldable without side actions, or the action is justified",
+          "hint": "Use pass-through cores or windows beneath hooks where possible. Each snap with its own lifter adds cost and maintenance.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-3",
+          "text": "Snap fits have a root radius and tapered beam where needed to spread strain",
+          "hint": "A sharp snap root is a crack starter. A tapered beam lowers peak strain for the same deflection.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-4",
+          "text": "Snap retention force and disassembly behavior (permanent or releasable) match the requirement",
+          "hint": "Check the return angle against the intended separation force. Confirm whether service removal is needed and how a technician releases the snap.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-5",
+          "text": "Living hinges use a resin suited to them and the geometry from the resin design guide",
+          "hint": "Polypropylene and some PE grades are typical; most engineering resins fail quickly. Gate so flow crosses the hinge, and flex it right after molding if the guide says to.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-imf-6",
+          "text": "Molded threads have a thread form, pitch and start suited to molding",
+          "hint": "Molded external threads usually sit on the parting line or need unscrewing cores; internal threads need collapsible or unscrewing cores. Use coarse, rounded thread forms for plastic.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-7",
+          "text": "Threaded inserts (heat-staked, ultrasonic, press-fit or molded-in) have hole sizes and boss walls per the insert supplier",
+          "hint": "Use the insert supplier's hole diameter and depth for the specific resin. Wrong hole size causes low pull-out torque or cracked bosses.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-8",
+          "text": "Heat stake and ultrasonic weld features follow the equipment supplier's joint design",
+          "hint": "Check stake post diameter and height, energy director geometry and clearance for the horn. Poor joint design gives weak or flashy joints.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-9",
+          "text": "Overmold or 2K material pairs are bond-compatible per the material supplier",
+          "hint": "Check the TPE or second-shot supplier's adhesion data for the substrate grade. Incompatible pairs peel, so add mechanical interlocks either way.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-imf-10",
+          "text": "Overmolds have mechanical interlocks (through holes, undercuts, grooves) in addition to chemical bond",
+          "hint": "Interlocks keep the overmold in place if the bond degrades from chemicals, heat or flexing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-11",
+          "text": "Overmold shut-off edges on the substrate are designed for a clean seal of the second-shot tool",
+          "hint": "The second shot needs a crisp shut-off groove or step on the substrate so it does not flash onto adjoining faces. Agree substrate tolerances with the molder.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-12",
+          "text": "Substrate is designed to withstand second-shot pressure and heat without deforming",
+          "hint": "Thin substrate walls deflect under overmold pressure, causing flash and dimensional error. Support them from the tool side.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-imf-13",
+          "text": "Press-fits into plastic have interference calculated against hoop stress and creep",
+          "hint": "Calculate hoop stress at maximum interference and compare with the long-term allowable for the resin. Plastic press-fits relax over time and with temperature.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "pd-sm",
+      "title": "Sheet Metal",
+      "tags": [
+        "sheet-metal"
+      ],
+      "items": [
+        {
+          "id": "pd-sm-1",
+          "text": "Bend radius is at least the minimum for the material, temper and thickness",
+          "hint": "Check the supplier or material bend table. Rule of thumb: inside radius at least equal to thickness for mild steel; harder aluminum tempers need more. Too tight a radius cracks the outside of the bend.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-sm-2",
+          "text": "Bend radii use the supplier's standard tooling where possible",
+          "hint": "Ask the fabricator for their punch radius list. Non-standard radii mean special tooling or air-bend variation.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-sm-3",
+          "text": "The flat pattern uses the supplier's K-factor or bend deduction for the material and tooling",
+          "hint": "Get the K-factor or bend table from the fabricator and set it in CAD before releasing the flat. A wrong bend allowance shifts every formed dimension.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-4",
+          "text": "Holes and slots are far enough from bends to avoid distortion",
+          "hint": "Rule of thumb: hole edge at least about 2-2.5 times thickness plus bend radius from the bend line. Closer holes deform into ovals during bending.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-5",
+          "text": "Bend reliefs are added where a bend meets an edge or another bend",
+          "hint": "Check the flat for tears at bend ends. Rule of thumb: relief width at least sheet thickness and depth past the bend radius.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-6",
+          "text": "Flange length is at least the minimum for the press brake tooling",
+          "hint": "Rule of thumb: minimum flange about 4 times thickness plus bend radius; confirm with the fabricator's die opening. Short flanges slip and bend unevenly.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-7",
+          "text": "Hems and teardrop hems have a radius or gap the material can form without cracking",
+          "hint": "Closed hems crack in harder tempers and trap contamination. Confirm hem type with the fabricator and finish supplier.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-sm-8",
+          "text": "Grain direction is specified where bends are tight or the material is prone to cracking",
+          "hint": "Bending across the rolling direction tolerates tighter radii. Note the grain direction on the flat pattern if it matters.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-sm-9",
+          "text": "Self-clinching hardware (PEM-style) is compatible with sheet thickness and hardness per the hardware supplier",
+          "hint": "Check minimum sheet thickness, hardness and hole size in the supplier catalog. Fasteners in sheet that is too thin or too hard will not clinch.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-sm-10",
+          "text": "Self-clinching hardware meets the supplier's minimum distance to edges and bends",
+          "hint": "Use the supplier's centerline-to-edge values. Hardware too close to an edge bulges it; too close to a bend cannot be pressed after forming.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-11",
+          "text": "Countersinks are not specified in sheet thinner than the countersink depth requires",
+          "hint": "In thin sheet a machined countersink leaves a knife edge. Use a dimpled (formed) countersink or a different fastener.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-12",
+          "text": "Tolerances across one or more bends reflect the fabricator's forming capability",
+          "hint": "Tolerances across bends accumulate bend variation. Agree realistic values with the fabricator; dimension critical features within one flat face where possible.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-13",
+          "text": "Welds and spot welds are located where the welder can reach and distortion is acceptable",
+          "hint": "Check electrode access for spot welds and torch access for fusion welds. Long welds near precise features distort them; plan post-weld machining if needed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-14",
+          "text": "Finishing (plating, painting, powder coat) is specified after forming, or the coating is rated for forming",
+          "hint": "Pre-plated or pre-painted sheet can crack at bends. Note whether finish is applied before or after forming and allow for coating thickness on fits.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-sm-15",
+          "text": "Burr direction is specified where it matters for safety, fit or cosmetics",
+          "hint": "Punching and some laser cutting leave a burr on one side. Call it out where edges are handled or mate with other parts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-sm-16",
+          "text": "Formed features (louvers, embosses, lances, extrusions) follow the fabricator's tooling dimensions",
+          "hint": "Formed features need specific punch tooling. Use the fabricator's standard form tools where possible and keep them away from bends.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-sm-17",
+          "text": "Flat pattern nests efficiently and the part avoids features needing secondary operations",
+          "hint": "Ask the fabricator for nest yield on large parts. Tapped holes, machined features and deburring add operations.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-mc",
+      "title": "Machined Parts",
+      "tags": [
+        "machined"
+      ],
+      "items": [
+        {
+          "id": "pd-mc-1",
+          "text": "Internal corner radii are no smaller than standard cutter radii, slightly larger than the cutter",
+          "hint": "Rule of thumb: internal radius slightly larger than the cutter radius so the tool does not dwell in the corner. Sharp internal vertical corners need EDM.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-2",
+          "text": "Pocket depth is within the reach of a standard cutter for the corner radius",
+          "hint": "Rule of thumb: pocket depth up to about 3-4 times tool diameter is routine; deeper needs long-reach tools, slow feeds and more cost.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-3",
+          "text": "Thin walls and floors are thick enough to machine without chatter or distortion",
+          "hint": "Rule of thumb: about 0.8 mm minimum in metal and more in plastic, per machinist capability. Thin unsupported walls vibrate and spring after release.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-4",
+          "text": "Drilled holes use standard drill sizes unless a reamed or bored size is needed",
+          "hint": "Match hole diameters to standard metric drills. Non-standard sizes need interpolation or special tools.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-5",
+          "text": "Tapped hole depth is no deeper than needed for thread engagement",
+          "hint": "Rule of thumb: thread engagement about 1.5 times diameter in steel and 2 times in aluminum. Deeper threads add tap breakage risk and cost.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-6",
+          "text": "Blind tapped holes have drill depth beyond the full thread for tap clearance and chips",
+          "hint": "Specify full-thread depth and drill depth separately. Bottom-tapping to the drill point breaks taps.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-7",
+          "text": "Threads in aluminum and other soft materials that are assembled repeatedly have threaded inserts",
+          "hint": "Use wire thread inserts or key-locking inserts where screws are removed in service. Threads in soft metal strip after a few cycles.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-8",
+          "text": "Thread form, size and class are specified consistently in the model and on the drawing",
+          "hint": "Use cosmetic thread features in CAD and check the drawing callout (e.g. M4x0.7-6H). Mismatched thread callouts cause wrong taps or mating hardware.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-9",
+          "text": "The part can be made in the minimum number of setups",
+          "hint": "Count the faces that need machining and the orientations required. Each setup adds cost and a datum transfer that affects tolerances.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-10",
+          "text": "Tight tolerances and fine surface finishes are applied only to functional features",
+          "hint": "Review each tolerance and Ra value against function. Tight blanket tolerances drive grinding, inspection and cost; see the tolerancing checklist.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-11",
+          "text": "Every machined feature is accessible to a standard tool from a reachable direction",
+          "hint": "Check for features hidden behind walls or needing angled access. Inaccessible features need 5-axis machining, special tools or redesign.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-12",
+          "text": "Edge breaks and deburr requirements are specified",
+          "hint": "Add a general note for edge break (e.g. a small chamfer or radius maximum) and call out any edge that must stay sharp. Undefined deburring gives inconsistent parts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-13",
+          "text": "Turned features have relief grooves at shoulders where threads or grinding end",
+          "hint": "Thread runout and grinding wheels need a relief groove. Without one the thread is incomplete at the shoulder.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-14",
+          "text": "Turned parts have features concentric to one axis where possible to finish in one chucking",
+          "hint": "Off-axis features and flats need mill-turn or a second operation. Group them where possible.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-15",
+          "text": "Raw stock size has been considered and the part does not waste a large stock size",
+          "hint": "Check the envelope against standard bar and plate sizes. A part slightly larger than standard stock jumps to the next size.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-mc-16",
+          "text": "Work-holding is feasible: the part has surfaces to clamp without distorting thin features",
+          "hint": "Discuss fixturing with the machinist for thin or odd-shaped parts. Add sacrificial tabs if needed and note their removal.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-mc-17",
+          "text": "Text and logos engraved or machined use a cutter-friendly font and size",
+          "hint": "Small text needs tiny engraving tools. Rule of thumb: letter stroke widths larger than the smallest practical cutter; confirm with the shop.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-cst",
+      "title": "Cast Parts",
+      "tags": [
+        "cast"
+      ],
+      "items": [
+        {
+          "id": "pd-cst-1",
+          "text": "Every face parallel to the die or mold pull has draft per foundry guidance",
+          "hint": "Run draft analysis for the casting pull direction. Draft requirements differ for die casting, investment casting and sand casting; get them from the foundry.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-cst-2",
+          "text": "Section thickness is as uniform as practical, with gradual transitions",
+          "hint": "Thick sections solidify last and shrink, causing porosity and sink. Use thickness analysis and core out heavy areas.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-3",
+          "text": "All internal and external corners have fillets per foundry guidance",
+          "hint": "Sharp corners cause hot tears, poor fill and stress concentration. Get the minimum fillet radius for the process from the foundry.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-4",
+          "text": "Parting line and gating are agreed with the foundry",
+          "hint": "Parting line location affects draft, flash and trim. Gating and overflow location affect porosity and cosmetic areas.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-cst-5",
+          "text": "Sealing faces and machined faces are located away from expected porosity",
+          "hint": "Ask the foundry for solidification simulation or porosity experience. Porosity exposed by machining can leak through sealing faces; specify impregnation if needed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-6",
+          "text": "Machined surfaces have machining stock added per foundry guidance",
+          "hint": "Model the as-cast part with stock on machined faces and draw both as-cast and machined states. Too little stock leaves cast skin; too much exposes porosity.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-7",
+          "text": "Cored holes are sized and positioned within foundry capability, and holes needing precision are drilled after casting",
+          "hint": "Small or deep cored holes need pins that break or bend. Specify drilled holes where position or size is tight.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-8",
+          "text": "Die-cast walls and ribs follow the die caster's rules of thumb for the alloy",
+          "hint": "Get the die caster's minimum wall, rib and boss guidelines for the alloy (e.g. aluminum or zinc). Walls too thin cold-shut; too thick porous.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-9",
+          "text": "Casting datums and fixturing points for machining are defined on the as-cast part",
+          "hint": "Define target datums on cast surfaces the machinist can locate from. Without them the first machining setup is improvised.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cst-10",
+          "text": "Ejector pin and overflow locations are acceptable for function and cosmetics",
+          "hint": "Ask the die caster for ejector and overflow layout. Trimmed overflow and gate stubs need a place that does not affect fit or appearance.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cst-11",
+          "text": "As-cast surface finish expected from the process is acceptable or post-processing is specified",
+          "hint": "Sand castings are rough and need machining or finishing on mating faces. State any shot blast, tumbling or coating requirement.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cst-12",
+          "text": "Pressure-tight castings have a leak test and impregnation requirement agreed with the foundry",
+          "hint": "If the casting holds fluid or forms a sealed enclosure, specify the leak test and whether vacuum impregnation is allowed.",
+          "tags": [
+            "sealed-ip",
+            "fluidic"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "pd-am",
+      "title": "Additive Parts",
+      "tags": [
+        "additive"
+      ],
+      "items": [
+        {
+          "id": "pd-am-1",
+          "text": "The additive process and material are chosen for the required strength, temperature, accuracy and finish",
+          "hint": "Compare SLS, MJF, SLA, FDM and DMLS against the requirement with the service bureau. A process that cannot meet tolerance or temperature fails late.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-2",
+          "text": "Build orientation is defined for strength, accuracy and finish",
+          "hint": "Layer lines are weak in FDM and somewhat in other processes. Orient so loads are not across layers and critical surfaces are not support faces.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-3",
+          "text": "Anisotropy of the printed material is considered in load-bearing features",
+          "hint": "Use the service bureau's Z-direction properties for loads across layers. Many datasheets show only the best direction.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-4",
+          "text": "Minimum wall, hole and feature sizes follow the service bureau's design guide for the process",
+          "hint": "Check thinnest features with CAD thickness analysis against the bureau's limits. Features below the limit print poorly or break during cleaning.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-5",
+          "text": "Support structures can be removed and support witness areas are acceptable",
+          "hint": "Identify overhangs that need supports (SLA, FDM, DMLS). Supports inside closed channels cannot be removed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-6",
+          "text": "Hollow or enclosed volumes have escape holes for trapped powder or resin",
+          "hint": "SLS, MJF and SLA parts with sealed cavities trap powder or liquid resin. Add drain holes sized per the bureau.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-7",
+          "text": "Threads in printed parts use inserts or a thread form suited to the process",
+          "hint": "Small printed threads are weak and inaccurate. Use heat-set inserts, tapped holes after printing or coarse modeled threads.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-8",
+          "text": "Dimensional accuracy expectations are agreed with the service bureau for critical features",
+          "hint": "Get the bureau's accuracy statement for the process and part size. Plan post-machining for fits that need more.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-9",
+          "text": "Post-processing (support removal, curing, bead blast, dye, vapor smoothing, heat treat, HIP) is specified",
+          "hint": "Post-processing changes dimensions, properties and appearance. Specify it on the drawing or purchase order.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-am-10",
+          "text": "Large flat areas and thick sections are designed to limit warp and residual stress",
+          "hint": "SLS and DMLS parts warp with large flat areas or abrupt thickness changes. Add ribs, lattices or fillets per the bureau's advice.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-am-11",
+          "text": "Part design takes advantage of additive capability where it adds value (consolidation, internal channels, lattices)",
+          "hint": "If the part is printed for production, check that it is not just a molded part design printed at high cost. Consolidation can remove fasteners and assembly steps.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-am-12",
+          "text": "Printed parts used for production have a defined material lot, machine and process qualification approach",
+          "hint": "Print properties vary between machines, powder refresh rates and bureaus. Agree what is locked and how changes are controlled.",
+          "tags": [
+            "medical",
+            "structural"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "pd-ext",
+      "title": "Extrusions",
+      "tags": [
+        "extruded"
+      ],
+      "items": [
+        {
+          "id": "pd-ext-1",
+          "text": "A standard extrusion profile has been considered before a custom die",
+          "hint": "Check extruder catalogs for a standard profile that meets the need. Custom dies add tooling cost and lead time.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-ext-2",
+          "text": "Custom profile walls are as symmetric and uniform as practical",
+          "hint": "Unequal walls cool and flow unevenly, causing twist and dimensional problems. Rule of thumb: keep adjacent wall ratios within about 2:1.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-3",
+          "text": "Tongue ratios (depth to width of channels) are within the extruder's capability",
+          "hint": "Deep narrow channels need a fragile die tongue. Ask the extruder for their maximum tongue ratio for the alloy.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-4",
+          "text": "Profile tolerances match the extruder's capability for the alloy and profile size",
+          "hint": "Get the extruder's standard tolerances. Tighter tolerances require special processing or post-machining.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-5",
+          "text": "Cut length, end squareness and end machining are specified",
+          "hint": "Saw cut length tolerance and burr are often looser than expected. Specify any end machining, drilling or deburr as a secondary operation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-6",
+          "text": "Corner radii in the profile meet the extruder's minimums",
+          "hint": "Sharp corners wear dies and cause tearing. Use the extruder's minimum internal and external radii.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-ext-7",
+          "text": "Features along the length (holes, slots, cutouts) are designed for post-machining fixturing",
+          "hint": "Long extrusions bow and twist within tolerance. Fixture locations and datum on the profile need definition.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-8",
+          "text": "Hollow profiles are designed for the die type the extruder recommends",
+          "hint": "Hollow profiles need porthole or bridge dies with weld seams. Check the seam location is not in a highly stressed area.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-ext-9",
+          "text": "Surface finish, anodizing and visible faces of the profile are defined",
+          "hint": "Extrusion die lines are visible on exposed faces. Specify which faces are cosmetic and the finish requirement.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-elb",
+      "title": "Elastomer Parts",
+      "tags": [
+        "elastomer"
+      ],
+      "items": [
+        {
+          "id": "pd-elb-1",
+          "text": "Durometer is selected for the function (sealing, damping, actuation, grip) and stated with its scale",
+          "hint": "State hardness as Shore A or Shore 00 with a tolerance. Softer parts seal at lower force but extrude and tear more easily.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-2",
+          "text": "Gasket compression is within the supplier's recommended range across tolerance extremes",
+          "hint": "Calculate compression at minimum and maximum gap from the stack. Under-compressed gaskets leak; over-compressed ones take set or crack. See the enclosure checklist for the seal design.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-elb-3",
+          "text": "Gasket groove volume accommodates the compressed elastomer without overfilling",
+          "hint": "Elastomers are nearly incompressible. Check groove fill at maximum material condition per the seal supplier guide.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "pd-elb-4",
+          "text": "Compression set data for the material at the operating temperature has been reviewed",
+          "hint": "Look up compression set at temperature and time from the datasheet. High compression set means loss of sealing force over life.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-5",
+          "text": "LSR parts have shut-off, venting and parting-line clearances within the LSR molder's flash capability",
+          "hint": "Liquid silicone flashes into gaps far smaller than thermoplastics do, so steel fits and venting must be agreed with the LSR molder. Flash on sealing or keypad faces is a common reject.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-6",
+          "text": "Keypad actuation force and travel meet the specification",
+          "hint": "Model the membrane web and check the force-travel curve with the keypad supplier. Tactile ratio and travel drive user feel.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-7",
+          "text": "Elastomer parts have draft and parting line agreed with the molder, with flash location acceptable",
+          "hint": "Elastomer parts are often demolded by stretching, but flash and parting line still need agreement. Flash on sealing faces leaks.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-8",
+          "text": "O-ring and seal dimensions use standard sizes where possible",
+          "hint": "Use standard O-ring cross sections and sizes (e.g. ISO 3601 series). Custom sizes add tooling and lead time.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-elb-9",
+          "text": "Elastomer parts are retained in position during assembly",
+          "hint": "Loose gaskets fall out or twist during assembly. Use dovetail grooves, retention bumps or adhesive where needed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-elb-10",
+          "text": "Elastomer chemical compatibility with fluids, cleaners and greases it will meet is confirmed per supplier data",
+          "hint": "Some elastomers swell or degrade in oils, alcohols or cleaners. Check the supplier compatibility chart.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "pd-cos",
+      "title": "Cosmetic Considerations",
+      "tags": [
+        "cosmetic"
+      ],
+      "items": [
+        {
+          "id": "pd-cos-1",
+          "text": "Knit lines are predicted away from Class A surfaces",
+          "hint": "Use mold-flow weld-line results overlaid on the cosmetic surface map. Knit lines on Class A faces show, especially with metallic or dark colors.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cos-2",
+          "text": "Sink marks are not expected on Class A surfaces",
+          "hint": "Check rib, boss and thick-section locations behind cosmetic faces. Use mold-flow sink prediction and revise rib thickness if needed.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cos-3",
+          "text": "Gate vestige is hidden on a non-cosmetic face or under another part",
+          "hint": "Agree gate location with the molder and check vestige height. A visible gate mark on a Class A face is a common cosmetic reject.",
+          "tags": [
+            "injection-molded",
+            "cast"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cos-4",
+          "text": "Parting lines are placed on edges or features where they are hidden or read as a design line",
+          "hint": "A parting line across a flat cosmetic face shows mismatch and flash. Place it on a sharp edge or a design step.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cos-5",
+          "text": "Each cosmetic texture and gloss level is approved on a physical sample plaque before the tool is textured",
+          "hint": "Approve texture, gloss and color on plaques in the production resin. Texture looks different on screen, in another resin or at a different draft; re-texturing a tool is slow and costly.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cos-6",
+          "text": "Class A, B and C surfaces are identified on the model or drawing",
+          "hint": "Use a surface map or colored faces so the molder knows which faces are cosmetic. Without it, ejectors and gates may land on visible faces.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-cos-7",
+          "text": "Matching parts have cosmetic gaps and flushness designed with realistic process variation",
+          "hint": "Model nominal gaps large enough that variation does not cause interference or uneven gaps. Use a design step to hide mismatch at split lines.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cos-8",
+          "text": "Large flat cosmetic faces have slight curvature or texture to hide distortion",
+          "hint": "Perfectly flat glossy faces show every warp and sink. A small crown or texture hides it.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-cos-9",
+          "text": "Slide, lifter and tool insert witness lines are kept off Class A faces",
+          "hint": "Review the tool layout with the toolmaker for every Class A face. Witness lines from actions and inserts show as fine lines and worsen as the tool wears.",
+          "tags": [
+            "injection-molded",
+            "cast"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "pd-vol",
+      "title": "Volume Production",
+      "tags": [
+        "high-volume"
+      ],
+      "items": [
+        {
+          "id": "pd-vol-1",
+          "text": "Part cost drivers (material, cycle time, tooling, secondary operations) are reviewed against the cost target",
+          "hint": "Get a cost breakdown from the supplier quote. Identify the top drivers and the design levers for each.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-2",
+          "text": "Tool life and steel specification match the lifetime volume",
+          "hint": "Agree tool class and steel (e.g. hardened steel for high volume or glass-filled resin) with the toolmaker. Soft tools wear out early.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-3",
+          "text": "Part consolidation opportunities have been considered",
+          "hint": "Ask whether two or more parts can become one without loss of function or serviceability. Fewer parts reduce tooling, assembly and inventory.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-vol-4",
+          "text": "Supplier DFM feedback has been received for every new tool or production part",
+          "hint": "Request a formal DFM report from each toolmaker or fabricator. Store it with the design record.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-5",
+          "text": "Every supplier DFM comment is dispositioned (accepted, rejected with reason, or deferred) and the record is kept",
+          "hint": "Track DFM comments in a log with owner and decision. Unresolved comments resurface as tool changes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-6",
+          "text": "Secondary operations (deburr, machining, inserts, painting) are minimized or justified",
+          "hint": "List every post-process operation. Each adds cost, handling and a defect opportunity.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "pd-vol-7",
+          "text": "Number of cavities or production rate matches the demand forecast",
+          "hint": "Compare cavitation or line capacity with annual volume and peak demand. Too few cavities limit supply; too many cost tooling up front.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-8",
+          "text": "Material grade is commonly available from more than one source or the single source is accepted",
+          "hint": "Special grades and colors carry long lead times and minimum orders. Check availability with the supplier; the materials checklist owns the grade choice.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-9",
+          "text": "Design allows production tooling to be adjusted after first articles without a full recut",
+          "hint": "Steel-safe fits, inserts for changeable features and adjustable stops allow tuning. Confirm with the toolmaker.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "pd-vol-10",
+          "text": "Part design supports automated handling, packing or inspection where planned",
+          "hint": "Check for features that allow robot pick, nesting or vision inspection. Parts that tangle or nest poorly slow production.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    }
+  ]
+}

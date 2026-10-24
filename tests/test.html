@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Signoff ME tests</title>
+<style>
+  body { font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; margin: 32px; background: #f5f5f7; color: #1d1d1f; }
+  .pass { color: #248a3d; } .fail { color: #d70015; font-weight: 600; }
+  #summary { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+  pre { margin: 2px 0 8px 18px; color: #515154; }
+</style>
+</head>
+<body>
+<div id="summary">Running…</div>
+<div id="out"></div>
+<script src="../assets/config.js"></script>
+<script src="../assets/templates.js"></script>
+<script src="../assets/model.js"></script>
+<script src="../assets/github.js"></script>
+<script src="../assets/workspace.js"></script>
+<script src="../assets/demo.js"></script>
+<script>
+/* Unit tests for the model and the GitHub sync, run against a fake GitHub API.
+   Open this file in a browser; the title shows PASS or FAIL. */
+(async function () {
+  var M = Signoff.model, results = [];
+  function ok(cond, name, detail) { results.push({ ok: !!cond, name: name, detail: detail }); }
+  function eq(a, b, name) { ok(JSON.stringify(a) === JSON.stringify(b), name, 'got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b)); }
+
+  var T = window.SIGNOFF_TEMPLATES;
+  var idx = M.indexTemplates(T);
+
+  // ── Templates ──
+  eq(T.map(function (t) { return t.id; }), Signoff.config.templateOrder, 'nine checklists bundled in order');
+  var ids = {}, dup = [];
+  T.forEach(function (t) { t.sections.forEach(function (s) { [s].concat(s.items).forEach(function (x) { if (ids[x.id]) dup.push(x.id); ids[x.id] = 1; }); }); });
+  eq(dup, [], 'ids are unique across templates');
+  ok(T.every(function (t) { var pre = Signoff.config.templatePrefixes[t.id] + '-'; return t.sections.every(function (s) { return s.id.indexOf(pre) === 0 && s.items.every(function (it) { return it.id.indexOf(s.id + '-') === 0; }); }); }), 'section and item ids carry their checklist prefix');
+  ok(Object.keys(idx.items).length > 600, 'a substantial ME check set (' + Object.keys(idx.items).length + ' checks)');
+  var newer = JSON.parse(JSON.stringify(T[0])); newer.version = T[0].version + 1; newer.title = 'Pulled';
+  eq(M.resolveTemplates(T, [newer])[0].title, 'Pulled', 'pulled template with higher version wins');
+  var older = JSON.parse(JSON.stringify(T[0])); older.version = 0; older.title = 'Old';
+  eq(M.resolveTemplates(T, [older])[0].title, T[0].title, 'bundled template wins over an older pulled one');
+
+  // ── Config ──
+  var CFG = Signoff.config;
+  eq(M.TAGS.map(function (t) { return t.id; }), CFG.tags.map(function (t) { return t.id; }), 'profile tags come from config.js');
+  ok(M.newProject({ name: 'x', checklists: [] }, 'Ann', T).id.indexOf(CFG.ids.project) === 0, 'project ids use the configured prefix');
+  ok(CFG.storage.ns !== 'signoff.' && CFG.repos.prefix !== 'review-', 'own storage namespace and shared-repo prefix');
+
+  // ── Applicability ──
+  ok(M.applies([], []), 'untagged applies');
+  ok(!M.applies(['rf'], ['battery']), 'tagged item hidden outside profile');
+  ok(M.applies(['rf', 'mains'], ['mains']), 'any matching tag applies');
+  var p = M.newProject({ name: 'Test Board', checklists: [T[0].id], profile: [] }, 'Ann', T);
+  var rows = []; M.checklistRows(p, T[0]).forEach(function (g) { rows = rows.concat(g.rows); });
+  var hidden = rows.filter(function (r) { return r.hidden; });
+  ok(hidden.length > 0 && hidden.every(function (r) { return r.status === 'na' && r.auto === 'profile'; }), 'profile-hidden rows count as N/A');
+  p.items[hidden[0].id] = { include: true };
+  var r2 = []; M.checklistRows(p, T[0]).forEach(function (g) { r2 = r2.concat(g.rows); });
+  eq(r2.filter(function (r) { return r.id === hidden[0].id; })[0].status, 'open', 'include brings a hidden item back');
+  p.items[hidden[0].id] = { status: 'pass' };
+  var r3 = []; M.checklistRows(p, T[0]).forEach(function (g) { r3 = r3.concat(g.rows); });
+  eq(r3.filter(function (r) { return r.id === hidden[0].id; })[0].status, 'pass', 'explicit status overrides profile');
+  var st = M.projectStats(p, T);
+  ok(st.total === rows.length - hidden.length + 1 && st.outside === hidden.length - 1 && st.reviewed === 1, 'profile-hidden items are left out of progress (a passed one counts)');
+  var fresh = M.newProject({ name: 'Fresh', checklists: [T[0].id, T[1].id], profile: ['battery'] }, 'Ann', T);
+  eq(M.projectStats(fresh, T).pct, 0, 'a new review starts at 0%');
+
+  // ── Merge ──
+  var base = M.newProject({ name: 'Merge', checklists: [T[0].id] }, 'Ann', T);
+  var a = JSON.parse(JSON.stringify(base)), b = JSON.parse(JSON.stringify(base));
+  a.items.sg1 = { status: 'pass', updatedAt: '2026-01-01T10:00:00Z', updatedBy: 'Ann' };
+  b.items.sg1 = { status: 'issue', updatedAt: '2026-01-01T11:00:00Z', updatedBy: 'Bob' };
+  a.items.sg2 = { status: 'pass', updatedAt: '2026-01-01T10:00:00Z', updatedBy: 'Ann' };
+  b.comments.c1 = { id: 'c1', item: 'sg1', author: 'Bob', text: 'hi', at: 'x', updatedAt: '2026-01-01T11:00:00Z', updatedBy: 'Bob' };
+  a.comments.c2 = { id: 'c2', item: 'sg1', author: 'Ann', text: 'yo', at: 'x', updatedAt: '2026-01-01T09:00:00Z', updatedBy: 'Ann' };
+  var m1 = M.mergeProjects(a, b), m2 = M.mergeProjects(b, a);
+  eq(m1.items.sg1.status, 'issue', 'newer item state wins');
+  ok(m1.items.sg2 && m1.comments.c1 && m1.comments.c2, 'both sides’ items and comments kept');
+  eq(M.stableStringify(m1), M.stableStringify(m2), 'merge is order independent');
+  var del = JSON.parse(JSON.stringify(m1)); del.comments.c1 = Object.assign({}, del.comments.c1, { deleted: true, updatedAt: '2026-01-02T00:00:00Z' });
+  ok(M.mergeProjects(m1, del).comments.c1.deleted, 'deletion tombstone survives merge');
+  eq(M.stableStringify({ b: 1, a: { d: 1, c: 2 } }), '{\n  "a": {\n    "c": 2,\n    "d": 1\n  },\n  "b": 1\n}\n', 'stable stringify sorts keys');
+
+  // ── No legacy import in ME ──
+  ok(!M.isLegacy({ checks: [{}], categories: [] }), 'old EE checklist exports are not taken as ME projects');
+
+  // ── Git blob sha ──
+  eq(await Signoff.github.gitBlobSha('hello\n'), 'ce013625030ba8dba906f756967f9e9ca394464a', 'git blob sha matches git hash-object');
+
+  // ── A fake GitHub with several repositories, users and permissions ──
+  // Tokens: 'tok-<login>'. 'ann' owns every repository (personal account).
+  function FakeHub() {
+    var hub = this;
+    hub.repos = {}; hub.n = 0; hub.calls = []; hub.inviteSeq = 1; hub.raceOnce = null;
+    function id() { return (++hub.n).toString(16).padStart(40, '0'); }
+    function commitFiles(repo, files) {
+      var t = id(); repo.trees[t] = files; var c = id(); repo.commits[c] = { tree: t, parent: repo.head }; repo.head = c; return c;
+    }
+    hub.makeRepo = function (full, files, members) {
+      hub.repos[full] = { trees: {}, commits: {}, head: null, blobs: {}, collaborators: (members || []).slice(), invitations: [] };
+      commitFiles(hub.repos[full], files);
+    };
+    hub.files = function (full) { var r = hub.repos[full]; return Object.assign({}, r.trees[r.commits[r.head].tree]); };
+    hub.push = function (full, files) { commitFiles(hub.repos[full], files); };
+    hub.fetchFor = function (token) {
+      var login = token.replace(/^tok-/, '');
+      return async function (url, opts) {
+        var u = url.replace('https://api.github.com', ''), method = opts.method || 'GET';
+        var body = opts.body ? JSON.parse(opts.body) : null;
+        hub.calls.push(login + ' ' + method + ' ' + u);
+        function res(status, data) { return { ok: status < 300, status: status, text: async function () { return data === undefined ? '' : JSON.stringify(data); } }; }
+        if (u === '/user') return res(200, { login: login, name: login.toUpperCase() });
+        if (/^\/users\//.test(u)) return res(200, { login: u.split('/')[2], type: 'User' });
+        if (/^\/user\/repos\?/.test(u) && method === 'GET') {
+          return res(200, Object.keys(hub.repos).filter(function (f) { return hub.repos[f].collaborators.indexOf(login) >= 0; })
+            .map(function (f) { return { name: f.split('/')[1], owner: { login: f.split('/')[0] } }; }));
+        }
+        if (u === '/user/repos' && method === 'POST') {
+          var full = login + '/' + body.name;
+          if (hub.repos[full]) return res(422, { message: 'name already exists on this account' });
+          hub.makeRepo(full, { 'README.md': '# ' + body.name }, [login]);
+          return res(201, { full_name: full });
+        }
+        if (/^\/user\/repository_invitations\?/.test(u)) {
+          var mine = [];
+          Object.keys(hub.repos).forEach(function (f) {
+            hub.repos[f].invitations.forEach(function (i) { if (i.login === login) mine.push({ id: i.id, repository: { full_name: f, owner: { login: f.split('/')[0] } } }); });
+          });
+          return res(200, mine);
+        }
+        var acc = /^\/user\/repository_invitations\/(\d+)$/.exec(u);
+        if (acc && method === 'PATCH') {
+          Object.keys(hub.repos).forEach(function (f) {
+            var r = hub.repos[f];
+            r.invitations.filter(function (i) { return String(i.id) === acc[1] && i.login === login; }).forEach(function () { r.collaborators.push(login); });
+            r.invitations = r.invitations.filter(function (i) { return String(i.id) !== acc[1]; });
+          });
+          return res(204);
+        }
+        var m = /^\/repos\/([^/]+)\/([^/]+)(\/.*)$/.exec(u.split('?')[0]);
+        if (!m) return res(404, { message: 'Not Found: ' + u });
+        var full2 = m[1] + '/' + m[2], repo = hub.repos[full2], path = m[3];
+        if (!repo || repo.collaborators.indexOf(login) < 0) return res(404, { message: 'Not Found' });
+        var admin = full2.split('/')[0] === login;
+        if (method === 'GET' && /^\/git\/ref\/heads\//.test(path)) return res(200, { object: { sha: repo.head } });
+        if (method === 'GET' && /^\/git\/commits\//.test(path)) return res(200, { tree: { sha: repo.commits[path.split('/').pop()].tree } });
+        if (method === 'GET' && /^\/git\/trees\//.test(path)) {
+          var files = repo.trees[path.split('/').pop()];
+          var entries = await Promise.all(Object.keys(files).map(async function (p) {
+            var s = await Signoff.github.gitBlobSha(files[p]); repo.blobs[s] = files[p]; return { path: p, type: 'blob', sha: s };
+          }));
+          return res(200, { tree: entries });
+        }
+        if (method === 'GET' && /^\/git\/blobs\//.test(path)) return res(200, { content: Signoff.github.b64Encode(repo.blobs[path.split('/').pop()]) });
+        if (method === 'POST' && path === '/git/trees') {
+          var f = Object.assign({}, repo.trees[body.base_tree]);
+          body.tree.forEach(function (e) { if (e.sha === null) delete f[e.path]; else f[e.path] = e.content; });
+          var t = id(); repo.trees[t] = f; return res(201, { sha: t });
+        }
+        if (method === 'POST' && path === '/git/commits') { var cs = id(); repo.commits[cs] = { tree: body.tree, parent: body.parents[0] }; return res(201, { sha: cs, html_url: 'https://github.com/' + full2 + '/commit/' + cs }); }
+        if (method === 'PATCH' && /^\/git\/refs\/heads\//.test(path)) {
+          if (hub.raceOnce) { var race = hub.raceOnce; hub.raceOnce = null; race(); }
+          if (repo.commits[body.sha].parent !== repo.head) return res(422, { message: 'Update is not a fast forward' });
+          repo.head = body.sha; return res(200, {});
+        }
+        if (!admin && /^\/(collaborators|invitations)/.test(path)) return res(403, { message: 'Must have admin rights' });
+        if (method === 'GET' && path === '/collaborators') return res(200, repo.collaborators.map(function (l) { return { login: l }; }));
+        if (method === 'GET' && path === '/invitations') return res(200, repo.invitations.map(function (i) { return { id: i.id, invitee: { login: i.login } }; }));
+        var col = /^\/collaborators\/(.+)$/.exec(path);
+        if (col && method === 'PUT') {
+          if (repo.collaborators.indexOf(col[1]) < 0 && !repo.invitations.some(function (i) { return i.login === col[1]; })) repo.invitations.push({ id: hub.inviteSeq++, login: col[1] });
+          return res(201, {});
+        }
+        if (col && method === 'DELETE') { repo.collaborators = repo.collaborators.filter(function (l) { return l !== col[1]; }); return res(204); }
+        var inv = /^\/invitations\/(\d+)$/.exec(path);
+        if (inv && method === 'DELETE') { repo.invitations = repo.invitations.filter(function (i) { return String(i.id) !== inv[1]; }); return res(204); }
+        return res(404, { message: 'Not Found: ' + method + ' ' + path });
+      };
+    };
+  }
+
+  var hub = new FakeHub();
+  hub.makeRepo('ann/tool', { 'index.html': '<html>', 'assets/version.js': "window.SIGNOFF_VERSION = { hash: 'abc123', date: '2026-10-23' };" }, ['ann']);
+  hub.makeRepo('ann/data', { 'README.md': '# data' }, ['ann']);
+  var SET = { owner: 'ann', toolRepo: 'tool', dataRepo: 'data', dataPath: '', prefix: 'review-', branch: 'main', suiteRepos: ['other_tool', 'other_data', 'signoff'] };
+  function wsFor(login, extra) { return new Signoff.Workspace(Object.assign({}, SET, extra || {}), 'tok-' + login, hub.fetchFor('tok-' + login)); }
+  function blank() { return { login: '', projects: {}, roster: M.emptyRoster(), homes: {}, cache: {}, dataAccess: '' }; }
+  function dataFile(id) { return hub.files('ann/data')['projects/' + id + '.json']; }
+
+  // Ann (owner) creates an internal project.
+  var annWs = wsFor('ann'), annSt = blank();
+  var P = M.newProject({ name: 'Sensor Hub Main Board', checklists: [T[0].id] }, 'ann', T);
+  annSt.projects[P.id] = P;
+  var r = await annWs.sync(annSt, {});
+  annSt = r.state;
+  ok(r.errors.length === 0 && annSt.dataAccess === 'ok' && annSt.login === 'ann', 'owner syncs as FTE', JSON.stringify(r.errors));
+  ok(dataFile(P.id), 'internal project is written to the data repo');
+  eq(r.version && r.version.hash, 'abc123', 'tool version read from the tool repo');
+  ok(!Object.keys(hub.files('ann/data')).some(function (p) { return /sensor/i.test(p); }), 'file names don’t reveal project names');
+
+  // People: Bob is an FTE, Cat a contractor on P.
+  var now = '2026-10-23T14:00:00Z';
+  annSt.roster.users.bob = { login: 'bob', name: 'Bob', role: 'fte', projects: [], updatedAt: now, updatedBy: 'ann' };
+  annSt.roster.users.cat = { login: 'cat', name: 'Cat', role: 'contractor', projects: [P.id], updatedAt: now, updatedBy: 'ann' };
+  r = await annWs.sync(annSt, {}); annSt = r.state;
+  ok(JSON.parse(hub.files('ann/data')['users.json']).users.cat, 'People list is saved in the data repo');
+
+  // Before accepting, Bob can't open the data repo: no local data, so he looks like a contractor.
+  hub.repos['ann/data'].invitations.push({ id: 900, login: 'bob' });
+  hub.repos['ann/tool'].invitations.push({ id: 901, login: 'bob' });
+  var bobWs = wsFor('bob'), bobSt = blank();
+  r = await bobWs.sync(bobSt, {});
+  ok(r.state.dataAccess === 'none' && r.invitations.length === 2, 'invitations are listed before they’re accepted');
+  await Promise.all(r.invitations.map(function (i) { return bobWs.account.acceptInvitation(i.id); }));
+  r = await bobWs.sync(r.state, {}); bobSt = r.state;
+  ok(bobSt.dataAccess === 'ok' && bobSt.projects[P.id], 'after accepting, the FTE sees internal projects');
+
+  // Bob edits P but doesn't sync. Meanwhile Ann shares P with Cat.
+  bobSt.projects[P.id] = JSON.parse(JSON.stringify(bobSt.projects[P.id]));
+  bobSt.projects[P.id].items.sg1 = { status: 'issue', updatedAt: '2026-10-23T15:00:00Z', updatedBy: 'bob' };
+  var sh = await annWs.share(annSt, P.id, ['cat']);
+  annSt = sh.state;
+  eq(sh.repo, 'ann/review-sensor-hub-main-board', 'sharing creates a private review- repository');
+  ok(hub.files(sh.repo)['projects/' + P.id + '.json'], 'the project is copied into it');
+  ok(hub.repos[sh.repo].invitations.some(function (i) { return i.login === 'cat'; }) && hub.repos[sh.repo].invitations.some(function (i) { return i.login === 'bob'; }),
+    'the contractor and the other FTEs are invited');
+  r = await annWs.sync(annSt, {}); annSt = r.state;
+  ok(!dataFile(P.id) && JSON.parse(hub.files('ann/data')['users.json']).shared[P.id].repo === sh.repo, 'the data repo records the move and drops its copy');
+
+  // Bob syncs his stale edit: it must not resurrect P in the data repo.
+  r = await bobWs.sync(bobSt, {}); bobSt = r.state;
+  ok(!dataFile(P.id), 'an unsynced edit doesn’t bring a shared project back into the data repo');
+  ok(bobSt.projects[P.id] && bobSt.projects[P.id].items.sg1 && r.errors.some(function (e) { return e.repo === sh.repo; }), 'until Bob accepts, his edit is kept locally and the repo is reported');
+  var bInv = (await bobWs.account.invitations()).filter(function (i) { return i.repo === sh.repo; })[0];
+  await bobWs.account.acceptInvitation(bInv.id);
+  r = await bobWs.sync(bobSt, {}); bobSt = r.state;
+  ok(JSON.parse(hub.files(sh.repo)['projects/' + P.id + '.json']).items.sg1 && !dataFile(P.id), 'after accepting, his edit lands in the shared repo');
+
+  // Cat: a contractor sees only her project and never touches the data repo.
+  var catWs = wsFor('cat'), catSt = blank();
+  r = await catWs.sync(catSt, {});
+  ok(r.state.dataAccess === 'none' && !Object.keys(r.state.projects).length && r.invitations.length === 1, 'contractor starts with an invitation and nothing else');
+  await catWs.account.acceptInvitation(r.invitations[0].id);
+  var Q = M.newProject({ name: 'Secret Internal', checklists: [T[0].id] }, 'ann', T);
+  annSt.projects[Q.id] = Q;
+  r = await annWs.sync(annSt, {}); annSt = r.state;
+  var dataCalls = hub.calls.length;
+  r = await catWs.sync(blank(), {}); catSt = r.state;
+  eq(Object.keys(catSt.projects), [P.id], 'contractor gets only the shared project');
+  ok(!hub.calls.slice(dataCalls).some(function (c) { return /^cat .*\/repos\/ann\/data\/git\/blobs/.test(c); }), 'contractor downloads nothing from the data repo');
+  catSt.projects[P.id] = JSON.parse(JSON.stringify(catSt.projects[P.id]));
+  catSt.projects[P.id].comments.k1 = { id: 'k1', item: 'sg1', author: 'Cat', text: 'Fixed in rev B', at: 'x', updatedAt: '2026-10-23T16:00:00Z', updatedBy: 'cat' };
+  r = await catWs.sync(catSt, {}); catSt = r.state;
+  ok(JSON.parse(hub.files(sh.repo)['projects/' + P.id + '.json']).comments.k1, 'contractor changes reach the single source of truth');
+
+  // Revoked: Cat's copy is dropped and nothing is pushed.
+  await annWs.revokeFrom(sh.repo, ['cat']);
+  catSt.projects[P.id].comments.k2 = { id: 'k2', item: 'sg1', author: 'Cat', text: 'late', at: 'x', updatedAt: '2026-10-23T17:00:00Z', updatedBy: 'cat' };
+  r = await catWs.sync(catSt, {});
+  ok(!r.state.projects[P.id] && r.dropped.indexOf(P.id) >= 0 && !JSON.parse(hub.files(sh.repo)['projects/' + P.id + '.json']).comments.k2, 'revoked contractor loses the project and can’t push');
+
+  // A share interrupted after the repo was created is finished, not duplicated.
+  var half = await annWs.share(annSt, Q.id, []);   // pretend the app crashed before saving this state
+  var again = await annWs.share(annSt, Q.id, []);
+  ok(half.repo === again.repo && !hub.repos['ann/review-secret-internal-2'], 'repeating an interrupted share adopts the repo it made');
+
+  // An FTE whose data repo can't be reached keeps everything.
+  var lost = await wsFor('ann', { dataRepo: 'typo' }).sync(annSt, {});
+  ok(lost.state.dataAccess === 'ok' && lost.state.projects[Q.id] && lost.errors.some(function (e) { return /typo/.test(e.message); }), 'a missing data repo is an error, not contractor mode');
+
+  // FTEs get the whole suite; a contractor only sees repos with this tool's prefix.
+  var fr = annWs.fteRepos(annSt);
+  ok(['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff', sh.repo].every(function (x) { return fr.indexOf(x) >= 0; }), 'FTE repos cover this tool, the rest of the suite and shared projects');
+  eq(annWs.internalRepos(), ['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff'], 'internal repos are the tool, data and suite repos');
+  hub.makeRepo('ann/review-ee-board', { 'README.md': '#' }, ['ann', 'dan']);
+  hub.makeRepo('ann/review-me-housing', { 'README.md': '#' }, ['ann', 'dan']);
+  eq(await wsFor('dan', { prefix: 'review-ee-' }).account.listRepos('ann', 'review-ee-'), ['review-ee-board'], 'a discipline prefix keeps the other tool’s shared repos out');
+
+  // ── Store-level behaviour ──
+  hub.makeRepo('ann/review-race', { 'README.md': '#' }, ['ann', 'bob']);
+  var R1 = M.newProject({ name: 'Race', checklists: [T[0].id] }, 'ann', T);
+  var annStore = annWs.store('ann/review-race'), bobStore = bobWs.store('ann/review-race');
+  var one = {}; one[R1.id] = R1;
+  var rr = await annStore.sync(one, null, {}, {});
+  var raced = JSON.parse(JSON.stringify(rr.projects[R1.id]));
+  raced.items.sg3 = { status: 'na', updatedAt: '2026-10-23T11:00:00Z', updatedBy: 'ann' };
+  var retries = 0;
+  hub.raceOnce = function () {
+    var f = hub.files('ann/review-race'), d = JSON.parse(f['projects/' + R1.id + '.json']);
+    d.items.sg4 = { status: 'pass', updatedAt: '2026-10-23T11:00:01Z', updatedBy: 'bob' };
+    f['projects/' + R1.id + '.json'] = M.stableStringify(d); hub.push('ann/review-race', f);
+  };
+  var one2 = {}; one2[R1.id] = raced;
+  await annStore.sync(one2, null, rr.cache, { onRetry: function () { retries++; } });
+  var after = JSON.parse(hub.files('ann/review-race')['projects/' + R1.id + '.json']);
+  ok(retries === 1 && after.items.sg3 && after.items.sg4, 'non-fast-forward is retried and both edits survive');
+  var warm = await bobStore.sync({}, null, {}, {});
+  var before = hub.calls.length;
+  var noop = await bobStore.sync(warm.projects, null, warm.cache, {});
+  var noopCalls = hub.calls.slice(before);
+  ok(noop.pushed === 0 && !noopCalls.some(function (c) { return /(POST|PATCH)/.test(c) || /blobs/.test(c); }), 'an unchanged repo is neither downloaded nor committed', noopCalls.join(', '));
+
+  // ── Demo ──
+  var demo = Signoff.demo.projects(T);
+  ok(demo.length === 2 && demo.every(function (d) { return Object.keys(d.items).length > 10; }), 'demo projects build');
+  ok(demo.some(function (d) { return Object.keys(d.items).some(function (k) { return d.items[k].status === 'issue'; }); }), 'demo has findings');
+
+  var failed = results.filter(function (r) { return !r.ok; });
+  document.getElementById('out').innerHTML = results.map(function (r) {
+    return '<div class="' + (r.ok ? 'pass' : 'fail') + '">' + (r.ok ? '✓ ' : '✗ ') + r.name + '</div>' + (r.ok ? '' : '<pre>' + (r.detail || '') + '</pre>');
+  }).join('');
+  document.getElementById('summary').textContent = (failed.length ? 'FAIL: ' + failed.length + ' of ' : 'PASS: all ') + results.length + ' tests';
+  document.title = failed.length ? 'FAIL' : 'PASS';
+})().catch(function (e) {
+  document.getElementById('summary').textContent = 'ERROR: ' + e.message;
+  document.title = 'ERROR';
+  console.error(e);
+});
+</script>
+</body>
+</html>

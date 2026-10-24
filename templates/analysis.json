@@ -1,0 +1,739 @@
+{
+  "id": "analysis",
+  "title": "Thermal & Structural Analysis",
+  "short": "Analysis",
+  "version": 1,
+  "description": "Analysis planning, loads and boundary conditions, FEA modeling, results interpretation, structural, dynamics, thermal, thermal expansion, pressure, battery and analysis documentation.",
+  "sections": [
+    {
+      "id": "fea-plan",
+      "title": "Analysis Planning",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-plan-1",
+          "text": "A list of parts and load cases that need analysis is agreed at the start of detailed design",
+          "hint": "Base it on the requirements, risk analysis and past failures. Unanalyzed critical parts are usually found during testing, when changes are expensive.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-plan-2",
+          "text": "Acceptance criteria and safety factors are defined before any analysis is run",
+          "hint": "State the allowable (yield, ultimate, strain, temperature, deflection) and safety factor for each load case in the plan. Criteria chosen after seeing results invite wishful thinking.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-plan-3",
+          "text": "Hand calculations bound each critical result before or alongside FEA",
+          "hint": "Beam, plate, pressure-vessel or thermal resistance hand calcs catch unit errors and wrong boundary conditions. Large disagreement with FEA needs an explanation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-plan-4",
+          "text": "Rules of thumb used in place of analysis are labeled as such and recorded with their source",
+          "hint": "Mark them clearly in the design record so reviewers know which numbers were not calculated.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-plan-5",
+          "text": "The analysis type (static, modal, transient, nonlinear, thermal, CFD) matches the physics of each load case",
+          "hint": "Impact and snap fits are not linear static problems. Large deflections, contact and yielding need nonlinear analysis.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-plan-6",
+          "text": "Analysis results feed back into a decision: design change, test or accepted risk",
+          "hint": "Every result should close with an action. Reports that conclude nothing waste the effort.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-plan-7",
+          "text": "Analysis schedule allows results before tooling release",
+          "hint": "Tie analysis milestones to the tooling kickoff. Results after tool steel is cut become a recut.",
+          "tags": [
+            "injection-molded",
+            "cast",
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-plan-8",
+          "text": "The software, version and solver settings used are recorded",
+          "hint": "Results can change between versions and solver settings. Record them for reproducibility.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-load",
+      "title": "Loads & Boundary Conditions",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-load-1",
+          "text": "Load cases are derived from the requirements, including normal use, reasonably foreseeable misuse and abuse",
+          "hint": "Trace each load case to a requirement or risk item. Sitting, stepping, dropping and lifting by the wrong feature are common misuse loads.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-load-2",
+          "text": "Drop and impact loads are included for handheld and portable products",
+          "hint": "Define the drop height, surface and orientations from the requirement. Use the results to rank risk, not as a pass/fail replacement for testing.",
+          "tags": [
+            "handheld"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-3",
+          "text": "Transport and packaging loads (vibration, stacking, shock) are included",
+          "hint": "Use the shipping test standard named in the requirements to define the loads. Stacking compression on packaged products can exceed use loads.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-4",
+          "text": "Assembly loads such as screw torque, press fits, heat staking and insertion forces are included",
+          "hint": "Boss splitting and stripped threads often come from assembly, not use. Apply the bolt preload or interference as a load case.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-5",
+          "text": "Fastener preload is modeled where it affects joint stiffness, contact or separation",
+          "hint": "Use bolt pretension features in the solver, with preload from torque per the fastener supplier's torque-tension data.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-6",
+          "text": "Boundary conditions represent the real supports and do not overconstrain the model",
+          "hint": "Fixed faces add artificial stiffness and stress. Use the actual mounting features, springs or remote supports, and check reaction forces.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-load-7",
+          "text": "Bonded versus contact interfaces are chosen deliberately and justified in the report",
+          "hint": "Bonded contact transfers tension through faces that would separate in reality. Use frictional or frictionless contact where parts can slide or open.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-8",
+          "text": "Reaction forces sum to the applied loads",
+          "hint": "Check the reaction-force probe in the solver. A mismatch reveals missing loads, wrong units or rigid body motion.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-9",
+          "text": "Load magnitude and direction worst cases are identified, not just one nominal load",
+          "hint": "Sweep directions where the load can come from different angles. The worst case is often off-axis.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-load-10",
+          "text": "Loads from internal components (battery, motors, heat sinks, displays) are applied with their masses",
+          "hint": "Heavy internal parts load their mounts during drop and vibration. Use point masses with correct center of gravity location.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-mod",
+      "title": "FEA Modeling",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-mod-1",
+          "text": "Geometry defeaturing (removed fillets, holes, ribs) is listed and justified as not affecting the results",
+          "hint": "Removing a fillet at a high-stress location changes the answer. Keep features in the region of interest.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-mod-2",
+          "text": "A mesh convergence study is done at the locations used for decisions",
+          "hint": "Refine the mesh until peak stress or displacement changes less than a stated tolerance. Report the convergence plot or table.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-mod-3",
+          "text": "Element type and order suit the geometry (e.g. second-order tetrahedra, shells for thin sheet metal)",
+          "hint": "First-order tetrahedra are too stiff in bending. Use at least two to three elements through thin walls, or shells.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-mod-4",
+          "text": "The material model (linear elastic, elastic-plastic, hyperelastic) matches the expected behavior",
+          "hint": "Linear elastic results above yield are meaningless. Use plasticity for yielding metals and hyperelastic models for elastomers.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-mod-5",
+          "text": "Glass-filled plastic parts account for fiber orientation and anisotropy, or use conservative properties",
+          "hint": "Map fiber orientation from mold flow into the FEA where results are critical, otherwise use the transverse (lower) properties and weld line knockdowns.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-mod-6",
+          "text": "Material data used is at the operating temperature and, where relevant, conditioned moisture state",
+          "hint": "Enter temperature-dependent properties from the supplier for the analyzed temperature. Room-temperature data overstates plastic strength at elevated temperature.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-mod-7",
+          "text": "Stress singularities at sharp corners, point loads and constraints are identified and not used as design stresses",
+          "hint": "Stress that keeps rising with mesh refinement is a singularity. Add the real fillet, or evaluate stress away from the singular point.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-mod-8",
+          "text": "Units are consistent throughout the model and inputs",
+          "hint": "Check density, modulus and load units against the solver unit system. Unit errors are among the most common FEA mistakes.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-mod-9",
+          "text": "Symmetry, if used, is valid for geometry, loads and constraints",
+          "hint": "Symmetric models miss asymmetric buckling and vibration modes. Check that loads are truly symmetric.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-mod-10",
+          "text": "Material properties assigned to every body match the specified grade on the BOM",
+          "hint": "Check each body's material assignment in the model tree. Default steel on a plastic part is a frequent mistake.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "fea-res",
+      "title": "Results & Interpretation",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-res-1",
+          "text": "Peak stresses are compared with the allowable for the material and failure mode, with the agreed safety factor",
+          "hint": "Use von Mises for ductile metals and principal stress or strain for brittle materials and plastics. Report the margin explicitly.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-res-2",
+          "text": "Displacements are checked against functional limits such as clearances, alignments and seal compression",
+          "hint": "Overlay deformed shape with nearby parts. Excess deflection can cause rubbing, gaps or loss of sealing even without failure.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-3",
+          "text": "Buckling is checked for slender or thin-walled parts under compression",
+          "hint": "Run a linear buckling analysis and apply a knockdown for imperfections, or a nonlinear analysis for critical cases.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-4",
+          "text": "Fatigue life is evaluated for cyclically loaded parts using an S-N curve for the material and the expected cycle count",
+          "hint": "Use the cycle count from the life requirement and include mean stress effects. Plastics fatigue at lower stress than static strength suggests.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-res-5",
+          "text": "Creep and stress relaxation are evaluated for plastic parts under sustained load",
+          "hint": "Use creep modulus or isochronous curves for the load duration and temperature. Bosses, clips and press fits loosen over time.",
+          "tags": [
+            "injection-molded",
+            "additive"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-6",
+          "text": "Snap fit strain at full deflection is below the allowable for the material grade",
+          "hint": "Compute the peak strain during assembly (not just the latched state) and compare against the supplier's allowable strain for the number of cycles.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-7",
+          "text": "Results are plotted with a sensible scale and the deformed shape is reviewed for plausibility",
+          "hint": "Check exaggerated deformed shape and animation. Parts flying apart or moving through each other point to modeling errors.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-res-8",
+          "text": "A second engineer reviews the model setup and results before they are used for decisions",
+          "hint": "The reviewer checks loads, boundary conditions, materials and mesh, not just the final plot.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-9",
+          "text": "The model is correlated with a physical test or a known reference case where results drive critical decisions",
+          "hint": "Compare strain gauge, deflection or temperature measurements with prediction, and update the model if it disagrees.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-res-10",
+          "text": "Sensitivity to uncertain inputs (friction, material properties, contact stiffness) is checked",
+          "hint": "Run the analysis at both ends of the input range. Conclusions that flip with a reasonable input change need a test.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-res-11",
+          "text": "Failure modes are reported with location and the design change that addresses them",
+          "hint": "Name the feature and propose the fix. A plot without a conclusion leaves the designer guessing.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-str",
+      "title": "Structural",
+      "tags": [
+        "structural"
+      ],
+      "items": [
+        {
+          "id": "fea-str-1",
+          "text": "Load paths from the point of load application to the supports are identified and continuous",
+          "hint": "Sketch the load path and check every joint, weld and fastener along it. Gaps in the path usually show up as unexpected deformation.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-str-2",
+          "text": "Fastener and joint loads (tension, shear, prying) are calculated and below the rated capacity",
+          "hint": "Extract forces at each fastener from FEA or calculate by hand. Include prying action and thread strip in the base material.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-str-3",
+          "text": "Weld strength is checked with the weld size, process and reduced heat-affected-zone properties",
+          "hint": "Weld toes are fatigue hotspots. Use the structural welding standard named in the requirements for allowables.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-str-4",
+          "text": "Factor of safety follows the applicable standard or requirement and is documented for each load case",
+          "hint": "Name the source of each factor. Lifting, pressure and overhead equipment often have prescribed factors.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-str-5",
+          "text": "The predicted failure mode is safe: it gives warning, fails gradually or fails in a direction that does not harm people",
+          "hint": "Prefer yielding before fracture. Check that a failed part does not release stored energy or drop loads on users.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-str-6",
+          "text": "Load ratings marked on the product or in the manual are supported by the analysis with the required margin",
+          "hint": "Cross-check the rated load in labeling against the analyzed and tested capacity.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "fea-dyn",
+      "title": "Dynamics, Shock & Drop",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-dyn-1",
+          "text": "Natural frequencies are calculated and separated from known excitation frequencies",
+          "hint": "Run a modal analysis and compare against motor, fan, pump and transport vibration frequencies. Rule of thumb: keep a clear margin between the first mode and the main excitation.",
+          "tags": [
+            "moving-parts",
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-dyn-2",
+          "text": "Random or sine vibration response is evaluated for the transport or operating vibration profile",
+          "hint": "Use the profile from the requirements and include appropriate damping. Check PCB and heavy-component mounts.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-dyn-3",
+          "text": "Shock loads are evaluated for the specified shock pulse",
+          "hint": "Use transient or response-spectrum analysis. Check mounts of heavy components and brittle parts like displays and glass.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-dyn-4",
+          "text": "Drop simulation assumptions (impact surface, contact, material strain-rate effects) are stated and its limits are acknowledged",
+          "hint": "Explicit drop simulations are sensitive to material data and contact. Use them to compare designs and find weak points, and confirm with physical drop tests.",
+          "tags": [
+            "handheld"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-dyn-5",
+          "text": "Moving masses and mechanisms are checked for dynamic loads, including end-of-travel impact",
+          "hint": "End stops, latches and hinges see peak loads at impact. Include velocity and stop stiffness.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-dyn-6",
+          "text": "Damping values used in dynamic analyses are justified by data or conservative assumptions",
+          "hint": "Response at resonance is very sensitive to damping. State the value and the source.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-th",
+      "title": "Thermal",
+      "tags": [
+        "thermal"
+      ],
+      "items": [
+        {
+          "id": "fea-th-1",
+          "text": "Heat sources and their power dissipation come from the EE power budget, including worst-case operating modes",
+          "hint": "Use the current power budget for every component, including peak and sustained modes. Analysis with stale or guessed power is not useful.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-th-2",
+          "text": "Maximum ambient temperature for analysis is the worst case from the requirements, including enclosure placement",
+          "hint": "Consider installation in cabinets, near other equipment, in vehicles or in direct sun. Ambient inside the installation can be well above room ambient.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-th-3",
+          "text": "Conduction paths from hot components to the enclosure or heat sink are identified and modeled",
+          "hint": "Check every interface along the path. A path through a thin plastic wall or an air gap is often the bottleneck.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-4",
+          "text": "Thermal interface materials are specified with thickness, compression and thermal resistance at that compression",
+          "hint": "Thermal pad resistance depends on compression. Check the gap stack-up gives the intended compression without overloading components or the PCB.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-5",
+          "text": "Natural or forced convection assumptions are stated, including the orientation of the product",
+          "hint": "Natural convection depends strongly on orientation and vent placement. Analyze the worst installed orientation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-6",
+          "text": "Fan selection is based on the system impedance curve intersecting the fan curve, with margin",
+          "hint": "Estimate system pressure drop from CFD or hand calcs, including filters and grilles. Account for filter clogging and fan aging.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-7",
+          "text": "CFD assumptions (turbulence model, mesh, boundary conditions, radiation) are documented and checked for sensitivity",
+          "hint": "Check mesh independence at component temperatures. Include radiation where natural convection dominates.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-8",
+          "text": "Every component temperature is below its rated limit with a margin agreed with the EE",
+          "hint": "Compare predicted junction or case temperatures with datasheet limits and derating rules from the EE.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-th-9",
+          "text": "Touch temperatures of accessible surfaces are within the limits of the applicable safety standard",
+          "hint": "Identify which surfaces are touchable and for how long, and check against the standard's surface temperature limits for that material and contact duration.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-th-10",
+          "text": "Solar loading is included for outdoor products",
+          "hint": "Apply solar flux from the requirement or design climate data, with surface absorptivity for the actual color and finish.",
+          "tags": [
+            "outdoor"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-11",
+          "text": "Plastic parts near heat sources stay below their long-term temperature limits",
+          "hint": "Check predicted part temperatures against RTI or HDT with margin. Hot spots near power components and LEDs soften bosses and clips.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-th-12",
+          "text": "Battery cell temperatures stay within the cell manufacturer's limits for charge and discharge",
+          "hint": "Charge limits are usually tighter than discharge limits. Coordinate with the EE on charge rate at high ambient.",
+          "tags": [
+            "battery-pack"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-th-13",
+          "text": "Vent and filter placement does not short-circuit airflow from outlet back to inlet",
+          "hint": "Check CFD streamlines or smoke tests. Recirculation raises inlet temperature and defeats the cooling design.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-th-14",
+          "text": "Transient thermal behavior is evaluated where duty cycles or startup peaks matter",
+          "hint": "Short bursts may be acceptable even if steady-state would not be. Use the duty cycle from the requirements.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-th-15",
+          "text": "Condensation risk is evaluated for products that cycle through the dew point",
+          "hint": "Cold surfaces inside a warm humid enclosure collect water. Check temperature cycling and venting strategy with the enclosure review.",
+          "tags": [
+            "outdoor",
+            "sealed-ip"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-cte",
+      "title": "Thermal Expansion & Thermal Stress",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-cte-1",
+          "text": "CTE mismatch between joined parts is evaluated over the full temperature range",
+          "hint": "Long plastic parts on metal frames, glass in housings and overmolds are common problem areas. Calculate differential growth by hand over the part length.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-cte-2",
+          "text": "Thermal stresses from constrained expansion are below allowables at temperature extremes",
+          "hint": "Run a thermal-structural analysis or hand calc for bonded, press-fit or fastened dissimilar materials.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-cte-3",
+          "text": "Clearances and fits remain functional at both temperature extremes",
+          "hint": "Recompute critical gaps at hot and cold. Coordinate with the tolerance stack-ups in the tolerancing review.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-cte-4",
+          "text": "Slotted holes, floating mounts or compliant features allow thermal growth where needed",
+          "hint": "Check that only one fixed point exists along a long part. Over-constrained long parts buckle or crack.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "fea-flu",
+      "title": "Fluid & Pressure",
+      "tags": [
+        "fluidic"
+      ],
+      "items": [
+        {
+          "id": "fea-flu-1",
+          "text": "Pressure-containing parts are analyzed for the maximum operating pressure with the required margin",
+          "hint": "Include pressure spikes from valves closing or pumps starting. Use the rated pressure from the requirements.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-flu-2",
+          "text": "Burst pressure factor meets the applicable standard or requirement",
+          "hint": "State the required burst factor and its source, and check the analysis and planned test against it.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-flu-3",
+          "text": "Pressure-induced deformation does not open leak paths at seals and joints",
+          "hint": "Check the seal compression at peak pressure in the deformed model. Housings bulge and unload O-rings.",
+          "tags": [
+            "sealed-ip"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "fea-flu-4",
+          "text": "Pressure drop and flow through the fluid path meet requirements",
+          "hint": "Use hand calcs or CFD for the full path, including fittings, filters and valves.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-flu-5",
+          "text": "Plastic pressure parts are evaluated for long-term creep rupture at temperature",
+          "hint": "Use long-term hydrostatic strength data from the supplier. Short-term burst tests do not predict long-term failure.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "fea-bat",
+      "title": "Battery",
+      "tags": [
+        "battery-pack"
+      ],
+      "items": [
+        {
+          "id": "fea-bat-1",
+          "text": "Thermal runaway propagation between cells is considered and the mitigation strategy is agreed with the EE",
+          "hint": "Review cell spacing, barriers and venting paths. Coordinate with the battery safety standard named in the requirements.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-bat-2",
+          "text": "Cell venting gases have a path out of the enclosure that does not direct them at the user",
+          "hint": "Check vent direction and enclosure pressure relief. A sealed enclosure can rupture during a cell vent event.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "fea-bat-3",
+          "text": "Cell swelling over life and mounting pressure are within the cell manufacturer's limits",
+          "hint": "Allow space for end-of-life swelling per the cell datasheet. Check the mounting design does not apply point loads to cells.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-bat-4",
+          "text": "Cells are protected from puncture and crush by the enclosure and internal structure under drop and impact loads",
+          "hint": "Check the drop and crush analysis results at the cell envelope, including sharp internal features such as screw tips, ribs and PCB components near the cells.",
+          "tags": [],
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "id": "fea-doc",
+      "title": "Documentation",
+      "tags": [],
+      "items": [
+        {
+          "id": "fea-doc-1",
+          "text": "Each analysis has a report with inputs, assumptions, load cases, results and conclusions",
+          "hint": "A reviewer should be able to repeat the analysis from the report alone.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-doc-2",
+          "text": "The report states the CAD revision and part numbers analyzed",
+          "hint": "Results on an old revision may no longer apply. Re-run or justify when the geometry changes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "fea-doc-3",
+          "text": "Analysis files (model, mesh, results) are archived with the project",
+          "hint": "Store native files in the project repository with the CAD revision. Lost models mean rerunning from scratch.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-doc-4",
+          "text": "Assumptions and simplifications are listed with their expected effect on the results",
+          "hint": "Mark which assumptions are conservative and which are not.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-doc-5",
+          "text": "Open issues and recommendations from analysis are tracked to closure",
+          "hint": "Enter them in the issue tracker or design review action list with an owner.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "fea-doc-6",
+          "text": "Analysis results that support certification or regulatory submissions are under document control",
+          "hint": "Release the report with a document number and revision so it can be referenced in the technical file.",
+          "tags": [
+            "regulatory",
+            "medical"
+          ],
+          "severity": "major"
+        }
+      ]
+    }
+  ]
+}

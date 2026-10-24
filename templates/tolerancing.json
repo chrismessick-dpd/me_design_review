@@ -1,0 +1,645 @@
+{
+  "id": "tolerancing",
+  "title": "Tolerancing & GD&T",
+  "short": "Tolerancing",
+  "version": 1,
+  "description": "Tolerancing strategy, datums, GD&T, fits, stack-ups, cosmetic gap and flush, seal compression, mechanism clearances and inspection.",
+  "sections": [
+    {
+      "id": "tol-strat",
+      "title": "Tolerancing Strategy",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-strat-1",
+          "text": "Functional requirements that depend on dimensions (fit, seal, alignment, appearance, motion) are listed before tolerances are assigned",
+          "hint": "Walk the product requirements and assembly and write down what each interface must do. Tolerances assigned without a functional reason end up either too loose to work or too tight to make.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-2",
+          "text": "Critical-to-function (CTF) dimensions are identified and listed for every part",
+          "hint": "Keep a CTF list per part that traces each dimension to the requirement or stack it serves. The list drives inspection, supplier focus and change impact review.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-3",
+          "text": "A general tolerance standard is chosen for each part and suits its process",
+          "hint": "For example ISO 2768 with a class suited to machining, ISO 8062 casting tolerance grades for castings, or a molder-agreed general table for plastics. A machining class applied to a molded part is usually unachievable on untoleranced features.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-4",
+          "text": "Every specific tolerance is within the capability of the chosen process and supplier",
+          "hint": "Compare each tolerance against the supplier's stated capability or historical Cpk data for that feature type and size. Ask the supplier to flag any tolerance they cannot hold before tooling or quoting is final.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-strat-5",
+          "text": "Tight tolerances are applied only to features that need them",
+          "hint": "Review every tolerance tighter than the general tolerance and confirm it is on the CTF list or supports a stack. Unnecessary tight tolerances add cost, inspection time and rejected parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-6",
+          "text": "Tolerances on molded parts account for the material's shrink variation and the number of cavities",
+          "hint": "Glass-filled and semi-crystalline resins vary more and shrink anisotropically. Cavity-to-cavity variation adds to the spread, so confirm tolerances with the molder for multi-cavity tools.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-7",
+          "text": "Dimensions intended to be adjusted at tool trial are identified as steel-safe",
+          "hint": "Leave plastic on (steel-safe) where the fit may need tuning so the tool can be cut rather than welded. Mark these on the drawing or in the tooling kickoff notes.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-strat-8",
+          "text": "The tolerancing scheme is consistent between the 3D model nominal and the drawing",
+          "hint": "Model nominals should sit at the intended target (often mid-tolerance for asymmetric limits). Suppliers machine and cut tools to the model, so a model at one limit shifts the whole distribution.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "tol-dat",
+      "title": "Datums & Datum Reference Frames",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-dat-1",
+          "text": "Primary datums are the functional mating or locating features of the part",
+          "hint": "The datum features should be the surfaces and holes that locate the part in the assembly. Datums chosen for drawing convenience produce parts that measure good and assemble badly.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-dat-2",
+          "text": "Datum features are accessible and stable for fixturing and inspection",
+          "hint": "Check that a CMM probe or fixture can contact each datum feature and that it is large enough to establish the datum repeatably. Small, flexible or draft-angled datums give unstable measurements.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-3",
+          "text": "Each datum reference frame constrains all the degrees of freedom the controlled features need",
+          "hint": "Walk the primary, secondary and tertiary datums and confirm translation and rotation are locked as required. An under-constrained frame lets the inspector orient the part differently each time.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-4",
+          "text": "Datum precedence (primary, secondary, tertiary) reflects how the part seats in assembly",
+          "hint": "The primary datum should be the surface that contacts first and carries the most contact. Reversed precedence changes the measured result and can accept parts that do not fit.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-5",
+          "text": "Mating parts use corresponding datum schemes at their shared interfaces",
+          "hint": "Compare datums across mating drawings: the hole pattern on one part and the pin pattern on the other should both be controlled to the same functional interface. Mismatched schemes break stack-up traceability.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-6",
+          "text": "Datum targets are used where a full surface datum is impractical (castings, moldings, sheet metal)",
+          "hint": "Use datum target points, lines or areas on large, warped or as-cast surfaces and match them to fixture locators. Specify the target size and location on the drawing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-7",
+          "text": "Datum features on molded or cast parts avoid parting lines, gates, ejector marks and draft",
+          "hint": "Flash, vestige and draft make a surface a poor datum. Check gate and ejector locations against the datum features before releasing for tooling.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-dat-8",
+          "text": "Datum features are labeled with a single, consistent identifier scheme across drawing sheets and views",
+          "hint": "Reusing or skipping datum letters between sheets confuses suppliers and CMM programmers. Check every feature control frame references a datum that is actually defined.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "tol-gdt",
+      "title": "GD&T Application",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-gdt-1",
+          "text": "The GD&T standard and edition are stated on the drawing (ASME Y14.5 or ISO GPS)",
+          "hint": "ASME Y14.5 and ISO GPS (ISO 1101 and related) interpret some symbols differently, and editions differ. Without the stated standard the supplier will pick one.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-2",
+          "text": "Hole and pin patterns are located with position tolerances rather than chained ± dimensions",
+          "hint": "Position to a datum frame gives a cylindrical zone, enables bonus tolerance and avoids the accumulation of chained ± dimensions. Check bolt patterns, PCB mounting bosses and dowel patterns.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-3",
+          "text": "Freeform, molded and cast surfaces are controlled with profile of a surface",
+          "hint": "Profile to a datum frame controls size, form, orientation and location of complex surfaces in one callout, referenced to the CAD model. Avoid trying to dimension splines with ± coordinates.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-4",
+          "text": "Form controls (flatness, straightness, cylindricity) are applied only where function needs them",
+          "hint": "Flatness on a sealing or mounting face is justified; flatness on every face is cost. Check each form callout against the CTF list.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-5",
+          "text": "Orientation controls (parallelism, perpendicularity, angularity) reference a datum and are tighter than the related size or location tolerance",
+          "hint": "An orientation tolerance looser than the size or position tolerance it refines adds nothing. Verify the datum reference makes sense for the function.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-gdt-6",
+          "text": "MMC or LMC modifiers are applied deliberately, with the functional reason understood",
+          "hint": "MMC suits clearance fits and enables functional gauging; LMC suits wall thickness and edge distance. A modifier added by habit can allow parts that fail the function.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-7",
+          "text": "Composite or multi-segment position is used where pattern-to-pattern location is looser than feature-to-feature spacing",
+          "hint": "A composite frame lets the pattern float relative to datums while holding hole-to-hole spacing tight, which often matches how mating patterns actually assemble. Confirm the inspector can measure it.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-gdt-8",
+          "text": "No feature is over-constrained by conflicting or redundant tolerances",
+          "hint": "Look for features with both ± location dimensions and a position callout, or two controls that set the same limit. Conflicts force the supplier to guess which governs.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-9",
+          "text": "Every feature control frame is complete and syntactically valid",
+          "hint": "Check the symbol, zone shape (diameter symbol where needed), value, modifiers and datum references. Use the CAD GD&T checker if available, then read each frame manually.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-10",
+          "text": "Basic dimensions locate every feature controlled by position or profile",
+          "hint": "A position or profile tolerance without basic dimensions to its datums is undefined. Basic dimensions can come from the model if the drawing states the model is the source.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-gdt-11",
+          "text": "Runout or concentricity controls on rotating parts reflect the functional axis",
+          "hint": "Use circular or total runout to the bearing or mounting axis for shafts, rotors and pulleys. Coaxial controls to the wrong datum let wobble through.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "tol-fit",
+      "title": "Fits & Clearances",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-fit-1",
+          "text": "Shafts, bores, bearing seats and dowel pins use ISO 286 fit designations matched to the function",
+          "hint": "Pick clearance, transition or interference fits from ISO 286 and the bearing or pin manufacturer's recommendations. Check both limits on the drawing, not just the fit name.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-2",
+          "text": "Bearing housing and shaft fits follow the bearing manufacturer's recommendations for the load case",
+          "hint": "Rotating versus stationary load on the inner or outer ring sets which ring needs interference. A wrong fit causes ring creep, fretting or lost internal clearance.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-fit-3",
+          "text": "Press-fit interference at the maximum condition stays within the material's allowable stress",
+          "hint": "Calculate hoop stress at maximum interference with thick-wall cylinder equations or FEA and compare to the yield or creep limit per material datasheet. Plastic bosses are especially prone to cracking and stress relaxation.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-fit-4",
+          "text": "Press-fit interference at the minimum condition still delivers the required retention or torque",
+          "hint": "Check pull-out or slip torque at minimum interference, including any relaxation over life and temperature. Validate on parts at both ends of the tolerance.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-5",
+          "text": "Clearances remain positive across the full operating and storage temperature range",
+          "hint": "Compute dimensional change from the CTE mismatch of mating materials (plastic in metal, aluminum on steel) at the temperature extremes. Thermal growth can turn a clearance fit into interference.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-6",
+          "text": "Coating, plating and paint thickness is accounted for on toleranced features",
+          "hint": "State whether dimensions apply before or after finish and mask or adjust critical bores, threads and fits. Anodize and powder coat thickness can close up a clearance fit entirely.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-7",
+          "text": "Fastener clearance holes are sized so the parts assemble at worst-case position",
+          "hint": "Use the fixed or floating fastener formula with the position tolerances on both parts. Undersized clearance holes cause binding and cross-threading on the line.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-8",
+          "text": "Moisture absorption is accounted for in fits on hygroscopic plastics",
+          "hint": "Polyamides and some other resins grow measurably as they absorb moisture. Check fits at conditioned dimensions per material datasheet, not dry-as-molded.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-fit-9",
+          "text": "Slip and sliding fits have clearance for lubricant film or wear allowance where required",
+          "hint": "Check that the minimum clearance supports the intended lubrication and that the maximum clearance after wear still meets play limits.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "tol-stk",
+      "title": "Tolerance Stack-Ups",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-stk-1",
+          "text": "Every critical gap, interference, alignment and engagement in the assembly has a documented stack-up",
+          "hint": "Cross-check the CTF list and assembly interfaces against the stack-up register. Unstacked interfaces are where first-build surprises come from.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-stk-2",
+          "text": "The stack method (worst-case, RSS or statistical) is stated and justified for each stack",
+          "hint": "Worst-case suits low volume, safety-critical or few-contributor stacks. RSS assumes centered, independent, normally distributed contributors and enough volume for the statistics to hold.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-3",
+          "text": "Every stack-up input is traced to a dimension and tolerance on a released or current drawing",
+          "hint": "List the drawing number, revision and dimension for each contributor. Inputs typed from memory or the model drift out of date silently.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-4",
+          "text": "Stack loops are drawn with correct direction and include every contributor in the path",
+          "hint": "Sketch the vector loop on a section view and check signs. Missing a contributor (a gasket, a washer, a datum shift) is the most common stack error.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-5",
+          "text": "Assembly variation (fastener float, fixture location, operator placement) is included as a contributor",
+          "hint": "Clearance-hole float and fixture locating error often dominate part tolerances. Include them explicitly rather than assuming perfect assembly.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-6",
+          "text": "Molded part contributors include shrink and warp variation, not only the drawing tolerance",
+          "hint": "Warp on long or thin parts can exceed the drawing tolerance in effect. Use moldflow warp results or measured first-shot data where available.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-7",
+          "text": "Sheet-metal contributors include bend-to-bend and bend-to-hole variation",
+          "hint": "Each bend adds positional error to features across it. Use supplier capability for bend tolerances, not the general machining tolerance.",
+          "tags": [
+            "sheet-metal"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-8",
+          "text": "Geometric tolerances (position, profile, flatness) are converted correctly into stack contributors",
+          "hint": "Convert a diametral position zone to ± half the zone and include bonus or datum shift where modifiers apply. Ignoring geometric tolerances understates the stack.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-9",
+          "text": "RSS stacks that rely on process centering have a supporting Cpk or a sigma assumption stated",
+          "hint": "State the assumed process capability for each contributor. If suppliers will not commit to that capability, recompute worst-case or with a safety factor.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-10",
+          "text": "Each stack result shows positive margin against the functional limit at the stated confidence",
+          "hint": "Report minimum and maximum result next to the requirement. A stack that just passes at nominal is not a pass.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-stk-11",
+          "text": "Stacks with insufficient margin have a recorded resolution (tolerance change, design change, adjustment or selective assembly)",
+          "hint": "Track the action in the review log. Do not release with a known negative stack and a note to fix it at tool trial.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-12",
+          "text": "Stack-ups are re-run after any change to a contributing dimension, tolerance, material or supplier",
+          "hint": "Link stacks to the change process so an ECO touching a contributor triggers a stack review. Check the stack revision matches the current drawing revisions.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-stk-13",
+          "text": "Stack-up predictions are compared against measured first-article or pilot data",
+          "hint": "Measure the actual gaps on built assemblies and compare with predicted range. Large disagreement means a missing contributor or wrong process assumption.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "tol-cos",
+      "title": "Cosmetic Gap & Flush",
+      "tags": [
+        "cosmetic"
+      ],
+      "items": [
+        {
+          "id": "tol-cos-1",
+          "text": "Visible gap and flush targets are defined with nominal and allowable range for every Class A seam",
+          "hint": "Agree targets with industrial design and record them on a gap-and-flush map. Without targets there is no stack to run and no accept criterion.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-cos-2",
+          "text": "Every cosmetic seam has a gap and a flush stack-up showing the targets are achievable",
+          "hint": "Run both directions: gap across the seam and step normal to the surface. Flush stacks on two molded shells are frequently missed.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-cos-3",
+          "text": "Gap uniformity (variation along a seam) is controlled, not only the average gap",
+          "hint": "Tapered gaps are more visible than a uniformly larger gap. Profile tolerances on both mating edges control taper.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-cos-4",
+          "text": "Cosmetic seam design hides expected variation (reveal, offset or step-in) where flush cannot be held",
+          "hint": "A deliberate reveal or a small designed step tolerates variation that a zero-gap, zero-flush seam shows immediately. Review with industrial design.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-cos-5",
+          "text": "Parts that meet at a visible seam are located from the same functional datums",
+          "hint": "Locate both parts from shared features near the seam rather than from distant datums so variation does not accumulate across the part.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-cos-6",
+          "text": "Color and gloss-matched mating parts consider texture and draft effects on perceived gap",
+          "hint": "Texture and draft at the seam edge change how a gap reads. Review on sample plaques or first shots under the specified lighting.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "tol-seal",
+      "title": "Sealing Compression Stacks",
+      "tags": [
+        "sealed-ip"
+      ],
+      "items": [
+        {
+          "id": "tol-seal-1",
+          "text": "Gasket or O-ring compression is calculated at both minimum and maximum stack conditions",
+          "hint": "Compute groove depth, seal cross-section and part flatness variation at both ends. Compression must stay inside the seal manufacturer's recommended range per datasheet.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-seal-2",
+          "text": "Seal compression stack includes flange flatness and deflection between fasteners",
+          "hint": "Housings bow between screws, so compression is lowest midway between fasteners. Check with FEA or measurement and include flatness tolerance on the flange.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-seal-3",
+          "text": "O-ring groove dimensions and tolerances follow the O-ring supplier's design guide",
+          "hint": "Check groove depth, width, fill ratio and surface finish against the supplier guide for static or dynamic use. Include thermal swell and chemical swell where relevant.",
+          "tags": [
+            "elastomer"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-seal-4",
+          "text": "Seal compression at minimum stack still exceeds the minimum after compression set over life",
+          "hint": "Apply the compression set from the material datasheet at the operating temperature and life. A seal that passes new may leak after aging.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-seal-5",
+          "text": "Hard stops or compression limiters control final gasket compression independent of fastener torque",
+          "hint": "Without a metal-to-metal or plastic-to-plastic stop, compression depends on torque and part creep. Stack the hard stop height against the groove.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-seal-6",
+          "text": "Seal squeeze is checked at the temperature extremes, including CTE mismatch of housing and seal",
+          "hint": "Elastomers have much higher CTE than housings. Check squeeze at cold (shrunken seal) and hot (expanded, possible over-fill of the groove).",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "tol-mech",
+      "title": "Mechanism Clearances & Kinematics",
+      "tags": [
+        "moving-parts"
+      ],
+      "items": [
+        {
+          "id": "tol-mech-1",
+          "text": "Running clearances are positive throughout the full range of motion at worst-case tolerances",
+          "hint": "Sweep the mechanism in CAD motion study with parts at their worst-case extremes, or run stacks at multiple positions. Interference often occurs mid-travel, not at the end stops.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-mech-2",
+          "text": "Maximum play or backlash at worst-case tolerances meets the functional and feel requirements",
+          "hint": "Stack the loose end as well as the tight end. Excess play produces rattle, wobble and poor perceived quality.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-mech-3",
+          "text": "Gear center distance and backlash tolerances follow the gear supplier's recommendations",
+          "hint": "Include bore position, bearing clearance and housing thermal growth in the center distance stack. Too little backlash binds hot, too much is noisy.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-mech-4",
+          "text": "Hinge and pivot axes are aligned within a tolerance that avoids binding",
+          "hint": "Coaxiality or position of multiple hinge knuckles to a common axis sets binding torque. Check with a stack across all knuckles, not just one.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-mech-5",
+          "text": "Latch and detent engagement remains sufficient at worst-case tolerances",
+          "hint": "Stack latch overlap at minimum engagement and confirm it holds under the specified load. Check that maximum engagement still releases at the specified force.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "tol-mech-6",
+          "text": "End stops and travel limits are dimensioned so travel is guaranteed within tolerance",
+          "hint": "Stack the travel at minimum to confirm full function and at maximum to confirm no over-travel into other parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-mech-7",
+          "text": "Spring working lengths and preloads stay within spec across the tolerance range of the spring pocket",
+          "hint": "Stack the pocket length and spring free-length tolerance. Out-of-range preload changes actuation force and can overstress the spring.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "tol-insp",
+      "title": "Inspection & Measurement",
+      "tags": [],
+      "items": [
+        {
+          "id": "tol-insp-1",
+          "text": "Every toleranced feature can be measured with available equipment and access",
+          "hint": "For each callout, name the method (CMM, gauge, optical, height gauge). Features with no feasible measurement cannot be accepted or rejected.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-insp-2",
+          "text": "Measurement uncertainty is small relative to the tolerance it verifies",
+          "hint": "Rule of thumb: measurement uncertainty or gauge R&R within about 10% of tolerance is good, and above about 30% is usually unacceptable. Run a gauge R&R study on tight CTF features.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-insp-3",
+          "text": "A CMM or fixture strategy matching the datum reference frame is agreed with the supplier",
+          "hint": "The supplier's fixture and alignment should replicate the drawing datums. Different alignment schemes are a common source of supplier-versus-customer measurement disputes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-insp-4",
+          "text": "Functional gauges are specified for MMC-modified hole patterns on high-volume parts",
+          "hint": "A go gauge built to virtual condition checks position quickly on the line. Specify gauge design ownership and calibration.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-insp-5",
+          "text": "Restraint conditions are stated for flexible parts (molded shells, sheet metal) where free-state measurement is not meaningful",
+          "hint": "Note the fixturing restraint (clamp locations and forces) or use the free-state symbol. Unstated restraint means each lab measures differently.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "tol-insp-6",
+          "text": "Measurement conditions (temperature, conditioning, time after molding) are specified where they affect results",
+          "hint": "Plastics shrink after molding and absorb moisture. State conditioning time and temperature so parts are measured consistently.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-insp-7",
+          "text": "Critical-to-function dimensions are flagged for SPC and capability (Cpk) monitoring in production",
+          "hint": "Mark CTF dimensions on the drawing with the agreed symbol and state the required Cpk per the quality plan. Agree sampling frequency with the supplier.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "tol-insp-8",
+          "text": "Cosmetic and visual criteria that cannot be measured dimensionally have a defined inspection method",
+          "hint": "Specify viewing distance, lighting, time and limit samples. These belong in a cosmetic spec referenced from the drawing.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "tol-insp-9",
+          "text": "Inspection data from first articles is reviewed against every CTF dimension before production release",
+          "hint": "Check the full dimensional report, not a summary. Out-of-tolerance CTF features need a disposition (rework, deviation or drawing change) before release.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    }
+  ]
+}

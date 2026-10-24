@@ -1,0 +1,723 @@
+{
+  "id": "requirements",
+  "title": "Requirements & Concept",
+  "short": "Requirements",
+  "version": 1,
+  "description": "Concept-phase review of product requirements, interfaces, loads, regulatory scope, manufacturing and cost targets, risks, serviceability, ID handshake, electronics integration and battery constraints.",
+  "sections": [
+    {
+      "id": "rq-prd",
+      "title": "Product Requirements & Use Cases",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-prd-1",
+          "text": "Every mechanical requirement traces to a numbered line in the PRD or customer specification",
+          "hint": "Keep a requirements matrix with PRD reference, ME requirement, verification method and owner. Requirements without a source tend to be argued about at DVT.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-2",
+          "text": "Each requirement is quantified with a value, unit and tolerance or limit",
+          "hint": "\"Rugged\" or \"compact\" is not verifiable; rewrite as e.g. drop height in m, envelope in mm, mass in g. If the customer can't give a number, record the assumed value and get it approved.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-3",
+          "text": "Each requirement has a defined verification method (test, analysis, inspection or demonstration)",
+          "hint": "Fill the verification column of the requirements matrix now; it becomes the skeleton of the design verification plan.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-4",
+          "text": "Intended use and reasonably foreseeable misuse cases are written down",
+          "hint": "List how users will actually handle it: dropped off a bench, sat on, used as a step, cleaned with solvent. Misuse cases drive loads and safety requirements.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-5",
+          "text": "Use environment is defined: indoor/outdoor, operating and storage temperature range, humidity, altitude",
+          "hint": "State operating and storage ranges separately in °C and %RH. Storage and transport extremes (e.g. a closed vehicle in summer) often exceed operating conditions.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-6",
+          "text": "Product life and duty cycle are specified in years and in use cycles",
+          "hint": "E.g. 5 years at 20 uses per day gives the cycle count for hinges, buttons, latches and connectors. Without it there is no basis for life testing.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-7",
+          "text": "Target user population is defined, including size range, strength and dexterity limits",
+          "hint": "Grip size, actuation forces and reach depend on who uses it (children, elderly, gloved hands). Reference anthropometric data rather than the design team's own hands.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-8",
+          "text": "Packaging, shipping and installation conditions are captured as requirements",
+          "hint": "Transit drop, stacking load and vibration often govern the design more than use. Note whether the product ships assembled, in retail packaging or bulk.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-prd-9",
+          "text": "Product mass target is set, with an allocation by subsystem",
+          "hint": "Track mass in a budget spreadsheet updated from CAD mass properties with correct material densities. Mass growth is easier to stop early than to remove later.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-prd-10",
+          "text": "Requirements baseline is under revision control and changes go through a documented approval",
+          "hint": "A dated, versioned requirements document with a change log stops scope creep from silently invalidating completed design work.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-env",
+      "title": "Interfaces & Envelope",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-env-1",
+          "text": "Space claim (maximum envelope) is defined in CAD and agreed with the customer and other disciplines",
+          "hint": "Publish a space-claim model with locked outer boundaries. Check the current design against it with an interference or clearance check.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-env-2",
+          "text": "Every mating product or accessory interface is identified with its controlling drawing or model",
+          "hint": "Docks, chargers, mounts, cartridges and third-party parts each need a reference model at a known revision. Designing to a photo or a competitor sample is how mismatches happen.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-env-3",
+          "text": "Interface tolerances of mating third-party parts are known, not assumed from nominal CAD",
+          "hint": "Get the supplier drawing with tolerances; vendor STEP files are usually nominal. Feed worst-case values into the stack-ups (see Tolerancing & GD&T).",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-env-4",
+          "text": "Mounting method and mounting points to the customer's system are defined",
+          "hint": "Specify hole pattern, fastener type, mounting surface and load direction. Confirm the customer's mounting surface flatness and material.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-env-5",
+          "text": "Connector and I/O access locations are agreed with EE and match cable and plug clearances",
+          "hint": "Check plug overmold dimensions and cable bend radius at each port, including right-angle and oversized aftermarket plugs, not just the receptacle.",
+          "tags": [
+            "electronics"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-env-6",
+          "text": "User interface locations (buttons, displays, indicators) are fixed relative to the envelope",
+          "hint": "Lock UI positions early; moving a button after PCB layout costs a board spin and a tooling change.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-env-7",
+          "text": "Access requirements for installation, cable connection and maintenance are defined",
+          "hint": "Check hand and tool access with a human model or simple clearance volumes in CAD, including fastener driver length.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-env-8",
+          "text": "Orientation, mounting position and gravity direction in use are defined",
+          "hint": "Drainage, venting, cable entry and load paths all depend on which way up the product sits or hangs.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-load",
+      "title": "Environmental & Mechanical Loads",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-load-1",
+          "text": "Drop requirement is defined: height, surface, orientations and number of drops",
+          "hint": "E.g. height in m onto concrete or steel, faces/edges/corners, in or out of packaging. Get the spec from the customer or the applicable product standard.",
+          "tags": [
+            "handheld"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-2",
+          "text": "Vibration requirement is defined as a profile (frequency range, level, duration, axes)",
+          "hint": "Use a transport or application profile from the customer or a recognized standard rather than an invented sine sweep. Note whether the product is powered during vibration.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-3",
+          "text": "Mechanical shock requirement is defined (pulse shape, peak acceleration, duration)",
+          "hint": "Shock levels often come from the end application (vehicle, machinery, shipping). Record the source of the numbers.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-4",
+          "text": "Static and user loads are quantified with direction and point of application",
+          "hint": "Include lean, sit, step and pull-on-cable loads as relevant. State whether a safety factor is applied and what it is.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-5",
+          "text": "Impact requirement for exposed surfaces is defined where the product could be struck",
+          "hint": "Specify energy in J and the impactor (ball, hammer). Displays, windows and thin cosmetic walls are the usual weak points.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-load-6",
+          "text": "Chemical exposure list is defined: cleaners, disinfectants, oils, fuels, sunscreen, sweat",
+          "hint": "Name actual products and concentrations; they drive material selection and chemical resistance testing. Plastics like PC and ABS can stress-crack under common cleaners.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-7",
+          "text": "UV and weathering exposure is specified, including expected outdoor hours or years",
+          "hint": "Defines UV stabilization, colorfastness and material choice. Indoor-only grades fade and embrittle outdoors.",
+          "tags": [
+            "outdoor"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-8",
+          "text": "Corrosion environment is defined (salt spray, coastal, industrial, condensation)",
+          "hint": "Drives plating, coating, fastener material and galvanic-pair choices.",
+          "tags": [
+            "outdoor"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-9",
+          "text": "Water and dust exposure is captured as a target IP rating or ingress scenario",
+          "hint": "Record the IP code per IEC 60529 or a plain-language scenario (rain, hose, immersion depth in m). Sealing design itself is covered in Enclosures, Sealing & IP.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-load-10",
+          "text": "Grip, carry and one-handed use requirements are defined",
+          "hint": "Specify mass limit, grip diameter range and whether use with gloves is required. Validate with foam or printed ergonomic models early.",
+          "tags": [
+            "handheld"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-reg",
+      "title": "Regulatory & Standards Identification",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-reg-1",
+          "text": "Target markets and sales regions are listed",
+          "hint": "Region drives which certifications, marks and material restrictions apply. Adding a region late can force redesign.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-2",
+          "text": "Applicable product safety standards are identified and owned",
+          "hint": "E.g. IEC 62368-1 for ICT/AV equipment, IEC 61010-1 for lab and measurement equipment. Confirm with the test lab or compliance consultant, not by guess.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-reg-3",
+          "text": "Mechanical requirements of the safety standard are extracted into the requirements matrix",
+          "hint": "Enclosure strength, impact, stability, flammability rating (UL 94) and accessible-part requirements need to be design inputs, not test-day surprises.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-4",
+          "text": "Material compliance requirements (RoHS, REACH, Prop 65 and similar) are flagged for all parts",
+          "hint": "Capture them as requirements so suppliers are asked for declarations at sourcing, not after tooling.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-5",
+          "text": "Medical device classification and regulatory pathway are identified",
+          "hint": "Class and pathway determine design control rigor, documentation and testing. Get regulatory affairs sign-off.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-reg-6",
+          "text": "Applicable medical standards are listed (e.g. IEC 60601-1, ISO 14971, ISO 10993)",
+          "hint": "List the specific parts and collateral standards applicable; each brings mechanical requirements such as stability, cleaning and biocompatibility.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-7",
+          "text": "Design control process (design inputs, reviews, traceability) is set up per the quality system",
+          "hint": "Under ISO 13485, design inputs must be documented and reviewed. Retrofitting traceability at the end is painful and audit-visible.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-8",
+          "text": "Skin-contact materials and contact duration are identified for biocompatibility evaluation",
+          "hint": "List every part touching skin, contact type and duration. This drives ISO 10993 testing scope and material choice.",
+          "tags": [
+            "wearable",
+            "medical"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-reg-9",
+          "text": "Labeling and marking requirements (rating label, symbols, regulatory marks) are captured",
+          "hint": "Reserve label area in the design and note whether marking is molded, printed or a label, and its durability requirement.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-mfg",
+      "title": "Manufacturing & Cost Targets",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-mfg-1",
+          "text": "Annual volume and lifetime volume forecasts are documented",
+          "hint": "Volume determines process choice, tooling investment and cavitation. Get the forecast in writing with ramp assumptions.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-mfg-2",
+          "text": "Target product cost (BOM plus assembly) is set and allocated by subsystem",
+          "hint": "Track estimated cost against the target in a cost model updated at each review.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-3",
+          "text": "Tooling and NRE budget is defined",
+          "hint": "Tooling budget limits cavitation, steel choice and number of slides. Know it before the part design commits to them.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-4",
+          "text": "Manufacturing process for each major part is selected with a written rationale",
+          "hint": "Record why injection molding vs. machining vs. sheet metal vs. additive, given volume, cost, tolerance and lead time. Revisit if volume changes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-5",
+          "text": "Process selection is consistent with forecast volume and cost targets",
+          "hint": "Rule of thumb: machined or printed parts that suit pilot volumes rarely meet volume cost targets; plan the transition and its tooling lead time.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-6",
+          "text": "Tooling lead times and their place in the schedule are confirmed with suppliers",
+          "hint": "Get quoted lead times for tools, T1 samples and modifications. Tooling is often the critical path to PVT.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-7",
+          "text": "Supplier strategy is defined: single vs. dual source, region, and assembly location",
+          "hint": "Decide early whether parts are sourced near the final assembly site; it affects logistics, cost and supplier DFM input.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-mfg-8",
+          "text": "Key suppliers are engaged for DFM input before design freeze",
+          "hint": "Early molder, fabricator or machinist feedback avoids expensive tooling changes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-mfg-9",
+          "text": "Assembly location and assembly method (manual, semi-automated, automated) are assumed and documented",
+          "hint": "Automated assembly imposes stricter part presentation and tolerance needs. See Assembly, Fastening & DFA.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-mfg-10",
+          "text": "Production test and inspection strategy is outlined, including end-of-line tests",
+          "hint": "Decide what is inspected at the supplier vs. at assembly and what fixtures are needed; fixtures have their own lead time.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-risk",
+      "title": "Concept Risk Review",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-risk-1",
+          "text": "A technical risk register exists with owner, likelihood, impact and mitigation for each risk",
+          "hint": "Review it at every design review. Risks without owners don't get mitigated.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-risk-2",
+          "text": "Design FMEA is started at the concept stage for the key functions",
+          "hint": "Begin with system-level functions and failure modes; refine as detail design develops. It feeds the verification plan.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-risk-3",
+          "text": "Hazard analysis or risk management file is started per ISO 14971",
+          "hint": "Mechanical hazards (pinch points, sharp edges, instability, ejected parts) need documented risk controls traceable to verification.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-risk-4",
+          "text": "Make vs. buy decision is recorded for each major subassembly",
+          "hint": "Off-the-shelf mechanisms, hinges, fans and seals often reduce risk; note lead time and obsolescence of bought parts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-risk-5",
+          "text": "IP and freedom-to-operate check is done for the core mechanism or architecture",
+          "hint": "Search patents for the key mechanism before investing heavily in detail design; involve counsel if anything close is found.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-risk-6",
+          "text": "Prior art and competitor products are reviewed and their known failure modes noted",
+          "hint": "Teardowns and reviews of competitor field complaints show which problems the design must avoid.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-risk-7",
+          "text": "Key technical unknowns are listed with a planned prototype or analysis to answer each",
+          "hint": "E.g. mechanism feel, seal compression, thermal margin, drop survival. Prototype the riskiest unknowns first, before the full design.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-risk-8",
+          "text": "Critical-to-function features are identified at concept stage",
+          "hint": "Naming the CTF dimensions and functions early lets tolerance analysis, drawings and inspection focus on what matters.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-risk-9",
+          "text": "Safety-critical failure modes and load paths are identified",
+          "hint": "Mark parts whose failure could injure someone; they need higher safety factors, analysis and validation.",
+          "tags": [
+            "structural"
+          ],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-risk-10",
+          "text": "Concepts are compared against requirements with a documented selection matrix",
+          "hint": "Score each concept against weighted requirements and keep the matrix; it explains later why alternatives were rejected.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-svc",
+      "title": "Serviceability, Repair & End of Life",
+      "tags": [],
+      "items": [
+        {
+          "id": "rq-svc-1",
+          "text": "Service and repair strategy is defined: field-repairable, depot repair or replace-only",
+          "hint": "This decides whether snaps vs. screws, glue vs. gaskets and modular subassemblies are acceptable.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-svc-2",
+          "text": "Field-replaceable parts and consumables are identified with their access path",
+          "hint": "Batteries, filters, seals and wear parts should be reachable without destroying cosmetic parts or seals.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-svc-3",
+          "text": "Disassembly for service does not require destroying single-use features unless planned",
+          "hint": "Single-use snaps and adhesives are fine for replace-only products but not for repairable ones; record the decision.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-svc-4",
+          "text": "Right-to-repair or regional repairability requirements are reviewed for the target markets",
+          "hint": "Some regions are introducing repairability and spare-part rules, particularly for batteries; check with compliance.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-svc-5",
+          "text": "End-of-life and recyclability requirements are defined, including material marking",
+          "hint": "Plastics marking per ISO 11469 and separable materials simplify recycling and meet take-back expectations.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-svc-6",
+          "text": "Sustainability targets (recycled content, mass, packaging) are captured if the customer has them",
+          "hint": "Recycled-content resins have different properties and color limits; capture them as inputs before material selection.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-id",
+      "title": "Industrial Design & CMF Handshake",
+      "tags": [
+        "cosmetic"
+      ],
+      "items": [
+        {
+          "id": "rq-id-1",
+          "text": "Industrial design surfaces are received as a controlled, versioned CAD release",
+          "hint": "Engineering should design to a frozen ID surface revision; track which revision each part is built on.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-id-2",
+          "text": "Class A surfaces are identified and agreed with ID",
+          "hint": "Mark which faces are cosmetic and their grade, so gates, ejector pins, sink-prone ribs and parting lines stay off them.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-id-3",
+          "text": "CMF specification (color, material, finish, texture) is defined for each visible part",
+          "hint": "Reference physical color standards or color chips and texture supplier codes, not screen colors.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-id-4",
+          "text": "Parting line and split line locations are agreed with ID before detailed design",
+          "hint": "Parting lines visible on Class A surfaces are a frequent ID/ME conflict; resolve on the concept model.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-id-5",
+          "text": "Draft required on textured cosmetic surfaces is accounted for in the ID surfaces",
+          "hint": "Rule of thumb: heavier textures need more draft per the texture supplier. Adding draft late changes the ID form.",
+          "tags": [
+            "injection-molded"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-id-6",
+          "text": "Gaps, flushness and step targets between visible parts are agreed with ID",
+          "hint": "State nominal gap and flush targets in mm; check they are achievable with the tolerance stack.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-id-7",
+          "text": "Appearance acceptance criteria (viewing distance, lighting, defect limits) are agreed",
+          "hint": "Define cosmetic inspection conditions now so supplier sample approval isn't subjective.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-ee",
+      "title": "Electronics Integration",
+      "tags": [
+        "electronics"
+      ],
+      "items": [
+        {
+          "id": "rq-ee-1",
+          "text": "PCB outline, mounting holes and component height keep-outs are agreed with EE and frozen",
+          "hint": "Exchange a STEP/IDF board outline with height zones; check against the enclosure with interference detection.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-ee-2",
+          "text": "Antenna keep-out volumes are defined and free of metal, metallized coatings and fasteners",
+          "hint": "Get the keep-out from the RF engineer or module datasheet; metal parts, screws and conductive paint nearby detune the antenna.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-ee-3",
+          "text": "Thermal budget (power dissipation per component and allowable temperatures) is shared with ME",
+          "hint": "Get worst-case dissipation in W and limits in °C, including surface touch-temperature limits. Feeds Thermal & Structural Analysis.",
+          "tags": [
+            "thermal"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-ee-4",
+          "text": "Cable and harness routing paths are reserved in CAD with bend radius and connector mating clearance",
+          "hint": "Model cables and flex circuits as solids at their minimum bend radius; pinched or over-bent cables are a common field failure.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-ee-5",
+          "text": "Display, touch and button stack-ups are defined with the EE and supplier",
+          "hint": "Include adhesive, gaskets, cover glass and switch travel so actuation force and travel requirements can be met.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-ee-6",
+          "text": "Grounding and EMC shielding approach is agreed (conductive coatings, gaskets, chassis bonding)",
+          "hint": "Shielding needs contact areas, coating masks and gasket compression in the mechanical design.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-ee-7",
+          "text": "Electrostatic discharge paths from user-touchable surfaces are considered with EE",
+          "hint": "Seams near PCBs and metal trim can let ESD reach electronics; agree creepage and ground paths early.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "rq-bat",
+      "title": "Battery",
+      "tags": [
+        "battery-pack"
+      ],
+      "items": [
+        {
+          "id": "rq-bat-1",
+          "text": "Cell or pack is selected with datasheet dimensions, tolerance and mass",
+          "hint": "Use supplier drawings with tolerances, not nominal models; pouch cells vary in thickness.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-bat-2",
+          "text": "Swelling allowance around pouch or prismatic cells is provided per the cell supplier",
+          "hint": "Rule of thumb: leave space for end-of-life swelling as specified by the cell maker. Squeezed cells are a safety and field-return issue.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-bat-3",
+          "text": "Transport and shipping rules for the battery (e.g. UN 38.3, air shipping limits) are identified",
+          "hint": "Shipping certification needs test samples and lead time; confirm requirements with the cell supplier and logistics.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "rq-bat-4",
+          "text": "Battery safety standards for the product category are identified",
+          "hint": "E.g. IEC 62133 for portable cells and packs. Confirm with the compliance lab.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "rq-bat-5",
+          "text": "Venting path and containment for a cell failure are considered in the concept",
+          "hint": "Decide where gases go if a cell vents and keep that path away from the user's face and hands.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-bat-6",
+          "text": "Battery is protected from puncture, crush and sharp edges in the housing",
+          "hint": "Check ribs, screw bosses and metal parts near the cell in CAD; drop loads can drive features into the cell.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "rq-bat-7",
+          "text": "Battery replaceability and access are decided (user, service or none)",
+          "hint": "Drives fasteners, door design and regional battery-removability rules.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "rq-bat-8",
+          "text": "Battery operating and charging temperature limits are reflected in the environmental requirements",
+          "hint": "Charging range is usually narrower than operating range; check against the product's use environment.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    }
+  ]
+}

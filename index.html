@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Signoff ME · Mechanical Design Review</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23004952'/%3E%3Cpath d='M10 9h5v6.2l-5 .8zM10 17l5 .8V23h-5z' fill='%23fff'/%3E%3Cpath d='M16 9l7 2.5v9L16 23v-5.2l4-.8v-2l-4-.8z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css?v=68e3e200aec3">
+</head>
+<body>
+<div id="demo-banner" class="demo-banner" hidden></div>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 18"><path d="M0 0h6v7.6L0 8.4zM0 9.6l6 .8V18H0z" fill="#fff"/><path d="M7 0l9 3v12l-9 3v-7.4l5-.9V8.3l-5-.9z" fill="#fff"/></svg>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name">Signoff ME</div>
+        <div class="brand-sub">Mechanical design review</div>
+      </div>
+    </div>
+    <div class="side-search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
+      <input id="project-search" type="search" placeholder="Search projects" autocomplete="off">
+    </div>
+    <div class="side-head">
+      <span class="side-label">Projects</span>
+      <button class="icon-btn" data-act="new-project" title="New project (N)" aria-label="New project">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+      </button>
+    </div>
+    <nav class="side-list" id="project-list"></nav>
+    <!-- tools-link: links to the rest of the suite next to this folder (C:/Dovetail/tools); hidden for contractors and in demo, removed by tools/package.py -->
+    <div class="side-tools" id="side-tools" hidden>
+      <div class="side-head"><span class="side-label">Dovetail Signoff</span></div>
+      <a class="side-link" href="../ee_design_review/index.html" title="Switch to Signoff EE, electrical design review">
+        <span class="tool-mark tool-mark-text">EE</span>
+        <span>Signoff EE<small>Electrical design review</small></span>
+      </a>
+      <a class="side-link" href="../signoff/index.html" title="Back to Dovetail Signoff, all tools">
+        <span class="tool-mark"><svg viewBox="0 0 18 18" fill="#fff"><rect x="2" y="2" width="6" height="6" rx="1.5"/><rect x="10" y="2" width="6" height="6" rx="1.5"/><rect x="2" y="10" width="6" height="6" rx="1.5"/><rect x="10" y="10" width="6" height="6" rx="1.5"/></svg></span>
+        <span>All tools<small>Dovetail Signoff home</small></span>
+      </a>
+    </div>
+    <!-- /tools-link -->
+    <button class="side-link" id="people-link" data-act="people" hidden>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7.5" cy="7" r="2.8"/><path d="M2.5 16.5c.6-2.8 2.6-4.3 5-4.3s4.4 1.5 5 4.3"/><circle cx="14" cy="7.8" r="2.2"/><path d="M13.6 12.3c2 .1 3.4 1.4 3.9 3.7"/></svg>
+      People &amp; access
+    </button>
+    <div class="side-foot">
+      <button class="sync-pill" data-act="sync" id="sync-pill" title="Sync with GitHub (Ctrl+S)">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span class="sync-text"><span class="sync-title" id="sync-title">Local only</span><span class="sync-sub" id="sync-sub">Set up Git sync</span></span>
+      </button>
+      <button class="icon-btn" data-act="theme" id="theme-btn" title="Dark mode" aria-label="Toggle dark mode"></button>
+      <button class="icon-btn" data-act="settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <header class="toolbar" id="toolbar">
+      <button class="icon-btn menu-toggle" data-act="nav" aria-label="Projects">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+      </button>
+      <div class="toolbar-title" id="toolbar-title"></div>
+      <div class="toolbar-center"><div class="seg" id="view-seg" role="tablist"></div></div>
+      <div class="toolbar-actions" id="toolbar-actions"></div>
+    </header>
+    <div id="page"></div>
+  </main>
+</div>
+
+<aside class="inspector" id="inspector" aria-label="Item detail"></aside>
+<div class="toasts" id="toasts"></div>
+<div id="report" class="report" hidden></div>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
+
+<script src="assets/config.js?v=68e3e200aec3"></script>
+<script src="assets/version.js?v=68e3e200aec3"></script>
+<script src="assets/templates.js?v=68e3e200aec3"></script>
+<script src="assets/model.js?v=68e3e200aec3"></script>
+<script src="assets/github.js?v=68e3e200aec3"></script>
+<script src="assets/workspace.js?v=68e3e200aec3"></script>
+<script src="assets/demo.js?v=68e3e200aec3"></script>
+<script src="assets/app.js?v=68e3e200aec3"></script>
+</body>
+</html>

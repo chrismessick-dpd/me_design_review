@@ -1,0 +1,717 @@
+{
+  "id": "drawings",
+  "title": "Drawings & Release",
+  "short": "Drawings",
+  "version": 1,
+  "description": "Drawing content, process-specific notes, assembly drawings and BOMs, revision control, checking and supplier release packages.",
+  "sections": [
+    {
+      "id": "drw-tb",
+      "title": "Title Block & Metadata",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-tb-1",
+          "text": "Part number in the title block matches the PDM/PLM record and the file name",
+          "hint": "Compare the title block, model properties and PDM record. Mismatches cause wrong parts to be quoted, ordered or built.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-tb-2",
+          "text": "Revision letter in the title block matches the latest entry in the revision table",
+          "hint": "A title block that disagrees with the revision table makes the revision ambiguous at the supplier.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-3",
+          "text": "Material is specified fully, with grade, standard or manufacturer and trade name",
+          "hint": "\"Aluminum\" or \"ABS\" is not a specification. Give alloy and temper, or resin grade and supplier, plus any approved equivalents.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-tb-4",
+          "text": "Finish is specified (anodize type and color, plating, paint, texture) or stated as none",
+          "hint": "Reference the finish spec or Materials & Finishes callout. A blank finish field is often read as \"as machined\" or \"as molded\".",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-5",
+          "text": "Units are stated on the drawing (mm by default) and used consistently",
+          "hint": "Dual dimensions, if any, show the primary unit clearly. Mixed units on one sheet are a recipe for scrap.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-6",
+          "text": "Projection angle (first or third angle) is stated with the standard symbol",
+          "hint": "Suppliers in different regions default to different projection angles. A missing symbol can mirror a view interpretation.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-7",
+          "text": "Drawing scale is stated and views not at the sheet scale are labeled with their own scale",
+          "hint": "Detail and section views often use a different scale. Remind readers not to scale the drawing.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-tb-8",
+          "text": "Sheet number and total sheet count are shown on every sheet",
+          "hint": "\"Sheet 2 of 3\" lets a supplier know a page is missing from the package.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-tb-9",
+          "text": "Drawn, checked and approved fields carry names and dates",
+          "hint": "An empty checked field means the drawing was not independently checked. Match the names to the PDM approval record.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-tb-10",
+          "text": "The general tolerance note or title-block tolerance table is present and matches the chosen tolerance standard",
+          "hint": "Confirm the note references the general tolerance standard and class selected during tolerancing (see Tolerancing & GD&T). Leftover template tolerance blocks are a frequent error.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-11",
+          "text": "Applicable drawing and GD&T standards are stated (e.g. ASME Y14.5 edition or ISO GPS)",
+          "hint": "The standard sets how every symbol is interpreted. Use the company template field rather than a free note so it is never omitted.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-tb-12",
+          "text": "Part mass or weight is shown where the drawing template calls for it",
+          "hint": "Use the CAD mass with the correct material density applied. Mass is useful for incoming checks and for BOM rollups.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-view",
+      "title": "Views & Dimensioning",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-view-1",
+          "text": "The drawing has enough views to define every feature without ambiguity",
+          "hint": "Check that hidden or internal features appear in at least one view where they can be dimensioned. A feature shown only in an isometric is undefined.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-view-2",
+          "text": "Section and detail views are provided for internal geometry, small features and complex profiles",
+          "hint": "Section through bosses, ribs, grooves and undercuts. Label section lines and views consistently.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-view-3",
+          "text": "Every feature is fully defined by dimensions, GD&T or a reference to the 3D model",
+          "hint": "Review each feature in turn and confirm its size and location are controlled. Missing dimensions get filled in by the supplier's guess.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-view-4",
+          "text": "No dimension is duplicated across views or sheets",
+          "hint": "Duplicates diverge after the next revision. Use the CAD tool's duplicate dimension check where available, then scan by eye.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-view-5",
+          "text": "Dimensions originate from datum features rather than chaining from edge to edge",
+          "hint": "Chained dimensions accumulate tolerance. Baseline or ordinate dimensioning from the datum frame matches how the part is inspected.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-view-6",
+          "text": "Reference dimensions are marked as reference and are not used to control features",
+          "hint": "Use parentheses or REF per the stated standard. An unmarked redundant dimension creates a conflict.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-view-7",
+          "text": "Dimensions are driven from the model and not overridden with manually typed values",
+          "hint": "Search for overridden or detached dimensions in the CAD drawing. A typed value that disagrees with the model is a silent error.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-view-8",
+          "text": "When the 3D model is the master definition, the drawing states this and identifies the governing model and revision",
+          "hint": "Model-based definition (e.g. per ASME Y14.41) needs a note naming the model file, revision and what the drawing still controls. Otherwise the supplier cannot tell which governs when they disagree.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-view-9",
+          "text": "Features controlled only by the model are identified and given a general profile tolerance",
+          "hint": "A note such as \"all untoleranced surfaces profile X to datums A|B|C per model\" closes the gap. Without it, model-only geometry has no tolerance.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-view-10",
+          "text": "Text, dimensions and symbols are legible at the printed sheet size and do not overlap geometry",
+          "hint": "Print or view at 100% on the intended sheet size. Overlapping dimensions are misread.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-view-11",
+          "text": "Threads, holes and countersinks use standard hole callouts rather than manual notes",
+          "hint": "Use the CAD hole callout so depth, thread class and countersink angle stay linked to the feature.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-note",
+      "title": "General Notes",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-note-1",
+          "text": "Edge break and deburr requirements are stated (e.g. per ISO 13715 or a general edge note)",
+          "hint": "Sharp edges cut assemblers and users; uncontrolled breaks affect seals and fits. State exceptions where sharp edges are functional.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-2",
+          "text": "Surface finish (Ra) is specified on functional surfaces and as a general value elsewhere",
+          "hint": "Call out Ra on sealing faces, bearing bores and sliding surfaces using the stated standard's symbol. Leave non-functional surfaces to the general note to avoid cost.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-3",
+          "text": "Heat treatment, hardness and case depth are specified where required, with the test method",
+          "hint": "Give the hardness scale and location of measurement. State whether dimensions apply before or after heat treatment.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-4",
+          "text": "A cosmetic specification is referenced for customer-facing surfaces",
+          "hint": "Reference the cosmetic spec that defines surface classes, allowable defects, viewing conditions and SPI or VDI 3400 finish where applicable.",
+          "tags": [
+            "cosmetic"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-5",
+          "text": "Part marking is specified: content, location, method and size",
+          "hint": "Include part number, revision, cavity number, date code, material ID or regulatory marks as required. Mark location must not land on a cosmetic or functional surface.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-note-6",
+          "text": "RoHS, REACH and other substance compliance requirements are stated on the drawing or in a referenced spec",
+          "hint": "Use a standard compliance note so suppliers certify every lot. Missing notes lead to non-compliant platings and coatings.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-7",
+          "text": "Cleanliness, biocompatibility or particulate requirements are stated for patient- or fluid-contacting parts",
+          "hint": "Reference the cleaning spec or ISO 10993 evaluation basis for patient-contact parts. Suppliers will not apply cleaning steps that are not specified.",
+          "tags": [
+            "medical"
+          ],
+          "severity": "major"
+        },
+        {
+          "id": "drw-note-8",
+          "text": "Notes are numbered, current and free of template leftovers that do not apply",
+          "hint": "Delete inherited notes that conflict with this part (wrong material, wrong process). Flag-note symbols on the views should match the note numbers.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-note-9",
+          "text": "Packaging and handling requirements are stated where the part is fragile or cosmetic",
+          "hint": "Specify protective film, separators or trays so cosmetic and precision parts arrive undamaged.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-im",
+      "title": "Injection-Molded Part Drawings",
+      "tags": [
+        "injection-molded"
+      ],
+      "items": [
+        {
+          "id": "drw-im-1",
+          "text": "Resin is specified by manufacturer, grade and color code, with any approved alternates",
+          "hint": "Name the resin grade and color masterbatch or pre-color code. Generic resin names let the molder substitute.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-im-2",
+          "text": "Surface texture or polish is specified by standard (SPI, VDI 3400 or texture supplier code) for each surface",
+          "hint": "Show texture zones on a view and give the code per zone. Texture affects draft, so confirm draft supports the texture.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-im-3",
+          "text": "Gate location and allowable gate vestige are shown or restricted",
+          "hint": "Mark permitted gate zones and maximum vestige height. Leaving it open lets the toolmaker gate on a Class A surface.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-im-4",
+          "text": "Ejector pin locations and allowable witness marks are restricted on cosmetic and functional surfaces",
+          "hint": "Show keep-out zones for ejectors and state allowable witness depth or protrusion.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-im-5",
+          "text": "Parting line location and allowable mismatch and flash are specified",
+          "hint": "Show the parting line and state the maximum flash and step per the molder's capability. Flash on a sealing surface causes leaks.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-im-6",
+          "text": "Sink and void acceptance criteria are stated for surfaces over ribs and bosses",
+          "hint": "Reference the cosmetic spec or give limits for sink on visible faces opposite ribs and bosses.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-im-7",
+          "text": "Cavity identification and date code inserts are specified on the drawing",
+          "hint": "Cavity ID lets quality trace defects to a specific cavity; date wheels support lot traceability.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-sm",
+      "title": "Sheet-Metal Part Drawings",
+      "tags": [
+        "sheet-metal"
+      ],
+      "items": [
+        {
+          "id": "drw-sm-1",
+          "text": "A flat pattern view is included with overall blank size",
+          "hint": "The flat pattern confirms the supplier's unfold matches yours. Note that the flat is for reference and the formed part governs, unless agreed otherwise.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sm-2",
+          "text": "Bend notes give direction, angle and inside radius for every bend",
+          "hint": "Include bend up/down and radius in a bend table. Inside radius should match the supplier's tooling.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sm-3",
+          "text": "Material thickness, grade and grain or rolling direction (where it matters) are specified",
+          "hint": "Grain direction affects cracking on tight bends in some alloys. State it when bends are near the material's minimum radius.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sm-4",
+          "text": "Hardware inserts (PEM-style nuts, studs, standoffs) are called out with supplier part numbers",
+          "hint": "Give the hardware manufacturer's part number and the installation side. Generic \"M3 nut\" callouts get substituted.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sm-5",
+          "text": "Dimensions to formed features are given from the side that is controlled (inside or outside of bend)",
+          "hint": "Indicate inside versus outside mold line dimensions. Ambiguity here shifts features by a material thickness.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sm-6",
+          "text": "Burr direction is specified where it affects safety, assembly or cosmetic surfaces",
+          "hint": "Punching leaves a burr on one side. Specify burr side away from users, cables and seals.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-mc",
+      "title": "Machined Part Drawings",
+      "tags": [
+        "machined"
+      ],
+      "items": [
+        {
+          "id": "drw-mc-1",
+          "text": "Threads are specified with size, pitch, class and depth (e.g. M5x0.8-6H, full thread depth)",
+          "hint": "Specify thread class per ISO 965 or the applicable standard and the minimum full-thread depth. Unspecified depth leaves the tap-drill depth to the machinist.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-mc-2",
+          "text": "Thread inserts (helical coil, key-locking) are specified with manufacturer part numbers and tapped hole spec",
+          "hint": "Give the insert part number and the insert manufacturer's tapped-hole size. The hole spec differs from a standard thread.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-mc-3",
+          "text": "Internal corner radii are compatible with standard cutters or are explicitly called out",
+          "hint": "Sharp inside corners cannot be milled. Show the maximum allowable radius so the shop can choose the tool.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-mc-4",
+          "text": "Surface finishes on machined functional surfaces are specified separately from the general finish",
+          "hint": "Call out Ra on sealing, bearing and sliding surfaces. Do not over-specify a fine general finish.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-mc-5",
+          "text": "Finish masking requirements are shown for threads, bores and grounding points",
+          "hint": "Mark areas to be masked from anodize, plating or paint. Unmasked grounding pads break electrical bonding.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "drw-cst",
+      "title": "Cast Part Drawings",
+      "tags": [
+        "cast"
+      ],
+      "items": [
+        {
+          "id": "drw-cst-1",
+          "text": "Machining stock is shown on as-cast surfaces that will be machined",
+          "hint": "Provide a casting drawing with stock allowance, or a combined drawing that distinguishes as-cast and machined dimensions.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-cst-2",
+          "text": "As-cast tolerances reference a casting tolerance standard or the foundry's agreed grade",
+          "hint": "ISO 8062 grades or a supplier-agreed table. Do not apply machining tolerances to as-cast features.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-cst-3",
+          "text": "Porosity acceptance class and inspection method are specified for critical zones",
+          "hint": "Reference the agreed radiographic or sectioning standard and zone the drawing where porosity matters (sealing faces, threads, high-stress areas).",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-cst-4",
+          "text": "The as-cast part and the machined part are separate, linked definitions (part numbers or drawing views)",
+          "hint": "Foundries are quoted and inspected on the as-cast condition, machinists on the finished part. Linking both on one ambiguous view causes disputes over which dimensions the foundry owns.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-cst-5",
+          "text": "Impregnation, heat treatment or stress relief requirements are stated where needed",
+          "hint": "Vacuum impregnation seals porosity for pressure-tight castings; state it with the spec if required.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-asm",
+      "title": "Assembly Drawings & BOM",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-asm-1",
+          "text": "Every balloon on the assembly drawing matches an item in the BOM, and every BOM item is ballooned",
+          "hint": "Cross-check the balloon list with the BOM table. Orphan balloons or missing items cause build errors.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-2",
+          "text": "BOM quantities and units of measure are correct for every line, including bulk items",
+          "hint": "Check quantities against the model and give units for adhesives, tapes and cables (mm, g, mL). Bulk items without units cause shortages.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-3",
+          "text": "Purchased parts list the manufacturer and manufacturer part number",
+          "hint": "A description alone is not orderable. Include the exact catalog number, including any variant suffixes.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-4",
+          "text": "Approved alternates for purchased parts are listed or explicitly forbidden",
+          "hint": "List qualified alternates or state \"no substitution\". Unlisted substitutes may differ in critical dimensions or materials.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-asm-5",
+          "text": "Fastener torque values are specified for every threaded joint",
+          "hint": "Give torque in N·m with tolerance and the tool or method. Torque values should come from the joint analysis (see Assembly, Fastening & DFA).",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-6",
+          "text": "Adhesive and thread-locker callouts give product, application area and cure requirements",
+          "hint": "Name the product and grade, show where to apply it and state cure time or conditions before handling.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-7",
+          "text": "Assembly sequence notes are given where order matters",
+          "hint": "Call out steps that cannot be reversed (adhesive, press fits, heat-staking) and any orientation requirements.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-asm-8",
+          "text": "Assembly-level dimensions and checks are shown for critical interfaces",
+          "hint": "Include the final gaps, heights or alignments the line must verify, with tolerances from the stack-ups.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-asm-9",
+          "text": "Lubrication, grease or potting callouts are specified with product and quantity",
+          "hint": "\"Lubricate\" without product or amount gets interpreted differently by each operator.",
+          "tags": [
+            "moving-parts"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-asm-10",
+          "text": "Label and marking placements are shown on the assembly drawing",
+          "hint": "Show product label, serial and regulatory mark locations with orientation.",
+          "tags": [
+            "regulatory"
+          ],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-rev",
+      "title": "Revision Control & Release",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-rev-1",
+          "text": "The revision table lists each revision with a description of the change",
+          "hint": "Descriptions such as \"updated\" are useless. Name what changed and where (zone or view).",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-rev-2",
+          "text": "Each revision references its ECO/ECN number",
+          "hint": "Traceability to the change order connects the drawing to the reason, approval and affected parts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-rev-3",
+          "text": "Model and drawing revisions match in the PDM/PLM system",
+          "hint": "Check that the drawing references the released model revision. A drawing pointing to a work-in-progress model can carry unapproved geometry.",
+          "tags": [],
+          "severity": "critical"
+        },
+        {
+          "id": "drw-rev-4",
+          "text": "The drawing is released through PDM/PLM, not sent from a local or working file",
+          "hint": "Released state locks the file and records approvals. Files emailed from a workspace bypass the release process.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-rev-5",
+          "text": "Changed features are identified on the drawing (revision clouds or triangles) for the current revision",
+          "hint": "Clouding lets suppliers and checkers find the change quickly. Clear old clouds when the next revision starts.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-rev-6",
+          "text": "STEP and PDF exports are generated from the released revision and stored with it",
+          "hint": "Regenerate exports at release rather than reusing earlier files. Check the STEP opens and the PDF revision matches.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-rev-7",
+          "text": "Native CAD files are archived with the release",
+          "hint": "Archive the native files and references (or a Pack and Go) so the design can be reproduced later.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-rev-8",
+          "text": "Suppliers receive controlled copies and superseded revisions are withdrawn",
+          "hint": "Send from PDM/PLM or a controlled portal and confirm the supplier acknowledges the new revision. Superseded copies at the supplier are a common cause of wrong parts.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-rev-9",
+          "text": "Interchangeability is assessed for each revision and part number changed when form, fit or function changes",
+          "hint": "If old and new parts are not interchangeable, the part number should change. Bumping only the revision mixes incompatible parts in stock.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-rev-10",
+          "text": "Where-used is checked for every changed part so affected assemblies and drawings are updated",
+          "hint": "Run the PDM where-used report. Shared parts often affect other products.",
+          "tags": [],
+          "severity": "major"
+        }
+      ]
+    },
+    {
+      "id": "drw-chk",
+      "title": "Checking",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-chk-1",
+          "text": "Each drawing is checked by someone other than the author",
+          "hint": "An independent checker catches errors the author cannot see. Record the checker in the title block and PDM.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-chk-2",
+          "text": "The drawing checklist was completed and stored with the release",
+          "hint": "Store the completed checklist in PDM with the release so later reviews can see what was checked.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-chk-3",
+          "text": "All checker redlines are closed or dispositioned before release",
+          "hint": "Each redline is either incorporated or answered with a reason. Open redlines at release are deferred errors.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-chk-4",
+          "text": "The checker compared the drawing against the model, stack-ups and CTF list",
+          "hint": "Check that CTF dimensions carry the tolerances the stack-ups assume. The drawing and stack-up analysis are often out of sync.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-chk-5",
+          "text": "A print-out or PDF review was done at final sheet size",
+          "hint": "Errors hidden by on-screen zoom (overlapping text, missing leaders) show up on a full-size print.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    },
+    {
+      "id": "drw-sup",
+      "title": "Supplier Package",
+      "tags": [],
+      "items": [
+        {
+          "id": "drw-sup-1",
+          "text": "The RFQ package contains drawings, 3D models, specifications and referenced documents at matching revisions",
+          "hint": "Send one zip or portal package with a document list. Missing referenced specs (cosmetic, finish, packaging) are the usual gap.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sup-2",
+          "text": "Annual volumes, lot sizes and ramp schedule are stated in the RFQ",
+          "hint": "Volume drives tooling choice (cavity count, soft versus hard tooling) and price. Quotes without volumes cannot be compared.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sup-3",
+          "text": "Inspection requirements and the critical dimensions list are included in the package",
+          "hint": "State which dimensions need measurement on every lot, SPC or certificates. Suppliers quote inspection cost from this.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sup-4",
+          "text": "First article inspection (FAI) requirements are specified: quantity, report format and full-dimension scope",
+          "hint": "State the FAI format (e.g. AS9102-style or PPAP if required), number of parts per cavity and which documents are returned.",
+          "tags": [],
+          "severity": "major"
+        },
+        {
+          "id": "drw-sup-5",
+          "text": "Material certifications and compliance declarations required from the supplier are listed",
+          "hint": "Specify mill certs, resin lot certificates, RoHS/REACH declarations and conflict-minerals statements as required.",
+          "tags": [],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-sup-6",
+          "text": "Tooling ownership, tool life and maintenance expectations are stated for production tooling",
+          "hint": "Agree who owns the tool, expected shot life and who pays for repair. Leaving this open causes disputes at transfer.",
+          "tags": [
+            "high-volume"
+          ],
+          "severity": "minor"
+        },
+        {
+          "id": "drw-sup-7",
+          "text": "Supplier questions and deviations from the RFQ are logged and answered in writing",
+          "hint": "Track supplier DFM feedback and agreed deviations, and fold accepted ones into the next drawing revision.",
+          "tags": [],
+          "severity": "minor"
+        }
+      ]
+    }
+  ]
+}
