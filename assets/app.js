@@ -1172,7 +1172,38 @@
   window.addEventListener('storage', function (e) {
     var t = e.key === THEME_KEY && sharedTheme();
     if (t && t !== settings.theme) { settings.theme = t; applyTheme(t); }
+    onExternalWrite(e);
   });
+
+  // Another tab of this tool, or Fabcheck's "Send to Signoff", wrote our projects, dirty list
+  // or ui. Merge it in rather than let our next persist() overwrite it. Storage events only
+  // fire in other tabs, and we write back only when the merge changed something, so two
+  // open tabs settle instead of echoing.
+  function onExternalWrite(e) {
+    if (!e.key || e.key.indexOf(NS) !== 0) return;
+    var key = e.key.slice(NS.length), theirs;
+    try { theirs = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { return; }
+    if (!theirs || typeof theirs !== 'object') return;
+    if (key === 'projects') {
+      var res = M.mergeLocalCopies(projects, theirs);
+      if (!res.changed) return;
+      projects = res.projects;
+      save('projects', projects);
+      render();
+    } else if (key === 'dirty') {
+      var added = Object.keys(theirs).filter(function (k) { return !dirty[k] || theirs[k] > dirty[k]; });
+      if (!added.length) return;
+      added.forEach(function (k) { dirty[k] = theirs[k]; });
+      save('dirty', dirty);
+      renderSidebar(); renderSyncState(); renderToolbar();
+    } else if (key === 'ui' && !('filter' in theirs) && theirs.slug && projects[theirs.slug] && (theirs.slug !== ui.slug || (theirs.view && theirs.view !== ui.view))) {
+      // A request from another tool, e.g. Fabcheck opening the findings it just sent:
+      // { slug, view: 'findings' }. Our own saveUi() always writes filter, so navigating in a
+      // second Signoff tab doesn't drag this one along.
+      ui.slug = theirs.slug; ui.view = theirs.view || 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; selected = null;
+      closeInspector(); render();
+    }
+  }
 
   // ── Events ───────────────────────────────────────────────
   function visibleItemIds() {

@@ -86,6 +86,25 @@
   // ── No legacy import in ME ──
   ok(!M.isLegacy({ checks: [{}], categories: [] }), 'old EE checklist exports are not taken as ME projects');
 
+  // ── Another tab (or Fabcheck's "Send to Signoff") wrote our working copies ──
+  var mine = M.newProject({ name: 'Shared Tab', checklists: [T[0].id] }, 'Ann', T);
+  mine.slug = 'shared-tab';
+  var theirsDoc = JSON.parse(JSON.stringify(mine));
+  mine.items.q1 = { status: 'pass', updatedAt: '2026-10-24T10:00:00Z', updatedBy: 'Ann' };
+  theirsDoc.custom.xfab1 = { id: 'xfab1', checklist: T[0].id, section: T[0].sections[0].id, text: 'Annular ring 0.05 mm on H3', severity: 'major',
+    source: { tool: 'fabcheck', check: 'annular-ring', gone: false }, createdAt: '2026-10-24T11:00:00Z', updatedAt: '2026-10-24T11:00:00Z', updatedBy: 'Fabcheck' };
+  theirsDoc.items.xfab1 = { status: 'issue', updatedAt: '2026-10-24T11:00:00Z', updatedBy: 'Fabcheck' };
+  theirsDoc.comments.cfab1 = { id: 'cfab1', item: 'xfab1', author: 'Fabcheck', at: '2026-10-24T11:00:00Z', text: 'From Fabcheck', updatedAt: '2026-10-24T11:00:00Z', updatedBy: 'Fabcheck' };
+  var other = M.newProject({ name: 'Only Theirs', checklists: [T[0].id] }, 'Bob', T);
+  other.slug = 'shared-tab';   // same slug, different project
+  var ext = M.mergeLocalCopies({ 'shared-tab': mine }, { 'shared-tab': theirsDoc, 'renamed-there': other });
+  var got = ext.projects['shared-tab'];
+  ok(ext.changed && got.items.q1 && got.items.xfab1.status === 'issue' && got.comments.cfab1, 'an external write merges with local edits instead of replacing them');
+  eq(got.custom.xfab1.source, { tool: 'fabcheck', check: 'annular-ring', gone: false }, 'the Fabcheck source field survives the merge');
+  ok(ext.projects['renamed-there'] && ext.projects['renamed-there'].id === other.id && Object.keys(ext.projects).length === 2, 'projects match by id, not slug');
+  ok(!M.mergeLocalCopies(ext.projects, { 'shared-tab': theirsDoc }).changed, 'nothing new from the other tab means no write back');
+  eq(M.mergeProjects(got, theirsDoc).custom.xfab1.source.tool, 'fabcheck', 'mergeProjects passes the source field through');
+
   // ── Git blob sha ──
   eq(await Signoff.github.gitBlobSha('hello\n'), 'ce013625030ba8dba906f756967f9e9ca394464a', 'git blob sha matches git hash-object');
 

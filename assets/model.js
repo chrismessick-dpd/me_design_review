@@ -225,6 +225,28 @@
     };
   }
 
+  // Working copies (slug -> doc) written by another tab, or by Fabcheck's "Send to Signoff",
+  // merged into ours. Projects match by id, not slug; a new one keeps its slug unless that
+  // slug is taken here. changed is false when theirs adds nothing, so callers don't write back.
+  function mergeLocalCopies(ours, theirs) {
+    var out = {}, bySlug = {}, changed = false;
+    Object.keys(ours || {}).forEach(function (slug) { out[slug] = ours[slug]; bySlug[ours[slug].id] = slug; });
+    Object.keys(theirs || {}).forEach(function (slug) {
+      var doc = theirs[slug];
+      if (!doc || !doc.id || !doc.meta) return;
+      var mine = bySlug[doc.id];
+      if (mine) {
+        var merged = mergeProjects(out[mine], doc);
+        if (stableStringify(merged) !== stableStringify(out[mine])) { out[mine] = merged; changed = true; }
+        return;
+      }
+      var free = slug, n = 2;
+      while (out[free]) free = slug + '-' + n++;
+      out[free] = doc; bySlug[doc.id] = free; changed = true;
+    });
+    return { projects: out, changed: changed };
+  }
+
   // ── People ───────────────────────────────────────────────
   // users.json in the FTE-only data repo:
   //   users:  { login: { login, name, role: 'fte' | 'contractor', projects: [ids] } }
@@ -335,7 +357,7 @@
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, liveComments: liveComments, retiredItems: retiredItems,
-    newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects,
+    newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo
   };
