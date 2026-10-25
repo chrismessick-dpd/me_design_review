@@ -320,7 +320,7 @@
     }
     var st = M.projectStats(p, TEMPLATES);
     var reqIdx = checkIdx(p), reqFail = M.liveReqs(p).some(function (q) { return reqFailing(q, reqIdx); });
-    var views = [{ id: 'overview', label: 'Overview' }, { id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }].concat(projectTemplates(p).map(function (t) {
+    var views = [{ id: 'overview', label: 'Overview' }].concat(reqsOn(p) ? [{ id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }] : [], projectTemplates(p).map(function (t) {
       var c = st.per[t.id];
       return { id: t.id, label: t.short, extra: c && c.issuesOpen ? '<span class="dot"></span>' : '' };
     }));
@@ -400,7 +400,7 @@
       stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue') +
       stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
       (st.outside ? '<p class="note" style="margin-top:10px">' + plural(st.outside, 'check') + ' outside this ' + W.thing + '’s profile ' + (st.outside === 1 ? 'is' : 'are') + ' set aside and not counted.</p>' : '') +
-      '<div class="section-title">Checklists</div><div class="grid grid-3">' + reqsCard(p) +
+      '<div class="section-title">Checklists</div><div class="grid grid-3">' + (reqsOn(p) ? reqsCard(p) : '') +
       tpls.map(function (t) {
         var c = st.per[t.id];
         return '<button class="card cl-card" data-act="view" data-view="' + t.id + '">' +
@@ -675,6 +675,14 @@
     draft: 'Draft', approved: 'Approved', changed: 'Changed', open: 'Not verified', pass: 'Pass', fail: 'Fail',
     shall: 'Shall', should: 'Should' };
   function reqOf(p, id) { var q = p && p.reqs && p.reqs[id]; return q && !q.deleted ? q : null; }
+  // Requirements is picked in the project sheet like a checklist ('reqs' in meta.checklists).
+  // Projects from before that choice existed show it if they already have requirements.
+  // Turning it off hides it but keeps the requirements, as a checklist's state is kept.
+  function reqsOn(p) {
+    if (!p) return false;
+    if ((p.meta.checklists || []).indexOf('reqs') >= 0) return true;
+    return !p.meta.reqsDecided && M.liveReqs(p).length > 0;
+  }
   function checkIdx(p) { return M.checkIndex(p, TEMPLATES); }
 
   function setReq(id, fields) {
@@ -838,6 +846,7 @@
 
   // On a check: the requirements it helps show are met.
   function tracedBy(p, id) {
+    if (!reqsOn(p)) return '';
     var hits = M.liveReqs(p).filter(function (q) { return (q.links || []).indexOf(id) >= 0; });
     if (!hits.length) return '';
     return '<div class="field"><span class="field-label">Traces to</span><div class="chips">' + hits.map(function (q) {
@@ -931,7 +940,9 @@
     var editing = !!p;
     var contractors = M.liveUsers(roster).filter(function (u) { return u.role === 'contractor'; });
     var defaults = C.defaultChecklists || TEMPLATES.map(function (t) { return t.id; });
-    var m = p ? p.meta : { name: '', client: '', board: '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }) };
+    var m = p ? p.meta : { name: '', client: '', board: '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
+    var reqsPicked = p ? reqsOn(p) : true;
+    var reqCount = p ? M.liveReqs(p).length : 0;
     var w = sheet('<div class="sheet-head"><h2>' + (editing ? 'Project details' : 'New design review') + '</h2><p>' + (editing ? 'Changes sync to everyone on this project.' : 'Pick the checklists and describe the ' + W.thing + '. Checks that don’t fit its profile are set aside as N/A, and you can still bring any of them back.') + '</p></div>' +
       '<div class="sheet-body">' +
       '<div class="field"><label for="f-name">Project name</label><input class="input" id="f-name" value="' + esc(m.name) + '" placeholder="' + esc(W.namePlaceholder) + '" maxlength="120"></div>' +
@@ -940,7 +951,10 @@
       '<div class="row2"><div class="field"><label for="f-rev">Revision</label><input class="input" id="f-rev" value="' + esc(m.revision) + '" placeholder="e.g. 03"></div>' +
       '<div class="field"><label for="f-stage">Stage</label><select class="input" id="f-stage">' + M.STAGES.map(function (s) { return '<option' + (s === m.stage ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div></div>' +
       '<div class="field"><label for="f-desc">Scope / notes</label><textarea class="input" id="f-desc" placeholder="What is being reviewed, which documents, anything reviewers should know">' + esc(m.description) + '</textarea></div>' +
-      '<div class="field"><span class="field-label">Checklists</span><div class="pick-grid" id="f-checklists">' + TEMPLATES.map(function (t) {
+      '<div class="field"><span class="field-label">Checklists</span><div class="pick-grid" id="f-checklists">' +
+      '<button type="button" class="pick' + (reqsPicked ? ' on' : '') + '" data-pick="reqs"><b>Requirements</b><span>' +
+      (reqCount ? plural(reqCount, 'requirement') : 'Your own list, traced to checks') + '</span></button>' +
+      TEMPLATES.map(function (t) {
         var n = 0; t.sections.forEach(function (s) { n += s.items.length; });
         return '<button type="button" class="pick' + (m.checklists.indexOf(t.id) >= 0 ? ' on' : '') + '" data-pick="' + t.id + '"><b>' + esc(t.short) + '</b><span>' + n + ' checks</span></button>';
       }).join('') + '</div></div>' +
@@ -999,8 +1013,11 @@
             .concat(drops.map(function (l) { return { login: l, revoke: [projectId] }; })));
         }, 0);
       }
+      // Requirements is chosen like a checklist; from now on that choice is explicit.
+      fields.reqsDecided = true;
       if (editing) { assign(p.id); updateMeta(fields); closeSheet(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
+      doc.meta.reqsDecided = true;
       var slug = doc.slug, n = 2;
       while (projects[slug]) slug = doc.slug + '-' + n++;
       doc.slug = slug;
@@ -1481,7 +1498,7 @@
             cm.map(function (c) { return '<div class="r-cmt">' + esc(c.author) + ' (' + fmtDate(c.at) + '): ' + esc(c.text) + '</div>'; }).join('') + '</td>' +
             '<td>' + esc(r.state.assignee || '—') + '</td><td>' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open') + '</td></tr>';
         }).join('') + '</tbody></table>' : '<p>No issues were raised.</p>') +
-      reqsReport(p) +
+      (reqsOn(p) ? reqsReport(p) : '') +
       '<div class="sign"><div>Reviewed by</div><div>Approved by</div></div>' +
       '<div class="r-foot"><span>Generated by ' + esc(C.product) + ' ' + esc((window.SIGNOFF_VERSION || {}).hash || '') + '</span><span>' + esc(m.name) + '</span></div></div>';
     var r = $('#report'); r.innerHTML = html; r.hidden = false;

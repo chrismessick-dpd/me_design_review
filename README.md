@@ -49,8 +49,10 @@ Which token you need:
 
 ## Requirements
 
-Every project has a **Requirements** tab next to its checklists. Unlike the checklists, these
-are written for the project rather than taken from a template.
+**Requirements** is picked like a checklist in the project sheet (New review / Edit profile)
+and is on by default. Unlike the checklists, requirements are written for the project rather
+than taken from a template. Unticking it hides the tab, the overview card and the report
+section, but keeps the requirements, the same way a checklist's review state is kept.
 
 - **Each requirement has:**
   - an ID (REQ-001…, numbered automatically)
