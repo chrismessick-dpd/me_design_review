@@ -587,7 +587,7 @@
       q.push('x=' + encodeURIComponent(loc.x), 'y=' + encodeURIComponent(loc.y));
       if (loc.layer) q.push('layer=' + encodeURIComponent(loc.layer));
     }
-    return '../pcb_dfm/index.html#/board?' + q.join('&');
+    return '../pcb_dfm/index.html' + (DEMO ? '?demo' : '') + '#/board?' + q.join('&');
   }
 
   function fabcheckBlock(p, def) {
