@@ -121,7 +121,7 @@
 
   // ── One repository ──
   function GitHubStore(cfg, fetchImpl) {
-    this.cfg = cfg;               // { owner, repo, branch, dataPath, templatePath, token, summarize }
+    this.cfg = cfg;               // { owner, repo, branch, dataPath, templatePath, token, summarize, merge }
     this.fetch = fetchImpl || window.fetch.bind(window);
   }
 
@@ -173,7 +173,9 @@
                                    and with opts.deleteStrays their files here are deleted.
      opts.tool:                    also read checklists (templates/) and the tool version.
      cfg.summarize(doc):           builds the summary written into each project file
-                                   (model.withSummary); without it files carry none.
+                                   (model.withSummary); without it the stored one is kept.
+     cfg.merge(local, remote):     merges two copies of a document; default model.mergeProjects.
+                                   Tools whose documents aren't reviews (Signoff PL) pass their own.
      Resolves { projects, roster, moved, cache, templates, version, pushed, commitUrl };
      templates is null when they haven't changed since the last sync. */
   GitHubStore.prototype.sync = function (local, roster, cache, opts) {
@@ -181,6 +183,7 @@
     opts = opts || {};
     local = local || {};
     var belongsHere = opts.belongsHere || function () { return true; };
+    var merge = self.cfg.merge || M.mergeProjects;
     var attempt = 0;
     cache = cache || {};
 
@@ -266,7 +269,7 @@
         var ids = Object.keys(remote).concat(Object.keys(local).filter(function (id) { return !remote[id] && moved.indexOf(id) < 0; }));
         ids.forEach(function (id) {
           var r = remote[id];
-          var doc = r && r.unchanged ? local[id] : M.mergeProjects(local[id], r && r.doc);
+          var doc = r && r.unchanged ? local[id] : merge(local[id], r && r.doc);
           if (!doc) return;
           merged[id] = doc;
           var written = M.withSummary(doc, self.cfg.summarize);

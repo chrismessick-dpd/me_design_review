@@ -193,7 +193,7 @@
 
   function projectSummary(project, templates) {
     var stats = projectStats(project, templates), meta = project.meta, checklists = {};
-    var issues = { open: {}, fixed: 0, waived: 0 };
+    var issues = { open: {}, fixed: 0, waived: 0 }, open = [];
     SEVERITIES.forEach(function (s) { issues.open[s] = 0; });
     templates.forEach(function (t) {
       if (meta.checklists.indexOf(t.id) < 0) return;
@@ -203,8 +203,11 @@
         g.rows.forEach(function (r) {
           if (r.status !== 'issue' || r.auto === 'profile') return;
           var res = r.state.resolution;
-          if (res) issues[res]++;
-          else issues.open[r.severity] = (issues.open[r.severity] || 0) + 1;
+          if (res) { issues[res]++; return; }
+          issues.open[r.severity] = (issues.open[r.severity] || 0) + 1;
+          var text = String(r.def.text || '');
+          open.push({ id: r.id, severity: r.severity, text: text.length > 160 ? text.slice(0, 159) + '…' : text,
+            checklist: t.short || t.title || t.id, assignee: r.state.assignee || '', ref: r.state.ref || '' });
         });
       });
     });
@@ -220,7 +223,8 @@
       name: meta.name, client: meta.client || '', number: meta.board || '', revision: meta.revision || '',
       stage: meta.stage || '', archived: !!meta.archived,
       total: stats.total, reviewed: stats.reviewed, pct: stats.pct,
-      checklists: checklists, issues: issues, reqs: reqs,
+      checklists: checklists, issues: issues, open: open.sort(function (a, b) { return SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity); }),
+      reqs: reqs,
       at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
     };
   }

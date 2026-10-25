@@ -283,7 +283,7 @@
     people.hidden = DEMO || !isFte();
     // Links to the rest of the suite (hub, the other Signoff tool, Fabcheck) show for everyone:
     // FTEs, contractors and the demo. In the demo they point at the other tools' demos. A link
-    // marked data-internal is for FTEs only (none today).
+    // marked data-internal is for FTEs only (Signoff PL).
     var tools = $('#side-tools');
     if (tools) {
       tools.hidden = false;
@@ -1470,6 +1470,7 @@
         });
         res.dropped.forEach(function (id) { delete dirty[id]; });
         ui.slug = Object.keys(projects).filter(function (k) { return projects[k].id === currentId; })[0] || '';
+        openWanted(true);
         if (res.templates && res.templates.length) { pulledTemplates = res.templates; save('templates', pulledTemplates); refreshTemplates(); }
         invitations = res.invitations || [];
         lastSync = { at: M.now(), version: res.version || (lastSync && lastSync.version), errors: res.errors };
@@ -1865,6 +1866,16 @@
       location.reload();
     });
   }
+  // ?project=<id> opens that project (Signoff PL links here). One not in this browser yet is
+  // looked for again after the first sync.
+  var wantProject = (/[?&]project=([^&#]+)/.exec(location.search) || [])[1] || '';
+  function openWanted(final) {
+    if (!wantProject) return;
+    var slug = Object.keys(projects).filter(function (k) { return projects[k].id === decodeURIComponent(wantProject); })[0];
+    if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; saveUi(); }
+    else if (final) { toast('That project isn’t in this browser. Check that your token reaches its repository.'); wantProject = ''; }
+  }
+  openWanted(DEMO || !getToken());
   if (!projects[ui.slug]) ui.slug = Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
   if (!settings.user && !DEMO) settingsSheet();

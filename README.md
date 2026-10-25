@@ -91,12 +91,12 @@ section, but keeps the requirements, the same way a checklist's review state is 
 | `me_design_review` (tool) | The tool and the checklists | FTEs |
 | `me_design_review_data` (data) | Internal ME reviews (`projects/<id>.json`) and People (`users.json`) | FTEs |
 | `review-me-<project>` (one per shared project) | That one review | FTEs and that project's contractors |
-| `ee_design_review`, `ee_design_review_data`, `signoff`, `pcb_dfm` | Signoff EE, the hub and Fabcheck | FTEs |
+| `ee_design_review`, `ee_design_review_data`, `signoff`, `pcb_dfm`, `signoff_pl`, `signoff_pl_data` | Signoff EE, the hub, Fabcheck and Signoff PL | FTEs |
 
 **People & access** (FTEs only) works as in Signoff EE:
 
 - **Adding an FTE** invites them to this tool's repo, its data repo, every ME shared repo, and
-  the rest of the suite: Signoff EE's tool and data repos, the hub repo and Fabcheck (`pcb_dfm`). That list is
+  the rest of the suite: Signoff EE's tool and data repos, the hub repo, Fabcheck (`pcb_dfm`) and Signoff PL's tool and data repos. That list is
   `repos.suite` in `assets/config.js`. Each tool keeps its own People list, so add FTEs in
   Signoff EE too. Its People page grants the `review-ee-…` repos.
 - **Adding a contractor to a project** moves it out of the data repo into a new private

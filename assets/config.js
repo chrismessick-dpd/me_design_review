@@ -22,7 +22,7 @@ window.SIGNOFF_CONFIG = {
     "toolRepo": "me_design_review",
     "dataRepo": "me_design_review_data",
     "prefix": "review-me-",
-    "suite": ["ee_design_review", "ee_design_review_data", "signoff", "pcb_dfm"]
+    "suite": ["ee_design_review", "ee_design_review_data", "signoff", "pcb_dfm", "signoff_pl", "signoff_pl_data"]
   },
   "ids": { "project": "m", "comment": "mc", "custom": "mx" },
   "templateOrder": ["requirements", "part-design", "tolerancing", "dfa", "materials", "analysis", "enclosure", "drawings", "validation"],
