@@ -1,5 +1,7 @@
 # Signoff ME — mechanical design review
 
+**User guide:** [docs/guide.md](docs/guide.md), with a customer-shareable overview and an FTE section on architecture and use.
+
 Signoff ME is Dovetail's checklist tool for mechanical design reviews: requirements, part
 design and DFM, tolerancing, assembly, materials, analysis, enclosures, drawings and
 validation. Each project is a review of one product, assembly or part. Reviewers mark checks
