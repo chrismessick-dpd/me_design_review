@@ -170,6 +170,71 @@
     return total;
   }
 
+  // ── Summary ──────────────────────────────────────────────
+  // A small digest written into each project file at sync (project.summary), so tools that
+  // don't load this tool's checklists (Signoff PL) can show where a review stands. It is
+  // derived, never merged: sync drops the old one and recomputes it from the document. It
+  // depends only on the document and the checklists, so an unchanged project writes the same
+  // bytes and isn't committed again. `at` / `by` are the latest edit in the document.
+  function reqsEnabled(project) {
+    if ((project.meta.checklists || []).indexOf('reqs') >= 0) return true;
+    return !project.meta.reqsDecided && liveReqs(project).length > 0;
+  }
+
+  function lastEdit(project) {
+    var last = { updatedAt: '', updatedBy: '' };
+    function see(rec) { if (rec && newer(last, rec) === rec) last = rec; }
+    see(project.meta);
+    ['items', 'sections', 'comments', 'custom', 'reqs'].forEach(function (k) {
+      Object.keys(project[k] || {}).forEach(function (id) { see(project[k][id]); });
+    });
+    return last;
+  }
+
+  function projectSummary(project, templates) {
+    var stats = projectStats(project, templates), meta = project.meta, checklists = {};
+    var issues = { open: {}, fixed: 0, waived: 0 };
+    SEVERITIES.forEach(function (s) { issues.open[s] = 0; });
+    templates.forEach(function (t) {
+      if (meta.checklists.indexOf(t.id) < 0) return;
+      var c = stats.per[t.id];
+      checklists[t.id] = { name: t.short || t.title || t.id, total: c.total, reviewed: c.reviewed, pct: c.pct, issuesOpen: c.issuesOpen };
+      checklistRows(project, t).forEach(function (g) {
+        g.rows.forEach(function (r) {
+          if (r.status !== 'issue' || r.auto === 'profile') return;
+          var res = r.state.resolution;
+          if (res) issues[res]++;
+          else issues.open[r.severity] = (issues.open[r.severity] || 0) + 1;
+        });
+      });
+    });
+    var reqs = null;
+    if (reqsEnabled(project)) {
+      var q = reqStats(project);
+      reqs = { total: q.total, approved: q.approved, pass: q.pass, fail: q.fail, open: q.open, unlinked: q.unlinked };
+    }
+    var last = lastEdit(project);
+    return {
+      v: 1,
+      tool: C.discipline || '',
+      name: meta.name, client: meta.client || '', number: meta.board || '', revision: meta.revision || '',
+      stage: meta.stage || '', archived: !!meta.archived,
+      total: stats.total, reviewed: stats.reviewed, pct: stats.pct,
+      checklists: checklists, issues: issues, reqs: reqs,
+      at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
+    };
+  }
+
+  // The document as written to its repository: the stored summary replaced by a fresh one.
+  // A writer without checklists (Fabcheck) keeps the stored one; the next sync here renews it.
+  function withSummary(project, summarize) {
+    if (!summarize) return project;
+    var out = Object.assign({}, project);
+    delete out.summary;
+    try { out.summary = summarize(out); } catch (e) { /* no checklists yet: write without */ }
+    return out;
+  }
+
   function liveComments(project, itemId) {
     return Object.keys(project.comments).map(function (k) { return project.comments[k]; })
       .filter(function (c) { return !c.deleted && (itemId === undefined || c.item === itemId); })
@@ -223,7 +288,9 @@
       sections: mergeMaps(local.sections, remote.sections),
       comments: mergeMaps(local.comments, remote.comments),
       custom: mergeMaps(local.custom, remote.custom),
-      reqs: mergeMaps(local.reqs || {}, remote.reqs || {})
+      reqs: mergeMaps(local.reqs || {}, remote.reqs || {}),
+      // Derived (see projectSummary): carried along for writers that can't rebuild it.
+      summary: local.summary && remote.summary && (local.summary.at || '') > (remote.summary.at || '') ? local.summary : remote.summary || local.summary
     };
   }
 
@@ -559,7 +626,8 @@
     now: now, uid: uid, slugify: slugify, stamp: stamp,
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
-    projectStats: projectStats, liveComments: liveComments, retiredItems: retiredItems,
+    projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary,
+    liveComments: liveComments, retiredItems: retiredItems,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,

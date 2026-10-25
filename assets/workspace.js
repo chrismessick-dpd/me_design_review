@@ -18,8 +18,11 @@
   'use strict';
   var M = S.model;
 
-  function Workspace(settings, token, fetchImpl) {
+  // summarize(doc): the project summary every store writes into project files (app.js passes
+  // model.projectSummary with the current checklists).
+  function Workspace(settings, token, fetchImpl, summarize) {
     this.s = settings;
+    this.summarize = summarize;
     this.token = token;
     this.fetch = fetchImpl;
     this.account = new S.GitHubAccount(token, fetchImpl);
@@ -30,7 +33,7 @@
   Workspace.prototype.toolFull = function () { return this.full(this.s.toolRepo); };
   Workspace.prototype.store = function (repoFull, extra) {
     var parts = repoFull.split('/');
-    return new S.GitHubStore(Object.assign({ owner: parts[0], repo: parts[1], branch: this.s.branch || 'main', dataPath: '', token: this.token }, extra || {}), this.fetch);
+    return new S.GitHubStore(Object.assign({ owner: parts[0], repo: parts[1], branch: this.s.branch || 'main', dataPath: '', token: this.token, summarize: this.summarize }, extra || {}), this.fetch);
   };
   Workspace.prototype.dataStore = function () { return this.store(this.dataFull(), { dataPath: this.s.dataPath || '' }); };
 

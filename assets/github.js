@@ -121,7 +121,7 @@
 
   // ── One repository ──
   function GitHubStore(cfg, fetchImpl) {
-    this.cfg = cfg;               // { owner, repo, branch, dataPath, templatePath, token }
+    this.cfg = cfg;               // { owner, repo, branch, dataPath, templatePath, token, summarize }
     this.fetch = fetchImpl || window.fetch.bind(window);
   }
 
@@ -172,6 +172,8 @@
                                    not downloaded or pushed; local copies come back in `moved`,
                                    and with opts.deleteStrays their files here are deleted.
      opts.tool:                    also read checklists (templates/) and the tool version.
+     cfg.summarize(doc):           builds the summary written into each project file
+                                   (model.withSummary); without it files carry none.
      Resolves { projects, roster, moved, cache, templates, version, pushed, commitUrl };
      templates is null when they haven't changed since the last sync. */
   GitHubStore.prototype.sync = function (local, roster, cache, opts) {
@@ -267,7 +269,8 @@
           var doc = r && r.unchanged ? local[id] : M.mergeProjects(local[id], r && r.doc);
           if (!doc) return;
           merged[id] = doc;
-          candidates.push({ path: r ? r.path : dir + id + '.json', text: M.stableStringify(doc), label: doc.meta.name, sha: r && r.sha });
+          var written = M.withSummary(doc, self.cfg.summarize);
+          candidates.push({ path: r ? r.path : dir + id + '.json', text: M.stableStringify(written), label: doc.meta.name, sha: r && r.sha });
         });
         projectEntries.forEach(function (e) { nextCache[e.path] = { sha: e.sha }; });
         if (mergedRoster && (Object.keys(mergedRoster.users).length || Object.keys(mergedRoster.shared).length)) {

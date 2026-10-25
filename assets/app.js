@@ -104,7 +104,7 @@
   function isOwner() { return !!settings.login && settings.login === String(settings.owner).toLowerCase(); }
   function visible() { return true; }
   function visibleProjects() { return Object.keys(projects).map(function (k) { return projects[k]; }); }
-  function workspace() { return new S.Workspace(settings, getToken()); }
+  function workspace() { return new S.Workspace(settings, getToken(), undefined, function (doc) { return M.projectSummary(doc, TEMPLATES); }); }
   function homeOf(p) { return M.sharedRepo(roster, p.id) || homes[p.id] || settings.owner + '/' + settings.dataRepo; }
   function touchRoster() { dirty.roster = M.now(); persist(); renderSyncState(); renderToolbar(); }
   function setPerson(login, fields) {
@@ -693,9 +693,7 @@
   // Projects from before that choice existed show it if they already have requirements.
   // Turning it off hides it but keeps the requirements, as a checklist's state is kept.
   function reqsOn(p) {
-    if (!p) return false;
-    if ((p.meta.checklists || []).indexOf('reqs') >= 0) return true;
-    return !p.meta.reqsDecided && M.liveReqs(p).length > 0;
+    return !!p && M.reqsEnabled(p);
   }
   function checkIdx(p) { return M.checkIndex(p, TEMPLATES); }
 

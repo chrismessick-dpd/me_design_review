@@ -120,6 +120,10 @@ section, but keeps the requirements, the same way a checklist's review state is 
 | `tools/build.py`, `package.py`, `validate_templates.py` | Shared engine tools (vendored) |
 | `tests/test.html` | Model and sync tests against a fake GitHub API (open it over http) |
 
+Each project file also carries a `summary` block (stage, progress, open issues by severity,
+requirement counts), which sync rebuilds on every write. Other tools read it. The format is in
+Signoff EE's README under *The project summary*.
+
 ## Changing the tool or the checklists
 
 - **Checklists, `config.js`, `index.html`, tests, docs:** edit here.
