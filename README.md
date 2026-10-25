@@ -32,12 +32,12 @@ shortcuts and how sync works are the same as in Signoff EE; its README covers th
 
 Open `index.html` in a browser, straight from a clone or served with `python -m http.server`.
 The first time, enter your name. Then open **Settings** (the gear, bottom left), enter a GitHub
-token, and **Save & sync**. Next to `ee_design_review`, the sidebar switches between Signoff ME
-and Signoff EE and links back to the hub (FTEs only; hidden in demo mode and in contractor
-copies).
+token, and **Save & sync**. The sidebar links to Signoff EE, Fabcheck and the hub, and for FTEs to
+Signoff PL. In demo mode the links open the other tools' demos; in a contractor zip they point
+at the hosted site.
 
 The token is stored under `signoff.token`, which every Signoff tool shares, so signing in once
-covers Signoff ME and Signoff EE in the same browser (from disk, or on one hosted origin).
+covers every Signoff tool in the same browser (from disk, or on one hosted origin).
 Light/dark mode is shared too (`theme` in `signoff.v1.settings`). Everything else lives under
 this tool's own namespace, `signoff-me.v1.`.
 

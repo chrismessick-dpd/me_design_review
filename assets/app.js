@@ -96,6 +96,33 @@
     settings.user = settings.user || 'Demo Reviewer';
     save('projects', projects); save('settings', settings);
   }
+  // A tab still running an older demo can write its copies of the sample projects back (other
+  // ids, same names). Drop them, here and whenever another tab writes, so a sample project
+  // never shows twice. Projects a visitor created in the demo are kept.
+  function dropStaleDemo(map) {
+    if (!DEMO || !S.demo) return map;
+    var ids = {}, names = {};
+    ((C.demo || {}).projects || []).forEach(function (d) { ids[S.demo.id(d.seed)] = 1; names[d.fields.name] = 1; });
+    var out = {};
+    Object.keys(map || {}).forEach(function (k) {
+      var d = map[k];
+      if (d && d.meta && names[d.meta.name] && !ids[d.id]) return;
+      out[k] = d;
+    });
+    return out;
+  }
+  // ...and put back any sample project such a tab replaced, so none goes missing either.
+  if (DEMO && S.demo) {
+    var cleaned = dropStaleDemo(projects), have = {}, fixed = Object.keys(cleaned).length !== Object.keys(projects).length;
+    Object.keys(cleaned).forEach(function (k) { have[cleaned[k].id] = 1; });
+    S.demo.projects(TEMPLATES).forEach(function (p) {
+      if (have[p.id]) return;
+      var key = p.slug, n = 2;
+      while (cleaned[key]) key = p.slug + '-' + n++;
+      cleaned[key] = p; fixed = true;
+    });
+    if (fixed) { projects = cleaned; save('projects', projects); }
+  }
 
   function persist() { save('projects', projects); save('dirty', dirty); save('roster', roster); save('homes', homes); }
 
@@ -263,10 +290,15 @@
       .sort(function (a, b) { return (b.meta.updatedAt || '').localeCompare(a.meta.updatedAt || ''); });
     var active = list.filter(function (p) { return !p.meta.archived; });
     var archived = list.filter(function (p) { return p.meta.archived; });
+    // Rows are keyed by the project's key in `projects`, not doc.slug: two projects with one
+    // name share a slug, and the second is stored under a suffixed key (slug-2).
+    var keyOf = new Map();
+    Object.keys(projects).forEach(function (k) { keyOf.set(projects[k], k); });
     function row(p) {
+      var key = keyOf.get(p);
       var st = M.projectStats(p, TEMPLATES);
       var tip = [p.meta.name, [p.meta.client, p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · '), p.meta.stage].filter(Boolean).join('\n');
-      return '<button class="proj' + (p.slug === ui.slug ? ' active' : '') + '" data-act="open-project" data-slug="' + esc(p.slug) + '" title="' + esc(tip) + '">' +
+      return '<button class="proj' + (key === ui.slug ? ' active' : '') + '" data-act="open-project" data-slug="' + esc(key) + '" title="' + esc(tip) + '">' +
         ring(st.pct, 26, 3.5) +
         '<span class="proj-body"><span class="proj-name">' + esc(p.meta.name) + '</span>' +
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
@@ -1641,7 +1673,10 @@
     try { theirs = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { return; }
     if (!theirs || typeof theirs !== 'object') return;
     if (key === 'projects') {
-      var res = M.mergeLocalCopies(projects, theirs);
+      var fresh = dropStaleDemo(theirs);
+      var res = M.mergeLocalCopies(projects, fresh);
+      // The other tab wrote stale demo copies over ours: write ours back.
+      if (!res.changed && Object.keys(fresh).length !== Object.keys(theirs).length) { save('projects', projects); return; }
       if (!res.changed) return;
       projects = res.projects;
       save('projects', projects);

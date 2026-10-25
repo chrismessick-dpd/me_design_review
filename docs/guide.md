@@ -41,7 +41,8 @@ comment and issue. At the end it produces a signed-off review report.
 merge record by record, so no one overwrites anyone. Reviews are kept in private, access-controlled
 storage. Each person sees only the projects they've been given.
 
-**Try it:** the demo (`?demo`) has two sample reviews and stays entirely in your browser.
+**Try it:** the demo (`?demo`) stays entirely in your browser. It reviews the enclosure and wall
+bracket of a made-up Smart Thermostat, the same product the Signoff EE and PL demos show.
 
 ---
 
