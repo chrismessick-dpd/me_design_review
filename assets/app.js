@@ -279,8 +279,19 @@
     $('[data-act="new-project"]').hidden = !isFte();
     var people = $('#people-link');
     people.hidden = DEMO || !isFte();
+    // Links to the rest of the suite: FTEs see them all. The demo shows them too, pointing at
+    // the other tools' demos, minus internal tools (data-internal). Contractors see none.
     var tools = $('#side-tools');
-    if (tools) tools.hidden = DEMO || !isFte();
+    if (tools) {
+      tools.hidden = !DEMO && !isFte();
+      tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = DEMO; });
+      if (DEMO) {
+        tools.querySelectorAll('a.side-link').forEach(function (a) {
+          var href = a.getAttribute('href');
+          if (!/[?&]demo\b/.test(href)) a.setAttribute('href', href + (href.indexOf('?') >= 0 ? '&' : '?') + 'demo');
+        });
+      }
+    }
     people.classList.toggle('active', ui.page === 'people');
   }
 
