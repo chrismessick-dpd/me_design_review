@@ -279,12 +279,13 @@
     $('[data-act="new-project"]').hidden = !isFte();
     var people = $('#people-link');
     people.hidden = DEMO || !isFte();
-    // Links to the rest of the suite: FTEs see them all. The demo shows them too, pointing at
-    // the other tools' demos, minus internal tools (data-internal). Contractors see none.
+    // Links to the rest of the suite (hub, the other Signoff tool, Fabcheck) show for everyone:
+    // FTEs, contractors and the demo. In the demo they point at the other tools' demos. A link
+    // marked data-internal is for FTEs only (none today).
     var tools = $('#side-tools');
     if (tools) {
-      tools.hidden = !DEMO && !isFte();
-      tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = DEMO; });
+      tools.hidden = false;
+      tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = DEMO || !isFte(); });
       if (DEMO) {
         tools.querySelectorAll('a.side-link').forEach(function (a) {
           var href = a.getAttribute('href');

@@ -100,8 +100,8 @@ section, but keeps the requirements, the same way a checklist's review state is 
   ME lists only `review-me-…` repos, so it never picks up EE projects. A contractor on an EE
   project is added in Signoff EE.
 - **Contractor copies:** `python tools/package.py` makes `dist/Signoff-ME-<build>.zip`. It
-  holds the tool and checklists only, with no data, no token and no links to the internal
-  tools, plus a START HERE note.
+  holds the tool and checklists only, with no data and no token, plus a START HERE note. Its
+  sidebar links to the hub, Signoff EE and Fabcheck point at the hosted site (`hostedBase` in config).
 
 ## Layout
 

@@ -16,6 +16,7 @@ window.SIGNOFF_CONFIG = {
   "discipline": "ME",
   "tagline": "Mechanical design review",
   "storage": { "ns": "signoff-me.v1.", "demoNs": "signoff-me.demo." },
+  "hostedBase": "https://chrismessick-dpd.github.io",
   "repos": {
     "owner": "chrismessick-dpd",
     "toolRepo": "me_design_review",

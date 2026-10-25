@@ -49,8 +49,15 @@ def main():
     out = ROOT / "dist" / f"{name}-{build}.zip"
     out.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        # Contractors don't get the rest of the suite, so the sidebar links to it go.
-        html = re.sub(r"\s*<!-- tools-link:.*?<!-- /tools-link -->", "", (ROOT / "index.html").read_text(encoding="utf-8"), flags=re.S)
+        # The zip holds only this tool, so the sidebar's links to the rest of the suite (the hub,
+        # the other Signoff tool, Fabcheck) point at the hosted site instead of sibling folders.
+        # Without a hosted site configured, they're removed.
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        hosted = (config.get("hostedBase") or "").rstrip("/")
+        if hosted:
+            html = re.sub(r'href="\.\./([\w-]+)/', lambda m: f'href="{hosted}/{m.group(1)}/', html)
+        else:
+            html = re.sub(r"\s*<!-- tools-link:.*?<!-- /tools-link -->", "", html, flags=re.S)
         z.writestr(f"{name}/index.html", html)
         for p in sorted((ROOT / "assets").rglob("*")):
             if p.is_file():
