@@ -328,6 +328,15 @@
   var demo = Signoff.demo.projects(T);
   ok(demo.length === 2 && demo.every(function (d) { return Object.keys(d.items).length > 10; }), 'demo projects build');
   ok(demo.some(function (d) { return Object.keys(d.items).some(function (k) { return d.items[k].status === 'issue'; }); }), 'demo has findings');
+  var DD = Signoff.config.demo;
+  ok(demo.every(function (d, i) { return d.id === Signoff.demo.id(DD.projects[i].seed); }), 'demo projects have fixed ids (Signoff PL’s demo links to them)');
+  demo.forEach(function (d, i) {
+    var want = (DD.projects[i].findings || []).slice().sort();
+    var got = Object.keys(d.items).filter(function (k) { return d.items[k].status === 'issue'; }).sort();
+    eq(got, want, 'demo project ' + (i + 1) + ' gets exactly its own findings');
+  });
+  var nowIso = new Date().toISOString();
+  ok(demo.every(function (d) { return M.projectSummary(d, T).at <= nowIso; }), 'demo edits are all in the past');
 
   var failed = results.filter(function (r) { return !r.ok; });
   document.getElementById('out').innerHTML = results.map(function (r) {

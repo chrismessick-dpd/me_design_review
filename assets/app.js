@@ -87,8 +87,12 @@
   }
   refreshTemplates();
 
-  if (DEMO && !Object.keys(projects).length && S.demo) {
+  // Demo projects have fixed ids so other tools (Signoff PL's demo) can link to them. A demo
+  // built by an older version is rebuilt.
+  if (DEMO && S.demo && (!Object.keys(projects).length || load('demoVersion', 0) !== S.demo.VERSION)) {
+    projects = {};
     S.demo.projects(TEMPLATES).forEach(function (p) { projects[p.slug] = p; });
+    save('demoVersion', S.demo.VERSION);
     settings.user = settings.user || 'Demo Reviewer';
     save('projects', projects); save('settings', settings);
   }
@@ -576,6 +580,12 @@
     else if ($('#inspector').classList.contains('open')) renderInspector();
   }
   function closeInspector() { $('#inspector').classList.remove('open'); }
+  // Show a check in its checklist (even if its section is collapsed or set aside) and open it.
+  function gotoItem(id) {
+    var d = itemDef(current(), id);
+    if (d.template) { ui.view = d.template.id; ui.filter = 'all'; ui.query = ''; collapsed[(d.section || {}).id] = false; showHidden[(d.section || {}).id] = true; saveUi(); renderPage(); }
+    select(id, true);
+  }
 
   // ── Fabcheck runs (docs/fabcheck-link.md) ────────────────
   function isFabcheck(def) { return !!(def && def.source && def.source.tool === 'fabcheck'); }
@@ -1478,6 +1488,7 @@
         lastError = res.errors.length ? res.errors[0].message : '';
         syncing = false;
         render();
+        openWantedItem();
         if (res.dropped.length) toast(plural(res.dropped.length, 'project') + ' no longer shared with you ' + (res.dropped.length === 1 ? 'was' : 'were') + ' removed from this browser');
         if (res.errors.length) toast(res.errors[0].message + (res.errors.length > 1 ? ' (+' + (res.errors.length - 1) + ' more)' : ''));
         else toast(res.pushed ? 'Synced — ' + plural(res.pushed, 'change') + ' pushed' : 'Up to date');
@@ -1717,12 +1728,7 @@
       case 'delete-custom':
         if (confirm('Delete this project check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); }
         break;
-      case 'goto-item': {
-        if (!id) break;
-        var d = itemDef(current(), id);
-        if (d.template) { ui.view = d.template.id; ui.filter = 'all'; ui.query = ''; collapsed[(d.section || {}).id] = false; showHidden[(d.section || {}).id] = true; saveUi(); renderPage(); }
-        select(id, true); break;
-      }
+      case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
       case 'open-fabcheck': { var w = window.open(el.dataset.href, 'dovetail-fabcheck'); if (w) w.focus(); break; }
       case 'sync': if (!DEMO && lastError && el.id === 'sync-pill' && !syncing) toast(lastError); sync(); break;
@@ -1866,18 +1872,27 @@
       location.reload();
     });
   }
-  // ?project=<id> opens that project (Signoff PL links here). One not in this browser yet is
-  // looked for again after the first sync.
-  var wantProject = (/[?&]project=([^&#]+)/.exec(location.search) || [])[1] || '';
+  // ?project=<id> opens that project, and &item=<check id> that check (Signoff PL links here).
+  // A project not in this browser yet is looked for again after the first sync.
+  function param(name) { var m = new RegExp('[?&]' + name + '=([^&#]+)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
+  var wantProject = param('project'), wantItem = '';
   function openWanted(final) {
     if (!wantProject) return;
-    var slug = Object.keys(projects).filter(function (k) { return projects[k].id === decodeURIComponent(wantProject); })[0];
-    if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; saveUi(); }
+    var slug = Object.keys(projects).filter(function (k) { return projects[k].id === wantProject; })[0];
+    if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; wantItem = param('item'); saveUi(); }
     else if (final) { toast('That project isn’t in this browser. Check that your token reaches its repository.'); wantProject = ''; }
+  }
+  // After a render: open the check the link asked for, if this project has it.
+  function openWantedItem() {
+    var id = wantItem; wantItem = '';
+    if (!id || !current()) return;
+    if (!itemDef(current(), id).retired) gotoItem(id);
+    else toast('That check isn’t in this project.');
   }
   openWanted(DEMO || !getToken());
   if (!projects[ui.slug]) ui.slug = Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
+  openWantedItem();
   if (!settings.user && !DEMO) settingsSheet();
   else if (!DEMO && getToken()) sync();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
