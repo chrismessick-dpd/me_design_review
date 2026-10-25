@@ -1,5 +1,7 @@
 # Signoff ME — mechanical design review
 
+**Live:** https://chrismessick-dpd.github.io/me_design_review/
+
 **User guide:** [docs/guide.md](docs/guide.md), with a customer-shareable overview and an FTE section on architecture and use.
 
 Signoff ME is Dovetail's checklist tool for mechanical design reviews: requirements, part
