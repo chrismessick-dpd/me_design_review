@@ -133,6 +133,18 @@
   function myRole() { return DEMO || dataAccess !== 'none' ? 'fte' : 'contractor'; }
   function isFte() { return myRole() === 'fte'; }
   function isOwner() { return !!settings.login && settings.login === String(settings.owner).toLowerCase(); }
+  // The token is shared by every Signoff tool, so it can change outside this one's Settings.
+  // A different token may be a different person: who it is, and their role, are found again at
+  // the next sync. Other tools read `tokenTag` and `dataAccess` to tell whether this browser's
+  // token is an FTE's (Signoff PL, Fabcheck and the hub show People & access then).
+  function noticeToken() {
+    var tag = getToken() ? M.tokenTag(getToken()) : '';
+    if ((settings.tokenTag || '') === tag) return false;
+    settings.tokenTag = tag; settings.login = ''; save('settings', settings);
+    dataAccess = ''; save('dataAccess', dataAccess); accessMap = {};
+    invitations = []; save('invitations', invitations);
+    return true;
+  }
   function visible() { return true; }
   function visibleProjects() { return Object.keys(projects).map(function (k) { return projects[k]; }); }
   function workspace() { return new S.Workspace(settings, getToken(), undefined, function (doc) { return M.projectSummary(doc, TEMPLATES); }); }
@@ -1477,6 +1489,7 @@
     if (syncing) return;
     if (!getToken() || !settings.owner || !settings.dataRepo) { settingsSheet(); return; }
     if (!settings.user) { settingsSheet(); return; }
+    noticeToken();
     syncing = true; renderSyncState('busy');
     var started = Object.assign({}, dirty);
     var st0 = stateNow();
@@ -1660,6 +1673,7 @@
   window.addEventListener('storage', function (e) {
     var t = e.key === THEME_KEY && sharedTheme();
     if (t && t !== settings.theme) { settings.theme = t; applyTheme(t); }
+    if (e.key === TOKEN_KEY && !DEMO && noticeToken()) { render(); syncSoon(); return; }
     onExternalWrite(e);
   });
 
@@ -1911,6 +1925,8 @@
   // A project not in this browser yet is looked for again after the first sync.
   function param(name) { var m = new RegExp('[?&]' + name + '=([^&#]+)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var wantProject = param('project'), wantItem = '';
+  // ?page=people opens People & access (the other tools link here).
+  if (param('page') === 'people' && !DEMO) ui.page = 'people';
   function openWanted(final) {
     if (!wantProject) return;
     var slug = Object.keys(projects).filter(function (k) { return projects[k].id === wantProject; })[0];
@@ -1924,6 +1940,7 @@
     if (!itemDef(current(), id).retired) gotoItem(id);
     else toast('That check isn’t in this project.');
   }
+  if (!DEMO) noticeToken();
   openWanted(DEMO || !getToken());
   if (!projects[ui.slug]) ui.slug = Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();

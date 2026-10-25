@@ -22,6 +22,15 @@
     return (prefix || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
+  // A short fingerprint of a GitHub token (FNV-1a), so a tool notices when the token it shares
+  // with the other Signoff tools has changed. It can't be turned back into the token.
+  function tokenTag(token) {
+    var h = 0x811c9dc5;
+    token = String(token || '');
+    for (var i = 0; i < token.length; i++) { h ^= token.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+
   function slugify(text) {
     return String(text || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'project';
@@ -627,7 +636,7 @@
 
   S.model = {
     STATUSES: STATUSES, SEVERITIES: SEVERITIES, RESOLUTIONS: RESOLUTIONS, TAGS: TAGS, STAGES: STAGES,
-    now: now, uid: uid, slugify: slugify, stamp: stamp,
+    now: now, uid: uid, slugify: slugify, stamp: stamp, tokenTag: tokenTag,
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary,
