@@ -39,7 +39,7 @@ templates pulled from the repo are used instead of the bundled copy.
 
   | Checklist (`id`) | Prefix | Section IDs | Item IDs |
   | --- | --- | --- | --- |
-  | Requirements & Concept (`requirements`) | `rq` | `rq-<sec>` | `rq-<sec>-<n>` |
+  | Concept (`requirements`) | `rq` | `rq-<sec>` | `rq-<sec>-<n>` |
   | Part Design & DFM (`part-design`) | `pd` | `pd-<sec>` | `pd-<sec>-<n>` |
   | Tolerancing & GD&T (`tolerancing`) | `tol` | `tol-<sec>` | `tol-<sec>-<n>` |
   | Assembly, Fastening & DFA (`dfa`) | `asm` | `asm-<sec>` | `asm-<sec>-<n>` |

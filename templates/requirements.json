@@ -1,8 +1,8 @@
 {
   "id": "requirements",
-  "title": "Requirements & Concept",
+  "title": "Concept",
   "short": "Concept",
-  "version": 2,
+  "version": 3,
   "description": "Concept-phase review of product requirements, interfaces, loads, regulatory scope, manufacturing and cost targets, risks, serviceability, ID handshake, electronics integration and battery constraints.",
   "sections": [
     {
