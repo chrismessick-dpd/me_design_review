@@ -113,7 +113,7 @@
   function assignedContractors(projectId) {
     return M.liveUsers(roster).filter(function (u) { return u.role === 'contractor' && (u.projects || []).indexOf(projectId) >= 0; });
   }
-  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed }); }
+  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all' }); }
   // The sidebar slides over the page on narrow windows; on wide ones it collapses away and
   // stays that way until opened again.
   var narrow = window.matchMedia ? window.matchMedia('(max-width: 860px)') : { matches: false };
@@ -315,7 +315,8 @@
       return;
     }
     var st = M.projectStats(p, TEMPLATES);
-    var views = [{ id: 'overview', label: 'Overview' }].concat(projectTemplates(p).map(function (t) {
+    var reqIdx = checkIdx(p), reqFail = M.liveReqs(p).some(function (q) { return reqFailing(q, reqIdx); });
+    var views = [{ id: 'overview', label: 'Overview' }, { id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }].concat(projectTemplates(p).map(function (t) {
       var c = st.per[t.id];
       return { id: t.id, label: t.short, extra: c && c.issuesOpen ? '<span class="dot"></span>' : '' };
     }));
@@ -344,6 +345,7 @@
     renderToolbar();
     if (ui.view === 'overview') page.innerHTML = overviewPage(p);
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
+    else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
   }
@@ -394,7 +396,7 @@
       stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue') +
       stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
       (st.outside ? '<p class="note" style="margin-top:10px">' + plural(st.outside, 'check') + ' outside this ' + W.thing + '’s profile ' + (st.outside === 1 ? 'is' : 'are') + ' set aside and not counted.</p>' : '') +
-      '<div class="section-title">Checklists</div><div class="grid grid-3">' +
+      '<div class="section-title">Checklists</div><div class="grid grid-3">' + reqsCard(p) +
       tpls.map(function (t) {
         var c = st.per[t.id];
         return '<button class="card cl-card" data-act="view" data-view="' + t.id + '">' +
@@ -602,6 +604,8 @@
   function renderInspector() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
+    var rq = reqOf(p, selected);
+    if (rq) return renderReqInspector(p, rq);
     var d = itemDef(p, selected);
     var st = p.items[selected] || {};
     var row = null;
@@ -627,6 +631,7 @@
       '<div class="insp-title"' + (d.custom ? ' contenteditable="true" data-edit-custom="' + esc(selected) + '"' : '') + '>' + esc(d.def.text) + '</div>' +
       fabcheckBlock(p, d.def) +
       (d.def.hint && !isFabcheck(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
+      tracedBy(p, selected) +
       (row && row.auto ? '<div class="note" style="margin:-4px 0 12px">' + (row.auto === 'section' ? 'Counted as N/A because the section is marked N/A.' : 'Counted as N/A: outside this ' + W.thing + '’s profile (' + esc((d.def.tags || d.section.tags || []).join(', ')) + '). Set a status to review it anyway.') + '</div>' : '') +
       '<div class="field"><span class="field-label">Status</span><div class="seg full">' + statusBtn('open', 'To review') + statusBtn('pass', 'Pass') + statusBtn('issue', 'Issue') + statusBtn('na', 'N/A') + '</div></div>' +
       (status === 'issue' ? '<div class="issue-box">' +
@@ -657,6 +662,250 @@
       if (locs) locs.scrollTop = keep.locs;
       el.querySelector('.insp-body').scrollTop = keep.body;
     }
+  }
+
+  // ── Requirements ─────────────────────────────────────────
+  // The project's own requirements (model.js: liveReqs, reqTrace…). Each one can trace to
+  // checks in the project's checklists, whose status then shows next to it.
+  var REQ_LABEL = { inspection: 'Inspection', analysis: 'Analysis', demonstration: 'Demonstration', test: 'Test',
+    draft: 'Draft', approved: 'Approved', changed: 'Changed', open: 'Not verified', pass: 'Pass', fail: 'Fail',
+    shall: 'Shall', should: 'Should' };
+  function reqOf(p, id) { var q = p && p.reqs && p.reqs[id]; return q && !q.deleted ? q : null; }
+  function checkIdx(p) { return M.checkIndex(p, TEMPLATES); }
+
+  function setReq(id, fields) {
+    var p = current(); if (!p) return;
+    var prev = reqOf(p, id); if (!prev) return;
+    var next = Object.assign({}, prev, fields);
+    // An approved requirement whose wording changes needs approving again.
+    if (prev.status === 'approved' && fields.text !== undefined && fields.text !== prev.text) next.status = 'changed';
+    p.reqs[id] = M.stamp(next, me());
+    touch(p); renderPage(); renderInspector();
+  }
+  function addReq() {
+    var p = current(); if (!p) return;
+    p.reqs = p.reqs || {};
+    var q = M.newReq(p, {}, me());
+    p.reqs[q.id] = q;
+    touch(p);
+    ui.view = 'reqs'; saveUi();
+    openReq(q.id);
+    setTimeout(function () { var t = $('#req-text'); if (t) t.focus(); }, 60);
+  }
+  function openReq(id) {
+    selected = id;
+    closeInspector();
+    renderPage();
+    $('#inspector').classList.add('open');
+    renderInspector();
+    var row = document.querySelector('tr[data-act="select-req"][data-id="' + CSS.escape(id) + '"]');
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+
+  function traceChip(t) {
+    if (t.state === 'none') return '<span class="res waived">Not traced</span>';
+    var cls = t.state === 'issue' ? 'open' : t.state === 'pass' ? 'fixed' : 'waived';
+    var label = t.state === 'issue' ? plural(t.issue, 'issue') : t.state === 'pass' ? 'Checks pass' : t.open + ' to review';
+    var tip = t.pass + ' pass · ' + t.issue + ' issue · ' + t.open + ' to review' + (t.na ? ' · ' + t.na + ' N/A' : '') + (t.missing ? ' · ' + t.missing + ' no longer in the project' : '');
+    return '<span class="res ' + cls + '" title="' + tip + '">' + label + '</span>';
+  }
+  function verifyChip(v) { return '<span class="res ' + (v === 'pass' ? 'fixed' : v === 'fail' ? 'open' : 'waived') + '">' + REQ_LABEL[v] + '</span>'; }
+
+  function reqFailing(q, idx) { return q.verify === 'fail' || M.reqTrace(q, idx).state === 'issue'; }
+  function reqMatches(q, idx) {
+    var f = ui.reqFilter || 'all';
+    if (ui.reqQuery) {
+      var s = ui.reqQuery.toLowerCase();
+      if ([q.ref, q.text, q.category, q.source].join(' ').toLowerCase().indexOf(s) < 0) return false;
+    }
+    if (f === 'draft') return q.status !== 'approved';
+    if (f === 'open') return q.verify === 'open';
+    if (f === 'fail') return reqFailing(q, idx);
+    if (f === 'unlinked') return !(q.links || []).length;
+    return true;
+  }
+
+  function reqsPage(p) {
+    var idx = checkIdx(p), all = M.liveReqs(p), st = M.reqStats(p);
+    var list = all.filter(function (q) { return reqMatches(q, idx); });
+    var failing = all.filter(function (q) { return reqFailing(q, idx); }).length;
+    var filters = [['all', 'All', st.total], ['draft', 'Not approved', st.total - st.approved], ['open', 'Not verified', st.open],
+      ['fail', 'Failing', failing], ['unlinked', 'Not traced', st.unlinked]];
+    var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Requirements</h1>' +
+      '<div class="page-sub"><span>' + plural(st.total, 'requirement') + '</span><span class="sep">·</span><span>' + st.approved + ' approved</span>' +
+      '<span class="sep">·</span><span>' + st.pass + ' verified</span>' +
+      (failing ? '<span class="sep">·</span><span style="color:var(--issue)">' + failing + ' failing</span>' : '') + '</div></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="req-import">Import</button>' +
+      (st.total ? '<button class="btn" data-act="req-export">Export CSV</button>' : '') +
+      '<button class="btn btn-primary" data-act="req-add">Add requirement</button></div></div>';
+    if (st.duplicates.length) {
+      html += '<div class="card" style="padding:12px 16px;margin-bottom:14px;font-size:13px">More than one requirement uses ' +
+        st.duplicates.map(esc).join(', ') + '. Renumber one so the trace stays unambiguous.</div>';
+    }
+    if (!st.total) {
+      return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No requirements yet</h2>' +
+        '<p>List what this ' + W.thing + ' must do, how each requirement will be verified, and which checks show it’s met. Add them one at a time, or import a spreadsheet with a Requirement column.</p>' +
+        '<button class="btn btn-primary" data-act="req-add">Add requirement</button> <button class="btn" data-act="req-import">Import</button></div></div>';
+    }
+    html += '<div class="filters"><div class="seg">' + filters.map(function (f) {
+      return '<button class="' + ((ui.reqFilter || 'all') === f[0] ? 'on' : '') + '" data-act="req-filter" data-filter="' + f[0] + '">' + f[1] + ' <span class="count">' + f[2] + '</span></button>';
+    }).join('') + '</div><div class="search">' + ICON.search + '<input id="req-search" type="search" placeholder="Filter requirements" value="' + esc(ui.reqQuery || '') + '" autocomplete="off"></div></div>';
+    if (!list.length) return html + '<div class="empty"><h2>Nothing here</h2><p>No requirements match this filter.</p></div></div>';
+    html += '<div class="card" style="overflow:hidden"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
+      list.map(function (q) {
+        var n = M.liveComments(p, q.id).length;
+        return '<tr data-act="select-req" data-id="' + esc(q.id) + '"' + (selected === q.id ? ' class="sel"' : '') + '>' +
+          '<td class="req-ref">' + esc(q.ref) + '</td>' +
+          '<td>' + (q.text ? esc(q.text) : '<span class="muted">No text yet</span>') +
+          '<div class="muted">' + esc([REQ_LABEL[q.kind], q.category, q.source].filter(Boolean).join(' · ')) +
+          (n ? ' <span class="cmt-count">' + ICON.bubble + n + '</span>' : '') + '</div></td>' +
+          '<td class="muted">' + REQ_LABEL[q.method] + '</td>' +
+          '<td><span class="chip' + (q.status === 'approved' ? ' accent' : '') + '">' + REQ_LABEL[q.status] + '</span></td>' +
+          '<td>' + verifyChip(q.verify) + '</td>' +
+          '<td>' + traceChip(M.reqTrace(q, idx)) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+    return html;
+  }
+
+  function renderReqInspector(p, q) {
+    var el = $('#inspector'), idx = checkIdx(p);
+    var keep = el.dataset.item === q.id ? { body: (el.querySelector('.insp-body') || {}).scrollTop || 0 } : null;
+    var draft = el.querySelector('#comment-input'), draftText = draft ? draft.value : '';
+    var search = el.dataset.item === q.id && el.querySelector('#req-link-search');
+    var linkQuery = search ? search.value : '';
+    var comments = M.liveComments(p, q.id);
+    function seg(key, values) {
+      return '<div class="seg full">' + values.map(function (v) {
+        var tone = key === 'verify' && v !== 'open' ? ' s-' + (v === 'pass' ? 'pass' : 'issue') : '';
+        return '<button class="' + (q[key] === v ? 'on' : '') + tone + '" data-act="req-field" data-key="' + key + '" data-val="' + v + '">' + REQ_LABEL[v] + '</button>';
+      }).join('') + '</div>';
+    }
+    var links = (q.links || []).map(function (id) {
+      var c = idx[id];
+      if (!c) {
+        return '<div class="req-link missing"><span class="req-link-main"><span class="status-dot"></span><span><span class="req-link-text">' + esc(id) + '</span><span class="muted">No longer in this project</span></span></span>' +
+          '<button class="cmt-del" style="opacity:1" data-act="req-unlink" data-id="' + esc(id) + '">Remove</button></div>';
+      }
+      var label = c.status === 'open' ? 'To review' : c.status === 'na' ? 'N/A' : c.status === 'pass' ? 'Pass' : 'Issue';
+      return '<div class="req-link"><button class="req-link-main" data-act="goto-item" data-id="' + esc(id) + '"><span class="status-dot st-' + c.status + '"></span>' +
+        '<span><span class="req-link-text">' + esc(c.text) + '</span><span class="muted">' + esc(c.template.short + ' › ' + c.section.title) + ' · ' + label + '</span></span></button>' +
+        '<button class="cmt-del" style="opacity:1" data-act="req-unlink" data-id="' + esc(id) + '">Remove</button></div>';
+    }).join('');
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Requirements › ' + esc(q.ref) + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<div class="row2"><div class="field"><label for="req-ref">ID</label><input class="input" id="req-ref" value="' + esc(q.ref) + '" data-req-input="ref"></div>' +
+      '<div class="field"><span class="field-label">Type</span>' + seg('kind', ['shall', 'should']) + '</div></div>' +
+      '<div class="field"><label for="req-text">Requirement</label><textarea class="input" id="req-text" rows="3" data-req-input="text" placeholder="e.g. The ' + esc(W.thing) + ' shall run from 24 V DC ±10%.">' + esc(q.text) + '</textarea></div>' +
+      '<div class="row2"><div class="field"><label for="req-cat">Category</label><input class="input" id="req-cat" value="' + esc(q.category) + '" placeholder="Power, interfaces…" data-req-input="category"></div>' +
+      '<div class="field"><label for="req-src">Source</label><input class="input" id="req-src" value="' + esc(q.source) + '" placeholder="Spec and section" data-req-input="source"></div></div>' +
+      '<div class="field"><span class="field-label">Verify by</span>' + seg('method', M.REQ_METHODS) + '</div>' +
+      '<div class="field"><span class="field-label">Status</span>' + seg('status', M.REQ_STATUS) + '</div>' +
+      '<div class="field"><span class="field-label">Verified</span>' + seg('verify', M.REQ_VERIFY) + '</div>' +
+      '<div class="field"><label for="req-ev">Evidence</label><textarea class="input" id="req-ev" rows="2" data-req-input="evidence" placeholder="Test report, measurement, analysis…">' + esc(q.evidence) + '</textarea></div>' +
+      '<div class="field"><span class="field-label">Traced checks ' + traceChip(M.reqTrace(q, idx)) + '</span>' +
+      (links || '<p class="note" style="margin:0 0 8px">Link the checks that show this requirement is met; their status shows here.</p>') +
+      '<input class="input" id="req-link-search" placeholder="Search checks to link…" value="' + esc(linkQuery) + '" autocomplete="off">' +
+      '<div id="req-link-results">' + linkResults(q, idx, linkQuery) + '</div></div>' +
+      '<div class="meta-line">Added ' + fmtDate(q.createdAt) + (q.updatedBy ? ' · last changed by ' + esc(q.updatedBy) + ', ' + relTime(q.updatedAt) : '') + '</div>' +
+      '<button class="btn btn-danger" data-act="req-delete" style="margin-bottom:10px">Delete requirement</button>' +
+      '<div class="thread"><div class="thread-title">Discussion <span class="note" style="margin:0">' + (comments.length || '') + '</span></div>' +
+      (comments.length ? comments.map(function (c) {
+        return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span title="' + esc(new Date(c.at).toLocaleString()) + '">' + relTime(c.at) + '</span>' +
+          (c.author === me() ? '<button class="cmt-del" data-act="del-comment" data-id="' + esc(c.id) + '">Delete</button>' : '') + '</div><div class="cmt-text">' + esc(c.text) + '</div></div></div>';
+      }).join('') : '<p class="note">No comments yet.</p>') + '</div></div>' +
+      '<div class="composer"><textarea class="input" id="comment-input" placeholder="Add a comment…" rows="2">' + esc(draftText) + '</textarea>' +
+      '<div class="composer-foot"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span><button class="btn btn-primary" data-act="post-comment">Comment</button></div></div>';
+    el.dataset.item = q.id;
+    if (keep) el.querySelector('.insp-body').scrollTop = keep.body;
+  }
+
+  function linkResults(q, idx, query) {
+    query = (query || '').trim().toLowerCase();
+    if (query.length < 2) return '';
+    var have = q.links || [];
+    var hits = Object.keys(idx).map(function (k) { return idx[k]; }).filter(function (c) {
+      return have.indexOf(c.id) < 0 && [c.text, c.section.title, c.template.short].join(' ').toLowerCase().indexOf(query) >= 0;
+    }).slice(0, 8);
+    if (!hits.length) return '<p class="note">No checks match.</p>';
+    return '<div class="req-results">' + hits.map(function (c) {
+      return '<button data-act="req-link" data-id="' + esc(c.id) + '"><span>' + esc(c.text) + '</span><span class="muted">' + esc(c.template.short + ' › ' + c.section.title) + '</span></button>';
+    }).join('') + '</div>';
+  }
+
+  // On a check: the requirements it helps show are met.
+  function tracedBy(p, id) {
+    var hits = M.liveReqs(p).filter(function (q) { return (q.links || []).indexOf(id) >= 0; });
+    if (!hits.length) return '';
+    return '<div class="field"><span class="field-label">Traces to</span><div class="chips">' + hits.map(function (q) {
+      return '<button class="chip accent" style="border:none" data-act="open-req" data-id="' + esc(q.id) + '" title="' + esc(q.text) + '">' + esc(q.ref) + '</button>';
+    }).join('') + '</div></div>';
+  }
+
+  function importReqsSheet() {
+    var p = current(); if (!p) return;
+    var w = sheet('<div class="sheet-head"><h2>Import requirements</h2><p>Paste rows from Excel or a CSV file, or choose a file. The first row names the columns: ' +
+      '<b>Requirement</b> (needed), and optionally <b>ID</b>, <b>Type</b> (shall / should), <b>Category</b>, <b>Source</b> and <b>Verification</b> ' +
+      '(inspection, analysis, demonstration, test). A row whose ID already exists updates that requirement.</p></div>' +
+      '<div class="sheet-body"><textarea class="input" id="req-paste" rows="8" placeholder="ID, Requirement, Type, Category, Source, Verification"></textarea>' +
+      '<p class="note" id="req-preview"></p><input type="file" id="req-file" accept=".csv,.tsv,.txt,text/csv"></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Import</button></div>', { wide: true });
+    var ta = w.querySelector('#req-paste');
+    function preview() {
+      var out = w.querySelector('#req-preview');
+      if (!ta.value.trim()) { out.textContent = ''; return; }
+      try {
+        var r = M.importReqs(p, M.parseTable(ta.value), me());
+        out.textContent = r.added + ' to add, ' + r.updated + ' to update' + (r.skipped ? ', ' + r.skipped + ' rows without text skipped' : '') + '.';
+      } catch (e) { out.textContent = e.message; }
+    }
+    ta.addEventListener('input', preview);
+    w.querySelector('#req-file').addEventListener('change', function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () { ta.value = rd.result; preview(); };
+      rd.readAsText(f);
+    });
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      var r;
+      try { r = M.importReqs(p, M.parseTable(ta.value), me()); } catch (err) { toast(err.message); return; }
+      if (!r.records.length) { toast('Nothing to import'); return; }
+      p.reqs = p.reqs || {};
+      r.records.forEach(function (q) { p.reqs[q.id] = q; });
+      touch(p); closeSheet();
+      ui.view = 'reqs'; saveUi(); renderPage();
+      toast('Imported — ' + r.added + ' added, ' + r.updated + ' updated');
+    });
+  }
+
+  // Overview card next to the checklists.
+  function reqsCard(p) {
+    var st = M.reqStats(p), idx = checkIdx(p);
+    var failing = M.liveReqs(p).filter(function (q) { return reqFailing(q, idx); }).length;
+    var pct = st.total ? Math.round(100 * st.pass / st.total) : 0;
+    return '<button class="card cl-card" data-act="view" data-view="reqs">' +
+      '<div class="cl-card-top"><div><div class="cl-card-title">Requirements</div><div class="cl-card-desc">' +
+      (st.total ? 'What this ' + W.thing + ' must do, how each is verified, and the checks that show it.' : 'None yet. List what this ' + W.thing + ' must do and trace each to the checks that prove it.') +
+      '</div></div>' + ring(pct, 46, 5, pct, '') + '</div>' +
+      '<div class="bar"><i class="b-pass" style="width:' + (st.total ? 100 * st.pass / st.total : 0) + '%"></i><i class="b-issue" style="width:' + (st.total ? 100 * st.fail / st.total : 0) + '%"></i></div>' +
+      '<div class="cl-card-foot"><span><b>' + st.pass + '</b>/' + st.total + ' verified</span>' +
+      (failing ? '<span style="color:var(--issue)"><b>' + failing + '</b> failing</span>' : '') +
+      (st.total && st.unlinked ? '<span>' + st.unlinked + ' not traced</span>' : '') + '</div></button>';
+  }
+
+  function reqsReport(p) {
+    var all = M.liveReqs(p);
+    if (!all.length) return '';
+    var idx = checkIdx(p), st = M.reqStats(p);
+    return '<h2>Requirements</h2><p class="r-cmt" style="margin:0 0 8px">' + plural(st.total, 'requirement') + ', ' + st.approved + ' approved, ' + st.pass + ' verified' + (st.fail ? ', ' + st.fail + ' failed' : '') + '.</p>' +
+      '<table><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Traced checks</th></tr></thead><tbody>' +
+      all.map(function (q) {
+        var t = M.reqTrace(q, idx);
+        return '<tr><td>' + esc(q.ref) + '</td><td>' + esc(q.text) + (q.source ? '<div class="r-cmt">' + esc(q.source) + '</div>' : '') + (q.evidence ? '<div class="r-cmt">Evidence: ' + esc(q.evidence) + '</div>' : '') + '</td>' +
+          '<td>' + REQ_LABEL[q.method] + '</td><td>' + REQ_LABEL[q.status] + '</td><td>' + REQ_LABEL[q.verify] + '</td>' +
+          '<td>' + (t.state === 'none' ? 'None' : t.pass + ' pass' + (t.issue ? ', ' + t.issue + ' issue' : '') + (t.open ? ', ' + t.open + ' to review' : '')) + '</td></tr>';
+      }).join('') + '</tbody></table>';
   }
 
   // ── Sheets ───────────────────────────────────────────────
@@ -1221,6 +1470,7 @@
             cm.map(function (c) { return '<div class="r-cmt">' + esc(c.author) + ' (' + fmtDate(c.at) + '): ' + esc(c.text) + '</div>'; }).join('') + '</td>' +
             '<td>' + esc(r.state.assignee || '—') + '</td><td>' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open') + '</td></tr>';
         }).join('') + '</tbody></table>' : '<p>No issues were raised.</p>') +
+      reqsReport(p) +
       '<div class="sign"><div>Reviewed by</div><div>Approved by</div></div>' +
       '<div class="r-foot"><span>Generated by ' + esc(C.product) + ' ' + esc((window.SIGNOFF_VERSION || {}).hash || '') + '</span><span>' + esc(m.name) + '</span></div></div>';
     var r = $('#report'); r.innerHTML = html; r.hidden = false;
@@ -1388,6 +1638,24 @@
       case 'close-insp': closeInspector(); break;
       case 'post-comment': { var ta = $('#comment-input'); addComment(selected, ta.value); var t2 = $('#comment-input'); if (t2) { t2.value = ''; t2.focus(); } break; }
       case 'del-comment': if (confirm('Delete this comment?')) deleteComment(id); break;
+      case 'req-add': addReq(); break;
+      case 'req-import': importReqsSheet(); break;
+      case 'req-export': { var rp = current(); download(rp.slug + '-requirements.csv', M.reqsCsv(rp, checkIdx(rp)), 'text/csv'); break; }
+      case 'req-filter': ui.reqFilter = el.dataset.filter; saveUi(); renderPage(); break;
+      case 'select-req': openReq(id); break;
+      case 'open-req': ui.view = 'reqs'; saveUi(); openReq(id); break;
+      case 'req-field': { var rf = {}; rf[el.dataset.key] = el.dataset.val; setReq(selected, rf); break; }
+      case 'req-link': {
+        var rl = reqOf(current(), selected);
+        if (rl) { var s1 = $('#req-link-search'); if (s1) s1.value = ''; setReq(selected, { links: (rl.links || []).concat([id]) }); var s2 = $('#req-link-search'); if (s2) s2.focus(); }
+        break;
+      }
+      case 'req-unlink': { var ru = reqOf(current(), selected); if (ru) setReq(selected, { links: (ru.links || []).filter(function (x) { return x !== id; }) }); break; }
+      case 'req-delete': {
+        var rd = reqOf(current(), selected);
+        if (rd && confirm('Delete ' + rd.ref + '? Its discussion is kept in the project history.')) { setReq(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); }
+        break;
+      }
       case 'delete-custom':
         if (confirm('Delete this project check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); }
         break;
@@ -1484,10 +1752,27 @@
       renderPage();
       var s = $('#item-search'); s.focus(); s.setSelectionRange(pos, pos);
     }
+    if (e.target.id === 'req-search') {
+      ui.reqQuery = e.target.value;
+      var rpos = e.target.selectionStart;
+      renderPage();
+      var rs = $('#req-search'); rs.focus(); rs.setSelectionRange(rpos, rpos);
+    }
+    if (e.target.id === 'req-link-search') {
+      // Only the result list redraws, so typing isn't interrupted.
+      var rp = current(), rq = reqOf(rp, selected);
+      if (rq) $('#req-link-results').innerHTML = linkResults(rq, checkIdx(rp), e.target.value);
+    }
   });
   document.addEventListener('change', function (e) {
     var k = e.target.dataset && e.target.dataset.itemInput;
     if (k && selected) { var f = {}; f[k] = e.target.value.trim(); setItem(selected, f); }
+    var rk = e.target.dataset && e.target.dataset.reqInput;
+    if (rk && selected) {
+      var rv = rk === 'text' || rk === 'evidence' ? e.target.value.trim() : e.target.value.trim();
+      var cur = reqOf(current(), selected);
+      if (cur && cur[rk] !== rv) { var rf2 = {}; rf2[rk] = rv; setReq(selected, rf2); }
+    }
     if (e.target.id === 'import-file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
   });
   document.addEventListener('keydown', function (e) {

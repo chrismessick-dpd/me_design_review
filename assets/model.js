@@ -89,7 +89,8 @@
       items: {},
       sections: {},
       comments: {},
-      custom: {}
+      custom: {},
+      reqs: {}
     };
   }
 
@@ -221,8 +222,185 @@
       items: mergeMaps(local.items, remote.items),
       sections: mergeMaps(local.sections, remote.sections),
       comments: mergeMaps(local.comments, remote.comments),
-      custom: mergeMaps(local.custom, remote.custom)
+      custom: mergeMaps(local.custom, remote.custom),
+      reqs: mergeMaps(local.reqs || {}, remote.reqs || {})
     };
+  }
+
+  // ── Requirements ─────────────────────────────────────────
+  // A project's own requirements (not from a template), in project.reqs:
+  //   { id, ref: 'REQ-001', text, kind: 'shall' | 'should', category, source,
+  //     method: inspection | analysis | demonstration | test,
+  //     status: draft | approved | changed, verify: open | pass | fail, evidence,
+  //     links: [check ids it traces to], createdAt, updatedAt, updatedBy, deleted }
+  // Comments on a requirement are ordinary comments with item = the requirement's id.
+  var REQ_METHODS = ['inspection', 'analysis', 'demonstration', 'test'];
+  var REQ_STATUS = ['draft', 'approved', 'changed'];
+  var REQ_VERIFY = ['open', 'pass', 'fail'];
+
+  function refNumber(ref) { var m = /(\d+)\s*$/.exec(ref || ''); return m ? parseInt(m[1], 10) : 0; }
+
+  function liveReqs(project) {
+    var r = project.reqs || {};
+    return Object.keys(r).map(function (k) { return r[k]; }).filter(function (q) { return !q.deleted; })
+      .sort(function (a, b) {
+        var pa = (a.ref || '').replace(/\d+\s*$/, ''), pb = (b.ref || '').replace(/\d+\s*$/, '');
+        return pa.localeCompare(pb) || refNumber(a.ref) - refNumber(b.ref) || (a.createdAt || '').localeCompare(b.createdAt || '');
+      });
+  }
+
+  // Next free REQ-nnn. Two people adding offline can pick the same number; the page flags it.
+  function nextReqRef(project) {
+    var max = 0;
+    liveReqs(project).forEach(function (q) { if (/^REQ-/i.test(q.ref || '')) max = Math.max(max, refNumber(q.ref)); });
+    return 'REQ-' + String(max + 1).padStart(3, '0');
+  }
+
+  function newReq(project, fields, user) {
+    var t = now();
+    var q = Object.assign({ id: uid('q'), ref: nextReqRef(project), text: '', kind: 'shall', category: '', source: '',
+      method: 'inspection', status: 'draft', verify: 'open', evidence: '', links: [], createdAt: t }, fields || {});
+    return stamp(q, user);
+  }
+
+  // Every check in the project's checklists, by id: { status, text, template, section, custom }.
+  function checkIndex(project, templates) {
+    var out = {};
+    templates.forEach(function (t) {
+      if (project.meta.checklists.indexOf(t.id) < 0) return;
+      checklistRows(project, t).forEach(function (g) {
+        g.rows.forEach(function (r) {
+          out[r.id] = { id: r.id, status: r.status, text: r.def.text, template: t, section: g.section, custom: r.custom, resolution: (r.state || {}).resolution || '' };
+        });
+      });
+    });
+    return out;
+  }
+
+  // How the checks a requirement traces to stand: counts by status, plus links to checks that
+  // no longer exist (removed custom checks, or checklists taken off the project).
+  function reqTrace(req, index) {
+    var t = { linked: 0, pass: 0, issue: 0, open: 0, na: 0, missing: 0 };
+    (req.links || []).forEach(function (id) {
+      var c = index[id];
+      if (!c) { t.missing++; return; }
+      t.linked++;
+      // A fixed issue still needs checking again; a waived one has been accepted.
+      if (c.status === 'issue' && c.resolution === 'fixed') t.open++;
+      else if (c.status === 'issue' && c.resolution === 'waived') t.pass++;
+      else t[c.status]++;
+    });
+    t.state = !t.linked ? 'none' : t.issue ? 'issue' : t.open ? 'open' : 'pass';
+    return t;
+  }
+
+  function reqStats(project) {
+    var s = { total: 0, approved: 0, draft: 0, changed: 0, pass: 0, fail: 0, open: 0, unlinked: 0, duplicates: [] };
+    var seen = {};
+    liveReqs(project).forEach(function (q) {
+      s.total++;
+      s[q.status] = (s[q.status] || 0) + 1;
+      s[q.verify] = (s[q.verify] || 0) + 1;
+      if (!(q.links || []).length) s.unlinked++;
+      var k = (q.ref || '').toUpperCase();
+      if (k && seen[k]) s.duplicates.push(q.ref);
+      seen[k] = 1;
+    });
+    return s;
+  }
+
+  // CSV or tab-separated text (as pasted from Excel) -> array of rows.
+  function parseTable(text) {
+    text = String(text || '').replace(/^﻿/, '');
+    var first = text.split(/\r?\n/)[0] || '';
+    var sep = (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? '\t' : ',';
+    var rows = [], row = [], cell = '', quoted = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cell += ch;
+      } else if (ch === '"' && cell === '') quoted = true;
+      else if (ch === sep) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row); row = []; cell = '';
+      } else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (c) { return String(c).trim(); }); });
+  }
+
+  // Header names accepted when importing, by field.
+  var REQ_COLUMNS = {
+    ref: /^(id|ref|req(uirement)?\s*(id|#|no\.?|number)|#)$/i,
+    text: /^(requirement|text|description|statement|req(uirement)?\s*text)$/i,
+    kind: /^(type|kind|shall\s*\/\s*should|level|priority)$/i,
+    category: /^(category|area|group|subsystem)$/i,
+    source: /^(source|spec|reference|doc(ument)?|origin)$/i,
+    method: /^(verification(\s*method)?|method|verify\s*by|v&v)$/i
+  };
+
+  // Rows (with a header row) -> requirement records for `project`. Rows whose ID matches an
+  // existing requirement update it; the rest are added. Resolves { added, updated, skipped }.
+  function importReqs(project, rows, user) {
+    var res = { added: 0, updated: 0, skipped: 0, records: [] };
+    if (rows.length < 2) return res;
+    var head = rows[0].map(function (h) { return String(h).trim(); });
+    var col = {};
+    Object.keys(REQ_COLUMNS).forEach(function (f) {
+      var i = head.findIndex(function (h) { return REQ_COLUMNS[f].test(h); });
+      if (i >= 0) col[f] = i;
+    });
+    if (col.text === undefined) throw new Error('No "Requirement" (or "Text" / "Description") column in the first row');
+    var byRef = {};
+    liveReqs(project).forEach(function (q) { byRef[(q.ref || '').toUpperCase()] = q; });
+    var scratch = { reqs: Object.assign({}, project.reqs || {}) };
+    rows.slice(1).forEach(function (r) {
+      var get = function (f) { return col[f] === undefined ? '' : String(r[col[f]] || '').trim(); };
+      var text = get('text');
+      if (!text) { res.skipped++; return; }
+      var kindRaw = get('kind').toLowerCase(), methodRaw = get('method').toLowerCase();
+      var fields = {
+        text: text,
+        category: get('category'),
+        source: get('source'),
+        kind: /should|desired|optional|goal/.test(kindRaw) || (!kindRaw && /\bshould\b/i.test(text) && !/\bshall\b/i.test(text)) ? 'should' : 'shall',
+        method: REQ_METHODS.filter(function (m) { return methodRaw.indexOf(m.slice(0, 4)) >= 0; })[0] || (methodRaw === 'i' ? 'inspection' : methodRaw === 'a' ? 'analysis' : methodRaw === 'd' ? 'demonstration' : methodRaw === 't' ? 'test' : 'inspection')
+      };
+      var ref = get('ref');
+      var existing = ref && byRef[ref.toUpperCase()];
+      var rec;
+      if (existing) {
+        rec = stamp(Object.assign({}, existing, fields, existing.status === 'approved' && existing.text !== text ? { status: 'changed' } : {}), user);
+        res.updated++;
+      } else {
+        rec = newReq(scratch, Object.assign(ref ? { ref: ref } : {}, fields), user);
+        res.added++;
+      }
+      scratch.reqs[rec.id] = rec;
+      if (rec.ref) byRef[rec.ref.toUpperCase()] = rec;
+      res.records.push(rec);
+    });
+    return res;
+  }
+
+  function csvCell(v) { v = String(v == null ? '' : v); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+
+  // Compliance matrix as CSV: one row per requirement, with what it traces to.
+  function reqsCsv(project, index) {
+    var rows = [['ID', 'Requirement', 'Type', 'Category', 'Source', 'Verification method', 'Status', 'Verified', 'Evidence', 'Traced checks', 'Trace status']];
+    liveReqs(project).forEach(function (q) {
+      var t = reqTrace(q, index);
+      rows.push([q.ref, q.text, q.kind, q.category, q.source, q.method, q.status, q.verify, q.evidence,
+        (q.links || []).map(function (id) {
+          var c = index[id];
+          return c ? c.text + ' [' + c.status + (c.resolution ? ', ' + c.resolution : '') + ']' : id + ' [no longer in the project]';
+        }).join(' | '),
+        t.state === 'none' ? 'not traced' : t.pass + ' pass, ' + t.issue + ' issue, ' + t.open + ' to review' + (t.na ? ', ' + t.na + ' N/A' : '')]);
+    });
+    return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n';
   }
 
   // Working copies (slug -> doc) written by another tab, or by Fabcheck's "Send to Signoff",
@@ -359,6 +537,9 @@
     projectStats: projectStats, liveComments: liveComments, retiredItems: retiredItems,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
-    emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo
+    emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,
+    REQ_METHODS: REQ_METHODS, REQ_STATUS: REQ_STATUS, REQ_VERIFY: REQ_VERIFY,
+    liveReqs: liveReqs, nextReqRef: nextReqRef, newReq: newReq, checkIndex: checkIndex, reqTrace: reqTrace, reqStats: reqStats,
+    parseTable: parseTable, importReqs: importReqs, reqsCsv: reqsCsv
   };
 })(window.Signoff = window.Signoff || {});

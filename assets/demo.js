@@ -15,7 +15,7 @@
   var FINDINGS = D.findings || [];
   var COMMENTS = D.comments || [];
 
-  function build(fields, templates, seed, passRatio, users) {
+  function build(fields, templates, seed, passRatio, users, reqs) {
     var M = S.model, rand = rng(seed);
     var p = M.newProject(fields, users[0], templates);
     var day = 86400000, start = Date.now() - 12 * day;
@@ -56,13 +56,23 @@
       var id = 'n' + seed + '-' + i, when = at(0.5 + 0.1 * i);
       p.comments[id] = { id: id, item: h.r.id, author: c.by, at: when, text: c.text, updatedAt: when, updatedBy: c.by };
     });
+    // Requirements, traced only to checks this project actually has.
+    var known = M.checkIndex(p, templates);
+    (reqs || []).forEach(function (r, i) {
+      var when = at(0.05 + 0.04 * i);
+      var q = M.newReq(p, { ref: r.ref, text: r.text, kind: r.kind || 'shall', category: r.category || '', source: r.source || '',
+        method: r.method || 'inspection', status: r.status || 'draft', verify: r.verify || 'open', evidence: r.evidence || '',
+        links: (r.links || []).filter(function (id) { return known[id]; }), createdAt: when }, r.by || users[0]);
+      q.id = 'q' + seed + '-' + i; q.updatedAt = when;
+      p.reqs[q.id] = q;
+    });
     p.meta.updatedAt = at(1);
     return p;
   }
 
   S.demo = {
     projects: function (templates) {
-      return (D.projects || []).map(function (d) { return build(d.fields, templates, d.seed, d.ratios, d.users); });
+      return (D.projects || []).map(function (d) { return build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements); });
     }
   };
 })(window.Signoff = window.Signoff || {});

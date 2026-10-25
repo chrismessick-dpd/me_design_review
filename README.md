@@ -47,6 +47,33 @@ Which token you need:
   A fine-grained token can only target repositories owned by its holder or by an organization
   they belong to.
 
+## Requirements
+
+Every project has a **Requirements** tab next to its checklists. Unlike the checklists, these
+are written for the project rather than taken from a template.
+
+- **Each requirement has:**
+  - an ID (REQ-001…, numbered automatically)
+  - the requirement text
+  - shall or should
+  - category and source (the customer spec and section)
+  - how it's verified: inspection, analysis, demonstration or test
+  - a status: draft, approved or changed. Rewording an approved requirement marks it
+    *changed* so it gets approved again.
+  - a verification result (not verified, pass, fail) with evidence
+  - a discussion thread
+- **Traceability:** link a requirement to the checks that show it's met. The requirement shows
+  how they stand:
+  - an open issue on a linked check makes it *failing*;
+  - a fixed issue needs re-review;
+  - a waived one counts as accepted.
+  Each check's panel shows **Traces to** for the requirements it supports.
+- **Import / export:** paste rows from Excel or import a CSV with a *Requirement* column, plus
+  optional ID, Type, Category, Source and Verification. Rows whose ID exists update that
+  requirement. **Export CSV** gives the compliance matrix, which the review report also prints.
+- Requirements live in the project document (`reqs`), so they sync, merge and discard like
+  everything else.
+
 ## Repositories, people and access
 
 | Repository | Holds | Who's on it |

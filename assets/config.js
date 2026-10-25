@@ -184,6 +184,7 @@ window.SIGNOFF_CONFIG = {
           "Dana Kim",
           "Lee Alvarez"
         ],
+        "requirements": [{"ref": "REQ-001", "text": "The enclosure shall meet IP67 with the cable gland and vent installed.", "category": "Sealing", "source": "Client PRD SH-200 §3.2", "method": "test", "status": "approved", "verify": "open", "links": ["enc-ip-1", "enc-ip-4", "enc-ip-17"], "by": "Dana Kim"}, {"ref": "REQ-002", "text": "Exterior plastics shall show no cracking or chalking after 1,000 h of UV exposure.", "category": "Environment", "source": "Client PRD SH-200 §3.5", "method": "test", "status": "approved", "verify": "open", "links": ["enc-env-1"], "by": "Lee Alvarez"}, {"ref": "REQ-003", "text": "The installed unit shall weigh no more than 450 g.", "category": "Mass", "source": "Client PRD SH-200 §2.1", "method": "analysis", "status": "approved", "verify": "pass", "evidence": "CAD mass report rev C: 412 g including the bracket.", "links": ["mat-sel-11"], "by": "Dana Kim"}, {"ref": "REQ-004", "text": "The lid should open with a standard tool and no special fasteners.", "kind": "should", "category": "Service", "source": "Field service workshop 2026-09-15", "method": "demonstration", "status": "draft", "verify": "open", "links": [], "by": "Lee Alvarez"}],
         "ratios": {
           "requirements": 0.95,
           "part-design": 0.7,
@@ -225,6 +226,7 @@ window.SIGNOFF_CONFIG = {
           "Lee Alvarez",
           "Dana Kim"
         ],
+        "requirements": [{"ref": "REQ-001", "text": "The scanner shall survive 26 drops from 1.2 m onto concrete, on every face, edge and corner, and still work.", "category": "Durability", "source": "Northwind PRD v2 §5.1", "method": "test", "status": "approved", "verify": "open", "links": ["enc-drop-1", "enc-drop-2"], "by": "Lee Alvarez"}, {"ref": "REQ-002", "text": "All fasteners shall be metric and use at most two drive types.", "category": "Assembly", "source": "Northwind design guide", "method": "inspection", "status": "approved", "verify": "pass", "evidence": "Fastener list rev B: M2 and M2.5, Torx T6 only.", "links": ["asm-thr-2"], "by": "Dana Kim"}],
         "ratios": {
           "part-design": 0.4,
           "tolerancing": 0.25,
