@@ -583,6 +583,9 @@ span.fab-loc { color: var(--text-2); }
 .table.reqs td { vertical-align: top; }
 .table.reqs .req-ref { font: 600 12.5px var(--mono); white-space: nowrap; color: var(--accent-ink); }
 .table.reqs tr.sel { background: var(--accent-soft); }
+/* Deprecated: kept for reference, lined out. */
+.table.reqs tr.deprecated td { color: var(--text-3); }
+.table.reqs tr.deprecated .req-ref, .table.reqs tr.deprecated .req-text { text-decoration: line-through; color: var(--text-3); }
 .req-link { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .req-link-main { flex: 1; min-width: 0; display: flex; gap: 9px; align-items: flex-start; text-align: left; border: none; background: var(--bg-sunk); border-radius: 9px; padding: 7px 10px; }
 button.req-link-main:hover { background: var(--hair-2); }

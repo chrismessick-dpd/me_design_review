@@ -231,11 +231,13 @@
   // A project's own requirements (not from a template), in project.reqs:
   //   { id, ref: 'REQ-001', text, kind: 'shall' | 'should', category, source,
   //     method: inspection | analysis | demonstration | test,
-  //     status: draft | approved | changed, verify: open | pass | fail, evidence,
+  //     status: draft | approved | changed | deprecated, verify: open | pass | fail, evidence,
   //     links: [check ids it traces to], createdAt, updatedAt, updatedBy, deleted }
   // Comments on a requirement are ordinary comments with item = the requirement's id.
+  // A deprecated requirement is kept for reference (lined out) but no longer counts: it's left
+  // out of the totals, verification and failing flags.
   var REQ_METHODS = ['inspection', 'analysis', 'demonstration', 'test'];
-  var REQ_STATUS = ['draft', 'approved', 'changed'];
+  var REQ_STATUS = ['draft', 'approved', 'changed', 'deprecated'];
   var REQ_VERIFY = ['open', 'pass', 'fail'];
 
   function refNumber(ref) { var m = /(\d+)\s*$/.exec(ref || ''); return m ? parseInt(m[1], 10) : 0; }
@@ -249,11 +251,19 @@
       });
   }
 
-  // Next free REQ-nnn. Two people adding offline can pick the same number; the page flags it.
+  // Next free ID, following the project's most-used numbering (an imported GEN-001… list goes on
+  // with GEN-124), else REQ-001. Two people adding offline can pick the same number; the page flags it.
   function nextReqRef(project) {
-    var max = 0;
-    liveReqs(project).forEach(function (q) { if (/^REQ-/i.test(q.ref || '')) max = Math.max(max, refNumber(q.ref)); });
-    return 'REQ-' + String(max + 1).padStart(3, '0');
+    var counts = {}, max = {}, width = {};
+    liveReqs(project).forEach(function (q) {
+      var m = /^(.*?)(\d+)\s*$/.exec(q.ref || ''); if (!m) return;
+      var pre = m[1];
+      counts[pre] = (counts[pre] || 0) + 1;
+      max[pre] = Math.max(max[pre] || 0, parseInt(m[2], 10));
+      width[pre] = Math.max(width[pre] || 0, m[2].length);
+    });
+    var pre = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    return pre === undefined ? 'REQ-001' : pre + String(max[pre] + 1).padStart(width[pre], '0');
   }
 
   function newReq(project, fields, user) {
@@ -295,16 +305,17 @@
   }
 
   function reqStats(project) {
-    var s = { total: 0, approved: 0, draft: 0, changed: 0, pass: 0, fail: 0, open: 0, unlinked: 0, duplicates: [] };
+    var s = { total: 0, approved: 0, draft: 0, changed: 0, deprecated: 0, pass: 0, fail: 0, open: 0, unlinked: 0, duplicates: [] };
     var seen = {};
     liveReqs(project).forEach(function (q) {
+      var k = (q.ref || '').toUpperCase();
+      if (k && seen[k]) s.duplicates.push(q.ref);
+      seen[k] = 1;
+      if (q.status === 'deprecated') { s.deprecated++; return; }
       s.total++;
       s[q.status] = (s[q.status] || 0) + 1;
       s[q.verify] = (s[q.verify] || 0) + 1;
       if (!(q.links || []).length) s.unlinked++;
-      var k = (q.ref || '').toUpperCase();
-      if (k && seen[k]) s.duplicates.push(q.ref);
-      seen[k] = 1;
     });
     return s;
   }
@@ -334,13 +345,23 @@
 
   // Header names accepted when importing, by field.
   var REQ_COLUMNS = {
-    ref: /^(id|ref|req(uirement)?\s*(id|#|no\.?|number)|#)$/i,
+    ref: /^(id|ref|req(uirement)?\.?\s*(id|#|no\.?|number)|#)$/i,
+    title: /^(name|title|short\s*name|summary)$/i,
     text: /^(requirement|text|description|statement|req(uirement)?\s*text)$/i,
     kind: /^(type|kind|shall\s*\/\s*should|level|priority)$/i,
-    category: /^(category|area|group|subsystem)$/i,
-    source: /^(source|spec|reference|doc(ument)?|origin)$/i,
-    method: /^(verification(\s*method)?|method|verify\s*by|v&v)$/i
+    category: /^(category|area|group|sub-?\s*system)$/i,
+    source: /^(source|spec|reference|doc(ument)?|origin|rationale)\b/i,
+    method: /^(verification(\s*method)?|method|verify\s*by|v&v)$/i,
+    status: /^(status|state)$/i
   };
+
+  // A spreadsheet's status words -> ours ('' leaves the status as it is).
+  function importStatus(raw) {
+    if (/obsolete|deprecat|withdrawn|supersed|cancel|removed|deleted|retired/.test(raw)) return 'deprecated';
+    if (/changed/.test(raw)) return 'changed';
+    if (/approved|accepted|active|implemented|released|baselined/.test(raw)) return 'approved';
+    return raw ? 'draft' : '';
+  }
 
   // Rows (with a header row) -> requirement records for `project`. Rows whose ID matches an
   // existing requirement update it; the rest are added. Resolves { added, updated, skipped }.
@@ -359,21 +380,25 @@
     var scratch = { reqs: Object.assign({}, project.reqs || {}) };
     rows.slice(1).forEach(function (r) {
       var get = function (f) { return col[f] === undefined ? '' : String(r[col[f]] || '').trim(); };
-      var text = get('text');
+      var text = get('text'), title = get('title');
       if (!text) { res.skipped++; return; }
+      // A short name column ("Power input voltage") leads the statement, which often needs it.
+      if (title && text.toLowerCase().indexOf(title.toLowerCase()) !== 0) text = title + ': ' + text;
       var kindRaw = get('kind').toLowerCase(), methodRaw = get('method').toLowerCase();
       var fields = {
         text: text,
         category: get('category'),
         source: get('source'),
-        kind: /should|desired|optional|goal/.test(kindRaw) || (!kindRaw && /\bshould\b/i.test(text) && !/\bshall\b/i.test(text)) ? 'should' : 'shall',
+        kind: /should|could|won'?t|may\b|desired|optional|goal|nice/.test(kindRaw) || (!kindRaw && /\bshould\b/i.test(text) && !/\bshall\b/i.test(text)) ? 'should' : 'shall',
         method: REQ_METHODS.filter(function (m) { return methodRaw.indexOf(m.slice(0, 4)) >= 0; })[0] || (methodRaw === 'i' ? 'inspection' : methodRaw === 'a' ? 'analysis' : methodRaw === 'd' ? 'demonstration' : methodRaw === 't' ? 'test' : 'inspection')
       };
+      var status = importStatus(get('status').toLowerCase());
+      if (status) fields.status = status;
       var ref = get('ref');
       var existing = ref && byRef[ref.toUpperCase()];
       var rec;
       if (existing) {
-        rec = stamp(Object.assign({}, existing, fields, existing.status === 'approved' && existing.text !== text ? { status: 'changed' } : {}), user);
+        rec = stamp(Object.assign({}, existing, fields, !status && existing.status === 'approved' && existing.text !== text ? { status: 'changed' } : {}), user);
         res.updated++;
       } else {
         rec = newReq(scratch, Object.assign(ref ? { ref: ref } : {}, fields), user);

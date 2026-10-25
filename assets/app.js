@@ -686,7 +686,7 @@
   // The project's own requirements (model.js: liveReqs, reqTrace…). Each one can trace to
   // checks in the project's checklists, whose status then shows next to it.
   var REQ_LABEL = { inspection: 'Inspection', analysis: 'Analysis', demonstration: 'Demonstration', test: 'Test',
-    draft: 'Draft', approved: 'Approved', changed: 'Changed', open: 'Not verified', pass: 'Pass', fail: 'Fail',
+    draft: 'Draft', approved: 'Approved', changed: 'Changed', deprecated: 'Deprecated', open: 'Not verified', pass: 'Pass', fail: 'Fail',
     shall: 'Shall', should: 'Should' };
   function reqOf(p, id) { var q = p && p.reqs && p.reqs[id]; return q && !q.deleted ? q : null; }
   // Requirements is picked in the project sheet like a checklist ('reqs' in meta.checklists).
@@ -737,13 +737,16 @@
   }
   function verifyChip(v) { return '<span class="res ' + (v === 'pass' ? 'fixed' : v === 'fail' ? 'open' : 'waived') + '">' + REQ_LABEL[v] + '</span>'; }
 
-  function reqFailing(q, idx) { return q.verify === 'fail' || M.reqTrace(q, idx).state === 'issue'; }
+  function reqFailing(q, idx) { return q.status !== 'deprecated' && (q.verify === 'fail' || M.reqTrace(q, idx).state === 'issue'); }
   function reqMatches(q, idx) {
     var f = ui.reqFilter || 'all';
     if (ui.reqQuery) {
       var s = ui.reqQuery.toLowerCase();
       if ([q.ref, q.text, q.category, q.source].join(' ').toLowerCase().indexOf(s) < 0) return false;
     }
+    // Deprecated requirements stay in All, lined out, and have a filter of their own.
+    if (f === 'deprecated') return q.status === 'deprecated';
+    if (f !== 'all' && q.status === 'deprecated') return false;
     if (f === 'draft') return q.status !== 'approved';
     if (f === 'open') return q.verify === 'open';
     if (f === 'fail') return reqFailing(q, idx);
@@ -756,19 +759,20 @@
     var list = all.filter(function (q) { return reqMatches(q, idx); });
     var failing = all.filter(function (q) { return reqFailing(q, idx); }).length;
     var filters = [['all', 'All', st.total], ['draft', 'Not approved', st.total - st.approved], ['open', 'Not verified', st.open],
-      ['fail', 'Failing', failing], ['unlinked', 'Not traced', st.unlinked]];
+      ['fail', 'Failing', failing], ['unlinked', 'Not traced', st.unlinked]].concat(st.deprecated ? [['deprecated', 'Deprecated', st.deprecated]] : []);
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Requirements</h1>' +
       '<div class="page-sub"><span>' + plural(st.total, 'requirement') + '</span><span class="sep">·</span><span>' + st.approved + ' approved</span>' +
       '<span class="sep">·</span><span>' + st.pass + ' verified</span>' +
-      (failing ? '<span class="sep">·</span><span style="color:var(--issue)">' + failing + ' failing</span>' : '') + '</div></div>' +
+      (failing ? '<span class="sep">·</span><span style="color:var(--issue)">' + failing + ' failing</span>' : '') +
+      (st.deprecated ? '<span class="sep">·</span><span>' + st.deprecated + ' deprecated</span>' : '') + '</div></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="req-import">Import</button>' +
-      (st.total ? '<button class="btn" data-act="req-export">Export CSV</button>' : '') +
+      (all.length ? '<button class="btn" data-act="req-export">Export CSV</button>' : '') +
       '<button class="btn btn-primary" data-act="req-add">Add requirement</button></div></div>';
     if (st.duplicates.length) {
       html += '<div class="card" style="padding:12px 16px;margin-bottom:14px;font-size:13px">More than one requirement uses ' +
         st.duplicates.map(esc).join(', ') + '. Renumber one so the trace stays unambiguous.</div>';
     }
-    if (!st.total) {
+    if (!all.length) {
       return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No requirements yet</h2>' +
         '<p>List what this ' + W.thing + ' must do, how each requirement will be verified, and which checks show it’s met. Add them one at a time, or import a spreadsheet with a Requirement column.</p>' +
         '<button class="btn btn-primary" data-act="req-add">Add requirement</button> <button class="btn" data-act="req-import">Import</button></div></div>';
@@ -780,15 +784,17 @@
     html += '<div class="card" style="overflow:hidden"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
       list.map(function (q) {
         var n = M.liveComments(p, q.id).length;
-        return '<tr data-act="select-req" data-id="' + esc(q.id) + '"' + (selected === q.id ? ' class="sel"' : '') + '>' +
+        var cls = [selected === q.id ? 'sel' : '', q.status === 'deprecated' ? 'deprecated' : ''].filter(Boolean).join(' ');
+        return '<tr data-act="select-req" data-id="' + esc(q.id) + '"' + (cls ? ' class="' + cls + '"' : '') + '>' +
           '<td class="req-ref">' + esc(q.ref) + '</td>' +
-          '<td>' + (q.text ? esc(q.text) : '<span class="muted">No text yet</span>') +
+          '<td>' + (q.text ? '<span class="req-text">' + esc(q.text) + '</span>' : '<span class="muted">No text yet</span>') +
           '<div class="muted">' + esc([REQ_LABEL[q.kind], q.category, q.source].filter(Boolean).join(' · ')) +
           (n ? ' <span class="cmt-count">' + ICON.bubble + n + '</span>' : '') + '</div></td>' +
           '<td class="muted">' + REQ_LABEL[q.method] + '</td>' +
           '<td><span class="chip' + (q.status === 'approved' ? ' accent' : '') + '">' + REQ_LABEL[q.status] + '</span></td>' +
+          (q.status === 'deprecated' ? '<td></td><td></td></tr>' :
           '<td>' + verifyChip(q.verify) + '</td>' +
-          '<td>' + traceChip(M.reqTrace(q, idx)) + '</td></tr>';
+          '<td>' + traceChip(M.reqTrace(q, idx)) + '</td></tr>');
       }).join('') + '</tbody></table></div></div>';
     return html;
   }
@@ -861,7 +867,7 @@
   // On a check: the requirements it helps show are met.
   function tracedBy(p, id) {
     if (!reqsOn(p)) return '';
-    var hits = M.liveReqs(p).filter(function (q) { return (q.links || []).indexOf(id) >= 0; });
+    var hits = M.liveReqs(p).filter(function (q) { return q.status !== 'deprecated' && (q.links || []).indexOf(id) >= 0; });
     if (!hits.length) return '';
     return '<div class="field"><span class="field-label">Traces to</span><div class="chips">' + hits.map(function (q) {
       return '<button class="chip accent" style="border:none" data-act="open-req" data-id="' + esc(q.id) + '" title="' + esc(q.text) + '">' + esc(q.ref) + '</button>';
@@ -871,8 +877,8 @@
   function importReqsSheet() {
     var p = current(); if (!p) return;
     var w = sheet('<div class="sheet-head"><h2>Import requirements</h2><p>Paste rows from Excel or a CSV file, or choose a file. The first row names the columns: ' +
-      '<b>Requirement</b> (needed), and optionally <b>ID</b>, <b>Type</b> (shall / should), <b>Category</b>, <b>Source</b> and <b>Verification</b> ' +
-      '(inspection, analysis, demonstration, test). A row whose ID already exists updates that requirement.</p></div>' +
+      '<b>Requirement</b> (or <b>Description</b>, needed), and optionally <b>ID</b>, <b>Name</b>, <b>Type</b> or <b>Priority</b> (shall / should), <b>Category</b>, <b>Source</b>, ' +
+      '<b>Verification</b> (inspection, analysis, demonstration, test) and <b>Status</b> (obsolete rows come in as deprecated). A row whose ID already exists updates that requirement.</p></div>' +
       '<div class="sheet-body"><textarea class="input" id="req-paste" rows="8" placeholder="ID, Requirement, Type, Category, Source, Verification"></textarea>' +
       '<p class="note" id="req-preview"></p><input type="file" id="req-file" accept=".csv,.tsv,.txt,text/csv"></div>' +
       '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Import</button></div>', { wide: true });
@@ -925,10 +931,14 @@
     var all = M.liveReqs(p);
     if (!all.length) return '';
     var idx = checkIdx(p), st = M.reqStats(p);
-    return '<h2>Requirements</h2><p class="r-cmt" style="margin:0 0 8px">' + plural(st.total, 'requirement') + ', ' + st.approved + ' approved, ' + st.pass + ' verified' + (st.fail ? ', ' + st.fail + ' failed' : '') + '.</p>' +
+    return '<h2>Requirements</h2><p class="r-cmt" style="margin:0 0 8px">' + plural(st.total, 'requirement') + ', ' + st.approved + ' approved, ' + st.pass + ' verified' + (st.fail ? ', ' + st.fail + ' failed' : '') +
+      (st.deprecated ? '; ' + st.deprecated + ' deprecated, kept for reference' : '') + '.</p>' +
       '<table><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Traced checks</th></tr></thead><tbody>' +
       all.map(function (q) {
         var t = M.reqTrace(q, idx);
+        if (q.status === 'deprecated') {
+          return '<tr style="color:#86868b"><td><s>' + esc(q.ref) + '</s></td><td><s>' + esc(q.text) + '</s></td><td></td><td>Deprecated</td><td></td><td></td></tr>';
+        }
         return '<tr><td>' + esc(q.ref) + '</td><td>' + esc(q.text) + (q.source ? '<div class="r-cmt">' + esc(q.source) + '</div>' : '') + (q.evidence ? '<div class="r-cmt">Evidence: ' + esc(q.evidence) + '</div>' : '') + '</td>' +
           '<td>' + REQ_LABEL[q.method] + '</td><td>' + REQ_LABEL[q.status] + '</td><td>' + REQ_LABEL[q.verify] + '</td>' +
           '<td>' + (t.state === 'none' ? 'None' : t.pass + ' pass' + (t.issue ? ', ' + t.issue + ' issue' : '') + (t.open ? ', ' + t.open + ' to review' : '')) + '</td></tr>';

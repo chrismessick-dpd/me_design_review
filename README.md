@@ -64,8 +64,9 @@ section, but keeps the requirements, the same way a checklist's review state is 
   - shall or should
   - category and source (the customer spec and section)
   - how it's verified: inspection, analysis, demonstration or test
-  - a status: draft, approved or changed. Rewording an approved requirement marks it
-    *changed* so it gets approved again.
+  - a status: draft, approved, changed or deprecated. Rewording an approved requirement marks
+    it *changed* so it gets approved again. A *deprecated* requirement stays in the list and
+    the report, lined out for reference, but is left out of the counts and failing flags.
   - a verification result (not verified, pass, fail) with evidence
   - a discussion thread
 - **Traceability:** link a requirement to the checks that show it's met. The requirement shows
@@ -74,9 +75,12 @@ section, but keeps the requirements, the same way a checklist's review state is 
   - a fixed issue needs re-review;
   - a waived one counts as accepted.
   Each check's panel shows **Traces to** for the requirements it supports.
-- **Import / export:** paste rows from Excel or import a CSV with a *Requirement* column, plus
-  optional ID, Type, Category, Source and Verification. Rows whose ID exists update that
-  requirement. **Export CSV** gives the compliance matrix, which the review report also prints.
+- **Import / export:** paste rows from Excel or import a CSV with a *Requirement* (or
+  *Description*) column, plus optional ID, Name, Type or Priority, Category or Sub-System,
+  Source or Rationale, Verification and Status. A Name leads the requirement text; must-have
+  priorities are *shall* and the rest *should*; obsolete rows come in deprecated. New
+  requirements carry on the imported numbering (GEN-124 after GEN-123). Rows whose ID exists
+  update that requirement. **Export CSV** gives the compliance matrix, which the review report also prints.
 - Requirements live in the project document (`reqs`), so they sync, merge and discard like
   everything else.
 
