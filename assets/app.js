@@ -230,6 +230,8 @@
     var id = M.uid(C.ids.comment || 'c');
     p.comments[id] = M.stamp({ id: id, item: itemId || null, author: me(), at: M.now(), text: text.trim() }, me());
     touch(p); renderPage(); renderInspector();
+    // Comments are a conversation, so they go out straight away rather than at the next sync.
+    syncSoon();
   }
   function deleteComment(id) {
     var p = current(); if (!p || !p.comments[id]) return;
@@ -1413,7 +1415,13 @@
   }
 
   // ── Sync ─────────────────────────────────────────────────
-  var syncing = false, lastError = '';
+  var syncing = false, lastError = '', syncAgain = false;
+  // An automatic sync: quiet when GitHub isn't set up, and queued behind one already running.
+  function syncSoon() {
+    if (DEMO || !getToken() || !settings.owner || !settings.dataRepo || !settings.user) return;
+    if (syncing) { syncAgain = true; return; }
+    sync();
+  }
   function sync() {
     if (DEMO) { toast('Demo mode keeps everything in this browser'); return; }
     if (syncing) return;
@@ -1464,9 +1472,10 @@
         if (res.dropped.length) toast(plural(res.dropped.length, 'project') + ' no longer shared with you ' + (res.dropped.length === 1 ? 'was' : 'were') + ' removed from this browser');
         if (res.errors.length) toast(res.errors[0].message + (res.errors.length > 1 ? ' (+' + (res.errors.length - 1) + ' more)' : ''));
         else toast(res.pushed ? 'Synced — ' + plural(res.pushed, 'change') + ' pushed' : 'Up to date');
+        if (syncAgain) { syncAgain = false; sync(); }
       })
       .catch(function (err) {
-        syncing = false; lastError = err.message;
+        syncing = false; syncAgain = false; lastError = err.message;
         renderSyncState('error');
         if (err.status === 401) {
           // GitHub doesn't recognize the token at all (not a permissions problem).
