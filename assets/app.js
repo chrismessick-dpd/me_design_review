@@ -20,10 +20,14 @@
   function save(key, value) {
     try { localStorage.setItem(NS + key, JSON.stringify(value)); } catch (e) { toast('Couldn’t save in this browser: ' + e.message); }
   }
+  // Tokens never contain spaces; copying one from a web page or document can pick up line
+  // breaks or invisible characters, which GitHub then rejects as "Bad credentials".
+  function cleanToken(t) { return String(t || '').replace(/[\s​-‍⁠﻿]/g, ''); }
   function getToken() {
-    try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }
+    try { return cleanToken(sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ''); } catch (e) { return ''; }
   }
   function setToken(token, remember) {
+    token = cleanToken(token);
     try {
       sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY);
       if (token) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
@@ -1059,7 +1063,7 @@
       if (!b) return;
       if (b.dataset.sheet === 'cancel') { applyTheme(settings.theme); return closeSheet(); }
       var s = read();
-      var tok = DEMO ? '' : w.querySelector('#s-token').value.trim();
+      var tok = DEMO ? '' : cleanToken(w.querySelector('#s-token').value);
       if (b.dataset.sheet === 'test') {
         var ws = new S.Workspace(s, tok);
         log('Checking your token…');
@@ -1435,6 +1439,13 @@
       .catch(function (err) {
         syncing = false; lastError = err.message;
         renderSyncState('error');
+        if (err.status === 401) {
+          // GitHub doesn't recognize the token at all (not a permissions problem).
+          lastError = 'GitHub didn’t accept the token saved in this browser. Paste the token again in Settings.';
+          toast(lastError);
+          settingsSheet();
+          return;
+        }
         toast('Sync failed: ' + err.message);
       });
   }
