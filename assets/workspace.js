@@ -86,13 +86,18 @@
           out.pushed += res.pushed;
         }).catch(function (err) {
           if (!denied(err)) throw err;
-          var ownsLocal = Object.keys(mine).length > 0;
+          // dataAccess is 'ok' only if this token opened the data repo before: the app clears it
+          // when the token changes. Local projects don't make an FTE: the browser may hold
+          // another person's copy (one browser, two tokens).
           var isOwner = st.login === ws.s.owner.toLowerCase();
-          if (isOwner || ownsLocal || st.dataAccess === 'ok') {
+          if (isOwner || st.dataAccess === 'ok') {
             // A settings or token problem, not a contractor: keep everything.
             errors.push({ repo: dataFull, message: 'Can’t open ' + dataFull + '. Check the repository name in Settings and that your token covers it.' });
           } else {
+            // A contractor. Step 3 drops the projects their token can't reach, and the People
+            // list goes too (the app keeps unsynced FTE work hidden; see sync() in app.js).
             st.dataAccess = 'none';
+            st.roster = M.emptyRoster();
           }
         });
       })

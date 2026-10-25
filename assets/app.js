@@ -78,6 +78,9 @@
   var pulledTemplates = load('templates', []);
   var lastSync = load('lastSync', null);    // { at, version, errors }
   var invitations = load('invitations', []);   // repository invitations waiting for this user
+  // Unsynced FTE work in this browser while a contractor's token is in use: kept out of sight
+  // and pushed when an FTE syncs here again. { projects: { id: doc }, roster: roster | null }
+  var held = load('held', { projects: {}, roster: null });
   var ui = Object.assign({ slug: '', view: 'overview', filter: 'all', query: '', showArchived: false }, load('ui', {}));
 
   var TEMPLATES, INDEX;
@@ -129,8 +132,14 @@
   // ── People and access ────────────────────────────────────
   // GitHub decides what each person can open. An FTE's token reaches the data repo; a
   // contractor's reaches only the review-* repos of their projects, so their copy of
-  // Signoff never sees anything else. Before a first sync everything local is shown.
-  function myRole() { return DEMO || dataAccess !== 'none' ? 'fte' : 'contractor'; }
+  // Signoff never sees anything else. Without a token everything local is shown. With one,
+  // nothing is until a sync tells who it belongs to: after a token change the browser may
+  // hold another person's copy.
+  function checking() { return !DEMO && !!getToken() && !dataAccess; }
+  function myRole() {
+    if (DEMO || dataAccess === 'ok' || (!getToken() && dataAccess !== 'none')) return 'fte';
+    return checking() ? 'checking' : 'contractor';
+  }
   function isFte() { return myRole() === 'fte'; }
   function isOwner() { return !!settings.login && settings.login === String(settings.owner).toLowerCase(); }
   // The token is shared by every Signoff tool, so it can change outside this one's Settings.
@@ -145,8 +154,8 @@
     invitations = []; save('invitations', invitations);
     return true;
   }
-  function visible() { return true; }
-  function visibleProjects() { return Object.keys(projects).map(function (k) { return projects[k]; }); }
+  function visible() { return !checking(); }
+  function visibleProjects() { return checking() ? [] : Object.keys(projects).map(function (k) { return projects[k]; }); }
   function workspace() { return new S.Workspace(settings, getToken(), undefined, function (doc) { return M.projectSummary(doc, TEMPLATES); }); }
   function homeOf(p) { return M.sharedRepo(roster, p.id) || homes[p.id] || settings.owner + '/' + settings.dataRepo; }
   function touchRoster() { dirty.roster = M.now(); persist(); renderSyncState(); renderToolbar(); }
@@ -316,7 +325,7 @@
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
         (dirty[p.id] ? '<span class="proj-dirty" title="Not synced yet"></span>' : '') + '</button>';
     }
-    var html = active.map(row).join('') || '<div class="side-empty">' + (q ? 'No matching projects.' : myRole() === 'fte' ? 'No projects yet.' : 'No projects shared with you yet.') + '</div>';
+    var html = active.map(row).join('') || '<div class="side-empty">' + (q ? 'No matching projects.' : checking() ? 'Checking access…' : myRole() === 'fte' ? 'No projects yet.' : 'No projects shared with you yet.') + '</div>';
     if (archived.length) {
       html += '<div class="side-archived"><div class="side-head"><span class="side-label">Archived</span><button class="btn-plain btn" style="padding:2px 6px;font-size:12px" data-act="toggle-archived">' + (ui.showArchived ? 'Hide' : 'Show ' + archived.length) + '</button></div>' +
         (ui.showArchived ? archived.map(row).join('') : '') + '</div>';
@@ -417,6 +426,11 @@
   }
 
   function emptyPage() {
+    if (checking()) {
+      return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
+        '<h2>Checking who’s signed in</h2><p>Your projects show once a sync confirms which projects this GitHub token can open.</p>' +
+        '<button class="btn btn-primary" data-act="sync">Sync now</button></div></div>';
+    }
     if (!isFte()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
         '<h2>' + (!visibleProjects().length ? 'No projects shared with you yet' : 'Pick a project') + '</h2>' +
@@ -1507,6 +1521,28 @@
         // Projects that only exist locally and weren't touched by this sync (e.g. its repo
         // failed) are kept.
         Object.keys(nowById).forEach(function (id) { if (!merged[id] && res.dropped.indexOf(id) < 0) merged[id] = nowById[id]; });
+        var dataFull = settings.owner + '/' + settings.dataRepo;
+        if (st.dataAccess === 'none') {
+          // A contractor's token: unsynced internal work (an FTE's, in this browser) is held out
+          // of sight, and the People list goes.
+          res.dropped.forEach(function (id) {
+            if (!dirty[id] || !nowById[id] || (homes[id] || dataFull) !== dataFull) return;
+            held.projects[id] = held.projects[id] ? M.mergeProjects(held.projects[id], nowById[id]) : nowById[id];
+            delete dirty[id];
+          });
+          if (dirty.roster) { held.roster = M.mergeRosters(held.roster || M.emptyRoster(), roster); delete dirty.roster; }
+          roster = M.emptyRoster();
+          save('held', held);
+        } else if (st.dataAccess === 'ok' && (Object.keys(held.projects).length || held.roster)) {
+          // An FTE again: bring the held work back and push it.
+          Object.keys(held.projects).forEach(function (id) {
+            merged[id] = merged[id] ? M.mergeProjects(merged[id], held.projects[id]) : held.projects[id];
+            dirty[id] = M.now();
+          });
+          if (held.roster) { roster = M.mergeRosters(roster, held.roster); dirty.roster = M.now(); }
+          held = { projects: {}, roster: null }; save('held', held);
+          syncAgain = true;
+        }
         // Slugs are only local handles for the sidebar; two projects with one name get a suffix.
         var next = {};
         Object.keys(merged).forEach(function (id) {
