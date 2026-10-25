@@ -2,7 +2,7 @@
   "id": "part-design",
   "title": "Part Design & DFM",
   "short": "Part DFM",
-  "version": 1,
+  "version": 2,
   "description": "Part-level design and manufacturability review covering CAD hygiene, general part design, and process rules for molding, sheet metal, machining, casting, additive, extrusion, elastomers, cosmetics and volume production.",
   "sections": [
     {
@@ -211,7 +211,7 @@
         {
           "id": "pd-im-4",
           "text": "Textured faces have draft sized for the specified texture depth",
-          "hint": "Get the required draft per texture from the texture supplier or molder. Rule of thumb: about 1° per side extra for each 0.025 mm of texture depth; too little draft drags and streaks the texture.",
+          "hint": "Get the required draft per texture from the texture supplier or molder. Rule of thumb: about 1° per side extra for each 0.025 mm (1 mil) of texture depth; too little draft drags and streaks the texture.",
           "tags": [],
           "severity": "major"
         },
@@ -687,7 +687,7 @@
         {
           "id": "pd-mc-3",
           "text": "Thin walls and floors are thick enough to machine without chatter or distortion",
-          "hint": "Rule of thumb: about 0.8 mm minimum in metal and more in plastic, per machinist capability. Thin unsupported walls vibrate and spring after release.",
+          "hint": "Rule of thumb: about 0.8 mm (31 mil) minimum in metal and more in plastic, per machinist capability. Thin unsupported walls vibrate and spring after release.",
           "tags": [],
           "severity": "major"
         },

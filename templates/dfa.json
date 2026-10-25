@@ -2,7 +2,7 @@
   "id": "dfa",
   "title": "Assembly, Fastening & DFA",
   "short": "Assembly",
-  "version": 1,
+  "version": 2,
   "description": "Assembly review covering DFA principles, assembly sequence, threaded fasteners, snap fits, adhesives, permanent joints, cables, labeling, serviceability, high-volume assembly and mechanism retention.",
   "sections": [
     {
@@ -41,7 +41,7 @@
         {
           "id": "asm-prin-5",
           "text": "Mating features have lead-ins (chamfers or radii) so parts guide into place",
-          "hint": "Look for square-edged pins, holes and slots that must be aligned by eye. Rule of thumb: lead-ins of about 0.5 mm or more on insertion features, sized to the expected misalignment.",
+          "hint": "Look for square-edged pins, holes and slots that must be aligned by eye. Rule of thumb: lead-ins of about 0.5 mm (19.7 mil) or more on insertion features, sized to the expected misalignment.",
           "tags": [],
           "severity": "minor"
         },
@@ -174,7 +174,7 @@
         {
           "id": "asm-thr-3",
           "text": "Look-alike screws of different lengths are not used in the same assembly where a wrong choice causes damage",
-          "hint": "A screw 2 mm too long can punch through a cosmetic wall or a battery cell. Use a distinct diameter or head, or make every location take the same screw.",
+          "hint": "A screw 2 mm (79 mil) too long can punch through a cosmetic wall or a battery cell. Use a distinct diameter or head, or make every location take the same screw.",
           "tags": [],
           "severity": "critical"
         },

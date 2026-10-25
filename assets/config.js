@@ -73,8 +73,8 @@ window.SIGNOFF_CONFIG = {
         "by": "Dana Kim",
         "ref": "Top housing, ribs R3–R7",
         "notes": [
-          "Ribs under the display window are 100% of the 2.0 mm wall. Mold-flow shows sink on the Class A face above them.",
-          "Thinned to 1.2 mm with a 0.5° draft per side. Will re-run mold-flow."
+          "Ribs under the display window are 100% of the 2.0 mm (79 mil) wall. Mold-flow shows sink on the Class A face above them.",
+          "Thinned to 1.2 mm (47 mil) with a 0.5° draft per side. Will re-run mold-flow."
         ],
         "res": "fixed"
       },
@@ -86,7 +86,7 @@ window.SIGNOFF_CONFIG = {
         "ref": "Snap S2",
         "notes": [
           "Knit line from the two gates meets right at the root of snap S2. Expect it to crack at assembly.",
-          "Molder suggests moving gate G2 about 15 mm toward the hinge side."
+          "Molder suggests moving gate G2 about 15 mm (591 mil) toward the hinge side."
         ],
         "res": ""
       },
@@ -97,7 +97,7 @@ window.SIGNOFF_CONFIG = {
         "by": "Lee Alvarez",
         "ref": "Stack 04, lid-to-base gap",
         "notes": [
-          "Gap stack uses drawing tolerances only. PC/ABS shrink variation on the 180 mm lid is missing."
+          "Gap stack uses drawing tolerances only. PC/ABS shrink variation on the 180 mm (7.09 in) lid is missing."
         ],
         "res": ""
       },
@@ -108,8 +108,8 @@ window.SIGNOFF_CONFIG = {
         "by": "Dana Kim",
         "ref": "Bosses B1–B6",
         "notes": [
-          "Boss OD is 5.0 mm for an M2.5 thread-forming screw. The screw supplier's guide asks for about 2.5× the screw diameter.",
-          "Increased to 6.3 mm and added gussets."
+          "Boss OD is 5.0 mm (197 mil) for an M2.5 thread-forming screw. The screw supplier's guide asks for about 2.5× the screw diameter.",
+          "Increased to 6.3 mm (248 mil) and added gussets."
         ],
         "res": "fixed"
       },
@@ -121,7 +121,7 @@ window.SIGNOFF_CONFIG = {
         "ref": "Main gasket",
         "notes": [
           "At max groove depth and min gasket height, compression drops below the supplier's minimum. IP67 at risk.",
-          "Proposal: raise the tongue 0.3 mm and re-check the stack."
+          "Proposal: raise the tongue 0.3 mm (11.8 mil) and re-check the stack."
         ],
         "res": ""
       },
@@ -132,7 +132,7 @@ window.SIGNOFF_CONFIG = {
         "by": "Lee Alvarez",
         "ref": "Battery bay rib",
         "notes": [
-          "Rib tip is 0.4 mm from the pouch cell. A 1.2 m drop simulation shows contact."
+          "Rib tip is 0.4 mm (15.7 mil) from the pouch cell. A 1.2 m drop simulation shows contact."
         ],
         "res": ""
       },

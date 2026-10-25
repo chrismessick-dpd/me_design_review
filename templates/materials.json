@@ -2,7 +2,7 @@
   "id": "materials",
   "title": "Materials & Finishes",
   "short": "Materials",
-  "version": 1,
+  "version": 2,
   "description": "Material selection, plastics, metals, elastomers, finishes and coatings, compliance, contact materials, sustainability and outdoor durability.",
   "sections": [
     {
@@ -162,7 +162,7 @@
         {
           "id": "mat-pl-7",
           "text": "UL 94 rating is verified at the actual minimum wall thickness and in the actual color of the part",
-          "hint": "UL Yellow Cards list ratings per thickness and sometimes per color. A rating at 3 mm does not cover a 1.5 mm wall; check the thinnest section in CAD against the card.",
+          "hint": "UL Yellow Cards list ratings per thickness and sometimes per color. A rating at 3 mm (118 mil) does not cover a 1.5 mm (59 mil) wall; check the thinnest section in CAD against the card.",
           "tags": [
             "regulatory"
           ],
