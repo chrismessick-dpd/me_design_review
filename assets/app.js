@@ -96,9 +96,12 @@
     projects = {};
     S.demo.projects(TEMPLATES).forEach(function (p) { projects[p.slug] = p; });
     save('demoVersion', S.demo.VERSION);
-    settings.user = settings.user || 'Demo Reviewer';
-    save('projects', projects); save('settings', settings);
+    save('projects', projects);
   }
+  // The demo asks for the visitor's name on first opening (see Start). Older demos filled in
+  // this placeholder instead; it counts as no name.
+  var DEMO_USER = 'Demo Reviewer';
+  if (DEMO && settings.user === DEMO_USER) { settings.user = ''; save('settings', settings); }
   // A tab still running an older demo can write its copies of the sample projects back (other
   // ids, same names). Drop them, here and whenever another tab writes, so a sample project
   // never shows twice. Projects a visitor created in the demo are kept.
@@ -201,7 +204,7 @@
     return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
   }
   function hue(name) { var h = 0; for (var i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
-  function me() { return settings.user || 'Anonymous'; }
+  function me() { return settings.user || (DEMO ? DEMO_USER : 'Anonymous'); }
 
   var ICON = {
     check: '<svg class="i-check" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2l2.3 2.3 4.7-5"/></svg>',
@@ -1123,7 +1126,7 @@
     var token = getToken();
     var remembered = false;
     try { remembered = !!localStorage.getItem(TOKEN_KEY); } catch (e) { /* ignore */ }
-    var w = sheet('<div class="sheet-head"><h2>Settings</h2><p>Your name goes on comments and changes. Reviews sync through private GitHub repositories, so everyone works on the same copy.</p></div>' +
+    var w = sheet('<div class="sheet-head"><h2>Settings</h2><p>' + (DEMO ? 'Your name goes on the comments and changes you make in this demo. Everything stays in this browser.' : 'Your name goes on comments and changes. Reviews sync through private GitHub repositories, so everyone works on the same copy.') + '</p></div>' +
       '<div class="sheet-body">' +
       '<div class="field"><label for="s-user">Your name</label><input class="input" id="s-user" value="' + esc(settings.user) + '" placeholder="First Last"></div>' +
       '<div class="field"><span class="field-label">Appearance</span><div class="seg full" id="s-theme">' + [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(function (t) {
@@ -1981,7 +1984,7 @@
   if (!projects[ui.slug]) ui.slug = Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
   openWantedItem();
-  if (!settings.user && !DEMO) settingsSheet();
+  if (!settings.user) settingsSheet();   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
 
