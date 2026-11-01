@@ -88,6 +88,7 @@
       templateVersions: versions,
       meta: {
         name: fields.name || 'Untitled project',
+        project: fields.project || '',
         client: fields.client || '',
         board: fields.board || '',
         revision: fields.revision || '',
@@ -234,7 +235,7 @@
     return {
       v: 1,
       tool: C.discipline || '',
-      name: meta.name, client: meta.client || '', number: meta.board || '', revision: meta.revision || '',
+      name: meta.name, project: meta.project || '', client: meta.client || '', number: meta.board || '', revision: meta.revision || '',
       stage: meta.stage || '', archived: !!meta.archived,
       total: stats.total, reviewed: stats.reviewed, pct: stats.pct,
       checklists: checklists, issues: issues, open: open.sort(function (a, b) { return SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity); }),
@@ -245,6 +246,19 @@
 
   // The document as written to its repository: the stored summary replaced by a fresh one.
   // A writer without checklists (Fabcheck) keeps the stored one; the next sync here renews it.
+  // Reviews grouped by the client project they belong to (meta.project, e.g. one product's
+  // boards), for the sidebar: [{ name, docs }], named groups A–Z (case-insensitive, trimmed),
+  // then the reviews with no project under name ''. Each group keeps the order it was given.
+  function projectGroups(docs) {
+    var byKey = {}, order = [];
+    docs.forEach(function (d) {
+      var name = String((d.meta && d.meta.project) || '').trim(), key = name.toLowerCase();
+      if (!byKey[key]) { byKey[key] = { name: name, docs: [] }; order.push(key); }
+      byKey[key].docs.push(d);
+    });
+    return order.sort(function (a, b) { return (a === '') - (b === '') || a.localeCompare(b); }).map(function (k) { return byKey[k]; });
+  }
+
   function withSummary(project, summarize) {
     if (!summarize) return project;
     var out = Object.assign({}, project);
@@ -644,7 +658,7 @@
     now: now, oneOf: oneOf, uid: uid, slugify: slugify, stamp: stamp, tokenTag: tokenTag,
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
-    projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary,
+    projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
     liveComments: liveComments, retiredItems: retiredItems,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,

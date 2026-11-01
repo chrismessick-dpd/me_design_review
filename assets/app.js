@@ -5,6 +5,9 @@
   'use strict';
   var M = S.model;
   var C = S.config, W = C.words || {};
+  // One review is a board (EE) or a part (ME); a "project" is the client project it belongs to.
+  var UNIT = W.unit || 'review', UNITS = W.units || UNIT + 's';
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // ── Storage ──────────────────────────────────────────────
   // Each tool keeps its data under its own namespace (assets/config.js). The token and the
@@ -176,7 +179,7 @@
   function assignedContractors(projectId) {
     return M.liveUsers(roster).filter(function (u) { return u.role === 'contractor' && (u.projects || []).indexOf(projectId) >= 0; });
   }
-  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all' }); }
+  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', closedGroups: ui.closedGroups || {} }); }
   // The sidebar slides over the page on narrow windows; on wide ones it collapses away and
   // stays that way until opened again.
   var narrow = window.matchMedia ? window.matchMedia('(max-width: 860px)') : { matches: false };
@@ -314,7 +317,7 @@
   function renderSidebar() {
     var q = ($('#project-search').value || '').toLowerCase();
     var list = visibleProjects()
-      .filter(function (p) { return !q || [p.meta.name, p.meta.client, p.meta.board].join(' ').toLowerCase().indexOf(q) >= 0; })
+      .filter(function (p) { return !q || [p.meta.name, p.meta.project, p.meta.client, p.meta.board].join(' ').toLowerCase().indexOf(q) >= 0; })
       .sort(function (a, b) { return (b.meta.updatedAt || '').localeCompare(a.meta.updatedAt || ''); });
     var active = list.filter(function (p) { return !p.meta.archived; });
     var archived = list.filter(function (p) { return p.meta.archived; });
@@ -332,7 +335,18 @@
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
         (dirty[p.id] ? '<span class="proj-dirty" title="Not synced yet"></span>' : '') + '</button>';
     }
-    var html = active.map(row).join('') || '<div class="side-empty">' + (q ? 'No matching projects.' : signedOut() ? 'Sign in to see your reviews.' : checking() ? 'Checking access…' : myRole() === 'fte' ? 'No projects yet.' : 'No projects shared with you yet.') + '</div>';
+    // Grouped by client project once any review has one; a group can be folded, but never the
+    // one holding the open review, and a search shows every match.
+    var groups = M.projectGroups(active), closed = ui.closedGroups || {};
+    var html = groups.length > 1 || (groups[0] && groups[0].name) ? groups.map(function (g) {
+      var key = g.name.toLowerCase();
+      var open = !closed[key] || !!q || g.docs.some(function (p) { return keyOf.get(p) === ui.slug; });
+      return '<div class="side-group"><button class="side-group-head" data-act="toggle-group" data-group="' + esc(key) + '" aria-expanded="' + open + '">' +
+        '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '<span class="side-group-name">' + esc(g.name || 'No project') + '</span><span class="side-group-count">' + g.docs.length + '</span></button>' +
+        (open ? g.docs.map(row).join('') : '') + '</div>';
+    }).join('') : active.map(row).join('');
+    html = html || '<div class="side-empty">' + (q ? 'No matching ' + UNITS + '.' : signedOut() ? 'Sign in to see your reviews.' : checking() ? 'Checking access…' : myRole() === 'fte' ? 'No ' + UNITS + ' yet.' : 'No ' + UNITS + ' shared with you yet.') + '</div>';
     if (archived.length) {
       html += '<div class="side-archived"><div class="side-head"><span class="side-label">Archived</span><button class="btn-plain btn" style="padding:2px 6px;font-size:12px" data-act="toggle-archived">' + (ui.showArchived ? 'Hide' : 'Show ' + archived.length) + '</button></div>' +
         (ui.showArchived ? archived.map(row).join('') : '') + '</div>';
@@ -435,24 +449,24 @@
   function emptyPage() {
     if (signedOut()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
-        '<h2>Sign in with GitHub</h2><p>Reviews live in private GitHub repositories. Add your GitHub token in Settings to see the projects shared with you, or explore the demo.</p>' +
+        '<h2>Sign in with GitHub</h2><p>Reviews live in private GitHub repositories. Add your GitHub token in Settings to see the ' + UNITS + ' shared with you, or explore the demo.</p>' +
         '<button class="btn btn-primary" data-act="settings">Set up GitHub</button> <a class="btn" href="' + esc(location.pathname) + '?demo">Open the demo</a></div></div>';
     }
     if (checking()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
-        '<h2>Checking who’s signed in</h2><p>Your projects show once a sync confirms which projects this GitHub token can open.</p>' +
+        '<h2>Checking who’s signed in</h2><p>Your ' + UNITS + ' show once a sync confirms which ones this GitHub token can open.</p>' +
         '<button class="btn btn-primary" data-act="sync">Sync now</button></div></div>';
     }
     if (!isFte()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
-        '<h2>' + (!visibleProjects().length ? 'No projects shared with you yet' : 'Pick a project') + '</h2>' +
-        '<p>' + (!visibleProjects().length ? 'Signed in as <b>' + esc(settings.login) + '</b>. ' + (invitations.length ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a project, then sync.') : 'Choose a project from the sidebar.') + '</p>' +
+        '<h2>' + (!visibleProjects().length ? 'No ' + UNITS + ' shared with you yet' : 'Pick a ' + UNIT) + '</h2>' +
+        '<p>' + (!visibleProjects().length ? 'Signed in as <b>' + esc(settings.login) + '</b>. ' + (invitations.length ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a ' + UNIT + ', then sync.') : 'Choose a ' + UNIT + ' from the sidebar.') + '</p>' +
         '<button class="btn btn-primary" data-act="sync">Sync now</button></div></div>';
     }
     var none = !visibleProjects().length;
     return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
-      '<h2>' + (none ? 'Start a design review' : 'Pick a project') + '</h2>' +
-      '<p>' + (none ? 'Create a project, choose the checklists and what kind of ' + W.thing + ' it is, and Signoff builds a review tailored to it.' : 'Choose a project from the sidebar, or start a new one.') + '</p>' +
+      '<h2>' + (none ? 'Start a design review' : 'Pick a ' + UNIT) + '</h2>' +
+      '<p>' + (none ? 'Create a review, choose the checklists and what kind of ' + W.thing + ' it is, and Signoff builds a review tailored to it.' : 'Choose a ' + UNIT + ' from the sidebar, or start a new one.') + '</p>' +
       '<button class="btn btn-primary" data-act="new-project">New project</button>' +
       (none && !DEMO ? ' <button class="btn" data-act="sync">Pull from GitHub</button>' : '') +
       (none ? '<p class="note" style="margin-top:18px">' + TEMPLATES.length + ' checklists · ' + Object.keys(INDEX.items).length + ' checks available</p>' : '') +
@@ -462,7 +476,7 @@
   function headBlock(p, eyebrow) {
     var m = p.meta;
     var sub = [m.client, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).map(esc).join('<span class="sep">·</span>');
-    return '<div class="eyebrow">' + esc(eyebrow) + '</div><h1 class="page-title">' + esc(m.name) + '</h1>' +
+    return '<div class="eyebrow">' + esc(m.project ? m.project + ' · ' + eyebrow : eyebrow) + '</div><h1 class="page-title">' + esc(m.name) + '</h1>' +
       '<div class="page-sub">' + (sub ? '<span>' + sub + '</span>' : '') + '<span class="chip accent">' + esc(m.stage) + '</span></div>';
   }
 
@@ -566,7 +580,7 @@
         '<div class="sec-body">' + visible.map(function (r) { return itemRow(r, counts); }).join('') +
         (hiddenCount ? '<div class="hidden-rows"><span>' + plural(hiddenCount, 'check') + ' not applicable to this ' + W.thing + '’s profile</span><button data-act="show-hidden" data-sec="' + esc(g.section.id) + '">Show</button></div>' :
           (showHidden[g.section.id] && g.rows.some(function (r) { return r.hidden; }) ? '<div class="hidden-rows"><span>Showing checks outside the profile</span><button data-act="show-hidden" data-sec="' + esc(g.section.id) + '">Hide</button></div>' : '')) +
-        (ui.filter === 'all' && !ui.query ? '<div class="add-row"><input data-add="' + esc(t.id) + '|' + esc(g.section.id) + '" placeholder="+ Add a check for this project" maxlength="400"></div>' : '') +
+        (ui.filter === 'all' && !ui.query ? '<div class="add-row"><input data-add="' + esc(t.id) + '|' + esc(g.section.id) + '" placeholder="+ Add a check for this ' + UNIT + '" maxlength="400"></div>' : '') +
         '</div></section>';
     });
     if (!shown) html += '<div class="empty"><h2>Nothing here</h2><p>No checks match this filter.</p></div>';
@@ -590,7 +604,7 @@
       if (r.state.assignee) sub += '<span>→ ' + esc(r.state.assignee) + '</span>';
     }
     if (r.auto === 'profile') sub += '<span class="tag">Outside profile</span>';
-    if (r.custom) sub += '<span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : 'Project check') + '</span>';
+    if (r.custom) sub += '<span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : cap(UNIT) + ' check') + '</span>';
     (r.def.tags || []).forEach(function (tg) { sub += '<span class="tag">' + esc(tg) + '</span>'; });
     var stCls = r.status === 'open' ? '' : r.status;
     return '<div class="item st-' + r.status + (r.auto ? ' auto-na' : '') + (selected === r.id ? ' sel' : '') + '" data-act="select" data-id="' + esc(r.id) + '">' +
@@ -683,7 +697,7 @@
       h += '<div class="fab-meta">' + esc(run.package && run.package.name || 'Package') +
         (run.package && run.package.key ? ' <span class="muted">· ' + esc(run.package.key.slice(0, 8)) + '</span>' : '') + '<br>' +
         esc([fmtDate(run.at), run.by, run.settings && run.settings.profile && run.settings.profile + ' profile'].filter(Boolean).join(' · ')) + '<br>' +
-        (stored ? 'Package and results saved with the project' : 'Run kept on ' + esc(run.by || 'the sender') + '’s computer only; others can drop the same package into Fabcheck to see it') + '</div>';
+        (stored ? 'Package and results saved with the ' + UNIT : 'Run kept on ' + esc(run.by || 'the sender') + '’s computer only; others can drop the same package into Fabcheck to see it') + '</div>';
     } else {
       h += '<div class="fab-meta">Sent before Fabcheck kept runs. Run Fabcheck on the package again and send it to link this check to the board.</div>';
     }
@@ -743,7 +757,7 @@
         '<div class="field"><label for="ref">Reference</label><input class="input" id="ref" value="' + esc(st.ref || '') + '" placeholder="Designators, sheet, net, ticket…" data-item-input="ref"></div>' +
         '</div>' : '') +
       (st.updatedAt ? '<div class="meta-line">Last changed by ' + esc(st.updatedBy || 'someone') + ', ' + relTime(st.updatedAt) + '</div>' : '') +
-      (d.custom ? '<button class="btn btn-danger" data-act="delete-custom" data-id="' + esc(selected) + '" style="margin-bottom:10px">Delete project check</button>' : '') +
+      (d.custom ? '<button class="btn btn-danger" data-act="delete-custom" data-id="' + esc(selected) + '" style="margin-bottom:10px">Delete ' + UNIT + ' check</button>' : '') +
       '<div class="thread"><div class="thread-title">Discussion <span class="note" style="margin:0">' + (comments.length || '') + '</span></div>' +
       (comments.length ? comments.map(function (c) {
         return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span title="' + esc(new Date(c.at).toLocaleString()) + '">' + relTime(c.at) + '</span>' +
@@ -810,7 +824,7 @@
     if (t.state === 'none') return '<span class="res waived">Not traced</span>';
     var cls = t.state === 'issue' ? 'open' : t.state === 'pass' ? 'fixed' : 'waived';
     var label = t.state === 'issue' ? plural(t.issue, 'issue') : t.state === 'pass' ? 'Checks pass' : t.open + ' to review';
-    var tip = t.pass + ' pass · ' + t.issue + ' issue · ' + t.open + ' to review' + (t.na ? ' · ' + t.na + ' N/A' : '') + (t.missing ? ' · ' + t.missing + ' no longer in the project' : '');
+    var tip = t.pass + ' pass · ' + t.issue + ' issue · ' + t.open + ' to review' + (t.na ? ' · ' + t.na + ' N/A' : '') + (t.missing ? ' · ' + t.missing + ' no longer in the ' + UNIT : '');
     return '<span class="res ' + cls + '" title="' + tip + '">' + label + '</span>';
   }
   function verifyChip(v) { return '<span class="res ' + (v === 'pass' ? 'fixed' : v === 'fail' ? 'open' : 'waived') + '">' + REQ_LABEL[v] + '</span>'; }
@@ -893,7 +907,7 @@
     var links = (q.links || []).map(function (id) {
       var c = idx[id];
       if (!c) {
-        return '<div class="req-link missing"><span class="req-link-main"><span class="status-dot"></span><span><span class="req-link-text">' + esc(id) + '</span><span class="muted">No longer in this project</span></span></span>' +
+        return '<div class="req-link missing"><span class="req-link-main"><span class="status-dot"></span><span><span class="req-link-text">' + esc(id) + '</span><span class="muted">No longer in this ' + UNIT + '</span></span></span>' +
           '<button class="cmt-del" style="opacity:1" data-act="req-unlink" data-id="' + esc(id) + '">Remove</button></div>';
       }
       var label = c.status === 'open' ? 'To review' : c.status === 'na' ? 'N/A' : c.status === 'pass' ? 'Pass' : 'Issue';
@@ -1042,16 +1056,24 @@
     var editing = !!p;
     var contractors = M.liveUsers(roster).filter(function (u) { return u.role === 'contractor'; });
     var defaults = C.defaultChecklists || TEMPLATES.map(function (t) { return t.id; });
-    var m = p ? p.meta : { name: '', client: '', board: '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
+    // A new review starts in the project of the one that's open, the usual next step.
+    var cur = !p && current();
+    var m = p ? p.meta : { name: '', project: (cur && cur.meta.project) || '', client: (cur && cur.meta.client) || '', board: '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
     var reqsPicked = p ? reqsOn(p) : true;
     var reqCount = p ? M.liveReqs(p).length : 0;
-    var w = sheet('<div class="sheet-head"><h2>' + (editing ? 'Project details' : 'New design review') + '</h2><p>' + (editing ? 'Changes sync to everyone on this project.' : 'Pick the checklists and describe the ' + W.thing + '. Checks that don’t fit its profile are set aside as N/A, and you can still bring any of them back.') + '</p></div>' +
+    // Projects and clients already in use, offered as suggestions so a product's reviews group.
+    var known = { project: {}, client: {} };
+    visibleProjects().forEach(function (d) { ['project', 'client'].forEach(function (k) { var v = String(d.meta[k] || '').trim(); if (v) known[k][v] = 1; }); });
+    function options(k) { return Object.keys(known[k]).sort().map(function (v) { return '<option value="' + esc(v) + '">'; }).join(''); }
+    var w = sheet('<div class="sheet-head"><h2>' + (editing ? cap(UNIT) + ' details' : 'New design review') + '</h2><p>' + (editing ? 'Changes sync to everyone on this ' + UNIT + '.' : 'Pick the checklists and describe the ' + W.thing + '. Checks that don’t fit its profile are set aside as N/A, and you can still bring any of them back.') + '</p></div>' +
       '<div class="sheet-body">' +
-      '<div class="field"><label for="f-name">Project name</label><input class="input" id="f-name" value="' + esc(m.name) + '" placeholder="' + esc(W.namePlaceholder) + '" maxlength="120"></div>' +
-      '<div class="row2"><div class="field"><label for="f-client">Client</label><input class="input" id="f-client" value="' + esc(m.client) + '" placeholder="Optional"></div>' +
-      '<div class="field"><label for="f-board">' + esc(W.number) + '</label><input class="input" id="f-board" value="' + esc(m.board) + '" placeholder="' + esc(W.numberPlaceholder) + '"></div></div>' +
-      '<div class="row2"><div class="field"><label for="f-rev">Revision</label><input class="input" id="f-rev" value="' + esc(m.revision) + '" placeholder="e.g. 03"></div>' +
-      '<div class="field"><label for="f-stage">Stage</label><select class="input" id="f-stage">' + M.STAGES.map(function (s) { return '<option' + (s === m.stage ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label for="f-name">' + cap(UNIT) + ' name</label><input class="input" id="f-name" value="' + esc(m.name) + '" placeholder="' + esc(W.namePlaceholder) + '" maxlength="120"></div>' +
+      '<div class="row2"><div class="field"><label for="f-project">Project</label><input class="input" id="f-project" list="f-project-list" value="' + esc(m.project || '') + '" placeholder="The product it belongs to, e.g. Smart Thermostat" maxlength="80"><datalist id="f-project-list">' + options('project') + '</datalist></div>' +
+      '<div class="field"><label for="f-client">Client</label><input class="input" id="f-client" list="f-client-list" value="' + esc(m.client) + '" placeholder="Optional"><datalist id="f-client-list">' + options('client') + '</datalist></div></div>' +
+      '<div class="row2">' +
+      '<div class="field"><label for="f-board">' + esc(W.number) + '</label><input class="input" id="f-board" value="' + esc(m.board) + '" placeholder="' + esc(W.numberPlaceholder) + '"></div>' +
+      '<div class="field"><label for="f-rev">Revision</label><input class="input" id="f-rev" value="' + esc(m.revision) + '" placeholder="e.g. 03"></div></div>' +
+      '<div class="field"><label for="f-stage">Stage</label><select class="input" id="f-stage">' + M.STAGES.map(function (s) { return '<option' + (s === m.stage ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label for="f-desc">Scope / notes</label><textarea class="input" id="f-desc" placeholder="What is being reviewed, which documents, anything reviewers should know">' + esc(m.description) + '</textarea></div>' +
       '<div class="field"><span class="field-label">Checklists</span><div class="pick-grid" id="f-checklists">' +
       '<button type="button" class="pick' + (reqsPicked ? ' on' : '') + '" data-pick="reqs"><b>Requirements</b><span>' +
@@ -1063,7 +1085,7 @@
       '<div class="field"><span class="field-label">' + esc(W.profile) + ' — select everything that applies</span><div class="pick-grid" id="f-profile">' + M.TAGS.map(function (t) {
         return '<button type="button" class="pick' + (m.profile.indexOf(t.id) >= 0 ? ' on' : '') + '" data-pick="' + t.id + '"><b>' + esc(t.label) + '</b><span>' + esc(t.desc) + '</span></button>';
       }).join('') + '</div><p class="note" id="f-count"></p></div>' +
-      (!DEMO && contractors.length ? '<div class="field"><span class="field-label">Contractors on this project \u2014 ' + (editing && M.sharedRepo(roster, p.id) ? 'shared as ' + esc(M.sharedRepo(roster, p.id)) : 'adding one moves it into its own private repository') + '</span><div class="pick-grid" id="f-people">' + contractors.map(function (u) {
+      (!DEMO && contractors.length ? '<div class="field"><span class="field-label">Contractors on this ' + UNIT + ' \u2014 ' + (editing && M.sharedRepo(roster, p.id) ? 'shared as ' + esc(M.sharedRepo(roster, p.id)) : 'adding one moves it into its own private repository') + '</span><div class="pick-grid" id="f-people">' + contractors.map(function (u) {
         return '<button type="button" class="pick' + (editing && (u.projects || []).indexOf(p.id) >= 0 ? ' on' : '') + '" data-pick="' + esc(u.login) + '"><b>' + esc(u.name || u.login) + '</b><span>@' + esc(u.login) + '</span></button>';
       }).join('') + '</div></div>' : '') +
       '</div><div class="sheet-foot">' +
@@ -1086,11 +1108,11 @@
       var b = e.target.closest('[data-sheet]');
       if (!b) return;
       if (b.dataset.sheet === 'cancel') return closeSheet();
-      if (b.dataset.sheet === 'archive') { updateMeta({ archived: !m.archived }); closeSheet(); toast(m.archived ? 'Project restored' : 'Project archived'); return; }
+      if (b.dataset.sheet === 'archive') { updateMeta({ archived: !m.archived }); closeSheet(); toast(m.archived ? cap(UNIT) + ' restored' : cap(UNIT) + ' archived'); return; }
       var name = w.querySelector('#f-name').value.trim();
       if (!name) { w.querySelector('#f-name').focus(); return; }
       var fields = {
-        name: name, client: w.querySelector('#f-client').value.trim(), board: w.querySelector('#f-board').value.trim(),
+        name: name, project: w.querySelector('#f-project').value.trim(), client: w.querySelector('#f-client').value.trim(), board: w.querySelector('#f-board').value.trim(),
         revision: w.querySelector('#f-rev').value.trim(), stage: w.querySelector('#f-stage').value,
         description: w.querySelector('#f-desc').value.trim(), profile: picked('f-profile'), checklists: picked('f-checklists')
       };
@@ -1108,10 +1130,14 @@
         if (!adds.length && !drops.length) return;
         var share = adds.length && !M.sharedRepo(roster, projectId);
         if (!getToken()) { toast('Saved. GitHub access is applied once you sync.'); return; }
-        if (!confirm((share ? 'Move this project into its own private repository and invite ' : adds.length ? 'Invite ' : '') + adds.join(', ') +
-          (drops.length ? (adds.length ? '; remove ' : 'Remove ') + drops.join(', ') : '') + '?\n\nGitHub emails the invitations.')) return;
+        // Removals always go through, so a removed contractor's copy goes at their next sync;
+        // only invitations (which email people) ask first.
+        if (adds.length && !confirm((share ? 'Move this ' + UNIT + ' into its own private repository and invite ' : 'Invite ') + adds.join(', ') + '?\n\nGitHub emails the invitations.')) {
+          adds = []; share = false;
+          if (!drops.length) return;
+        }
         setTimeout(function () {
-          runAccessOps('Updating who can open this project', adds.map(function (l, i) { return { login: l, share: share && i === 0 ? [projectId] : [], invite: share ? [] : [projectId] }; })
+          runAccessOps('Updating who can open this ' + UNIT, adds.map(function (l, i) { return { login: l, share: share && i === 0 ? [projectId] : [], invite: share ? [] : [projectId] }; })
             .concat(drops.map(function (l) { return { login: l, revoke: [projectId] }; })));
         }, 0);
       }
@@ -1144,7 +1170,7 @@
       (DEMO ? '<p class="note">Git sync is off in demo mode. <a href="' + esc(location.pathname) + '">Open the full tool</a>.</p>' :
         '<div class="field-label" style="margin-top:20px;font-size:13px;color:var(--text);font-weight:600">GitHub</div>' +
         (settings.login ? '<p class="note" style="margin:0 0 12px">Signed in as <b>' + esc(settings.login) + '</b> · ' +
-          (dataAccess === 'none' ? 'Contractor: you see the projects shared with you' : dataAccess === 'ok' ? 'FTE: you see every project' : 'not synced yet') + '</p>' : '') +
+          (dataAccess === 'none' ? 'Contractor: you see the ' + UNITS + ' shared with you' : dataAccess === 'ok' ? 'FTE: you see every ' + UNIT : 'not synced yet') + '</p>' : '') +
         '<details class="guide"' + (getToken() ? '' : ' open') + '><summary>New to GitHub? Set up in four steps</summary><ol>' +
         '<li>Create a free account at <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a>.</li>' +
         '<li>Send your username to your Dovetail contact.</li>' +
@@ -1158,7 +1184,7 @@
         '<div class="field"><label for="s-branch">Branch</label><input class="input" id="s-branch" value="' + esc(settings.branch) + '"></div></div>' +
         '<div class="row2"><div class="field"><label for="s-data">Data repo (FTEs)</label><input class="input" id="s-data" value="' + esc(settings.dataRepo) + '"></div>' +
         '<div class="field"><label for="s-tool">Tool repo (FTEs)</label><input class="input" id="s-tool" value="' + esc(settings.toolRepo) + '"></div></div>' +
-        '<div class="field"><label for="s-prefix">Shared project repos start with</label><input class="input" id="s-prefix" value="' + esc(settings.prefix) + '"></div>' +
+        '<div class="field"><label for="s-prefix">Shared review repos start with</label><input class="input" id="s-prefix" value="' + esc(settings.prefix) + '"></div>' +
         (settings.suiteRepos.length ? '<p class="note">FTEs are also invited to the rest of the suite: ' + settings.suiteRepos.map(esc).join(', ') + ' (set in assets/config.js).</p>' : '') + '</details>' +
         '<div class="log" id="s-log" hidden></div>') +
       '</div><div class="sheet-foot">' + (DEMO ? '' : '<button class="btn" data-sheet="test">Test connection</button><button class="btn" data-sheet="signout" title="Remove the token and every Signoff and Fabcheck copy kept in this browser">Sign out</button>') + '<span class="spacer"></span>' +
@@ -1193,7 +1219,7 @@
           return ws.dataStore().snapshot().then(function () { log('Data repo ' + ws.dataFull() + ': OK (FTE access)', 'ok'); },
             function () { log('Data repo ' + ws.dataFull() + ': no access (fine for contractors)'); });
         }).then(function () {
-          return ws.account.listRepos(s.owner, s.prefix).then(function (names) { log(plural(names.length, 'shared project repo') + ' reachable', 'ok'); });
+          return ws.account.listRepos(s.owner, s.prefix).then(function (names) { log(plural(names.length, 'shared review repo') + ' reachable', 'ok'); });
         }).then(function () {
           return ws.account.invitations().then(function (inv) { if (inv.length) log(plural(inv.length, 'invitation') + ' waiting — accept them after saving'); });
         }).catch(function (err) { log(err.message, 'err'); });
@@ -1222,7 +1248,7 @@
     });
     try { unsynced += Object.keys((JSON.parse(localStorage.getItem('signoff.v1.held') || '{}') || {}).projects || {}).length; } catch (e) { /* ignore */ }
     var ask = 'Sign out of this browser? This removes your GitHub token and every Signoff and Fabcheck copy kept here. Your reviews stay on GitHub.';
-    if (unsynced) ask = plural(unsynced, 'project or list has', 'projects or lists have') + ' changes that aren’t on GitHub yet and would be lost. Sync first unless you mean to throw them away.\n\n' + ask;
+    if (unsynced) ask = plural(unsynced, UNIT + ' or list has', UNITS + ' or lists have') + ' changes that aren’t on GitHub yet and would be lost. Sync first unless you mean to throw them away.\n\n' + ask;
     if (!confirm(ask)) return;
     var theme = settings.theme;
     try {
@@ -1300,7 +1326,7 @@
     if (g.unknown && !g.missing.length) return '<span class="muted">Only the owner can see this</span>';
     var parts = [];
     if (g.missing.length || g.unshared.length) {
-      parts.push('<span class="res open">' + (g.missing.length ? 'Not on ' + g.missing.map(repoName).join(', ') : plural(g.unshared.length, 'project') + ' not shared yet') + '</span>');
+      parts.push('<span class="res open">' + (g.missing.length ? 'Not on ' + g.missing.map(repoName).join(', ') : plural(g.unshared.length, UNIT, UNITS) + ' not shared yet') + '</span>');
       parts.push('<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="fix-access" data-login="' + esc(u.login) + '">Give access</button>');
     }
     if (g.pending.length) parts.push('<span class="res waived">Invite pending' + (g.pending.length > 1 ? ' ×' + g.pending.length : '') + '</span>');
@@ -1308,7 +1334,7 @@
       parts.push('<span class="res open">Still on ' + g.extra.map(repoName).map(esc).join(', ') + '</span>');
       parts.push('<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="trim-access" data-login="' + esc(u.login) + '">Remove access</button>');
     }
-    if (!parts.length) parts.push('<span class="res fixed">' + (u.role === 'fte' ? 'All repos' : g.want.length ? 'Has access' : 'No projects') + '</span>');
+    if (!parts.length) parts.push('<span class="res fixed">' + (u.role === 'fte' ? 'All repos' : g.want.length ? 'Has access' : 'No ' + UNITS) + '</span>');
     return parts.join(' ');
   }
 
@@ -1317,18 +1343,18 @@
     var people = M.liveUsers(roster);
     var byId = stateNow().projects;
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(settings.owner) + '</div><h1 class="page-title">People &amp; access</h1>' +
-      '<div class="page-sub"><span>FTEs can open every project. A contractor can open only the projects shared with them, each in its own private repository.</span></div></div>' +
+      '<div class="page-sub"><span>FTEs can open every ' + UNIT + '. A contractor can open only the ' + UNITS + ' shared with them, each in its own private repository.</span></div></div>' +
       '<div style="display:flex;gap:8px"><button class="btn" data-act="refresh-access">Refresh</button><button class="btn btn-primary" data-act="add-person">Add person</button></div></div>';
     if (!isOwner()) {
-      html += '<div class="card" style="padding:14px 18px;margin-bottom:14px;font-size:13.5px">Only <b>' + esc(settings.owner) + '</b> can create project repositories and invite people while the repos are in a personal account. You can still edit this list; the owner applies the access.</div>';
+      html += '<div class="card" style="padding:14px 18px;margin-bottom:14px;font-size:13.5px">Only <b>' + esc(settings.owner) + '</b> can create review repositories and invite people while the repos are in a personal account. You can still edit this list; the owner applies the access.</div>';
     }
     if (!people.length) {
       html += '<div class="card" style="padding:18px 20px;margin-bottom:14px"><b>No one is listed yet.</b> Add yourself and the other FTEs first, then contractors.' +
         (settings.login ? ' <button class="btn btn-plain" data-act="add-self">Add me (' + esc(settings.login) + ') as FTE</button>' : '') + '</div>';
     } else {
-      html += '<div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>Projects</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
+      html += '<div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
         people.map(function (u) {
-          var projs = u.role === 'fte' ? '<span class="muted">All projects</span>' :
+          var projs = u.role === 'fte' ? '<span class="muted">All ' + UNITS + '</span>' :
             ((u.projects || []).map(function (id) { return byId[id] ? '<span class="chip">' + esc(byId[id].meta.name) + '</span>' : ''; }).join(' ') || '<span class="muted">None yet</span>') +
             ' <button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="person-projects" data-login="' + esc(u.login) + '">Edit</button>';
           return '<tr><td><div style="display:flex;gap:10px;align-items:center">' + avatar(u.name || u.login) + '<div><div>' + esc(u.name || u.login) + (u.login === settings.login ? ' <span class="muted">(you)</span>' : '') + '</div><div class="muted">@' + esc(u.login) + '</div></div></div></td>' +
@@ -1342,16 +1368,16 @@
     }
     var sharedIds = Object.keys(roster.shared || {}).filter(function (id) { return M.sharedRepo(roster, id); });
     if (sharedIds.length) {
-      html += '<div class="section-title">Shared project repositories</div><div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>Project</th><th>Repository</th><th>Contractors</th></tr></thead><tbody>' +
+      html += '<div class="section-title">Shared review repositories</div><div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Contractors</th></tr></thead><tbody>' +
         sharedIds.map(function (id) {
           var repo = M.sharedRepo(roster, id), p = byId[id];
           var names = assignedContractors(id).map(function (u) { return esc(u.name || u.login); }).join(', ') || '<span class="muted">None</span>';
           return '<tr><td>' + esc(p ? p.meta.name : roster.shared[id].name || id) + '</td><td><a href="https://github.com/' + esc(repo) + '" target="_blank" rel="noopener">' + esc(repo) + '</a></td><td>' + names + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     }
-    html += '<p class="note" style="margin-top:14px">Internal projects live in <b>' + esc(settings.dataRepo) + '</b>, which only FTEs can open. ' +
-      'Adding a contractor to a project moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
-      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tool’s shared projects are granted from its own People page. ' : '') +
+    html += '<p class="note" style="margin-top:14px">Internal ' + UNITS + ' live in <b>' + esc(settings.dataRepo) + '</b>, which only FTEs can open. ' +
+      'Adding a contractor to a ' + UNIT + ' moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
+      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tool’s shared reviews are granted from its own People page. ' : '') +
       'On a personal account every collaborator can push to the repositories they’re on; an organization allows narrower roles.</p></div>';
     return html;
   }
@@ -1361,16 +1387,16 @@
     var list = visibleProjects().filter(function (p) { return !p.meta.archived; }).sort(function (a, b) { return a.meta.name.localeCompare(b.meta.name); });
     var role = u ? u.role : 'contractor';
     var picked = u ? (u.projects || []).slice() : [];
-    var w = sheet('<div class="sheet-head"><h2>' + (u ? esc(u.name || u.login) : 'Add person') + '</h2><p>' + (u ? 'Choose the projects this contractor works on. Each one is shared through its own private repository.' : 'They’ll need a free GitHub account. Use their GitHub username here.') + '</p></div>' +
+    var w = sheet('<div class="sheet-head"><h2>' + (u ? esc(u.name || u.login) : 'Add person') + '</h2><p>' + (u ? 'Choose the ' + UNITS + ' this contractor works on. Each one is shared through its own private repository.' : 'They’ll need a free GitHub account. Use their GitHub username here.') + '</p></div>' +
       '<div class="sheet-body">' +
       (u ? '' : '<div class="row2"><div class="field"><label for="p-name">Name</label><input class="input" id="p-name" placeholder="First Last"></div>' +
         '<div class="field"><label for="p-login">GitHub username</label><input class="input" id="p-login" placeholder="username" autocomplete="off"></div></div>' +
-        '<div class="field"><span class="field-label">Role</span><div class="seg full" id="p-role"><button type="button" data-role="fte">FTE — every project</button><button type="button" class="on" data-role="contractor">Contractor — chosen projects</button></div></div>') +
+        '<div class="field"><span class="field-label">Role</span><div class="seg full" id="p-role"><button type="button" data-role="fte">FTE — every ' + UNIT + '</button><button type="button" class="on" data-role="contractor">Contractor — chosen projects</button></div></div>') +
       '<div class="field" id="p-projects-field"' + (role === 'fte' ? ' hidden' : '') + '><span class="field-label">Projects</span><div class="pick-grid" id="p-projects">' +
       (list.length ? list.map(function (p) {
         var shared = !!M.sharedRepo(roster, p.id);
         return '<button type="button" class="pick' + (picked.indexOf(p.id) >= 0 ? ' on' : '') + '" data-pick="' + esc(p.id) + '"><b>' + esc(p.meta.name) + '</b><span>' + (shared ? 'Shared' : 'Internal') + (p.meta.client ? ' · ' + esc(p.meta.client) : '') + '</span></button>';
-      }).join('') : '<p class="note">No projects yet.</p>') + '</div></div>' +
+      }).join('') : '<p class="note">No ' + UNITS + ' yet.</p>') + '</div></div>' +
       '</div><div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">' + (u ? 'Save' : 'Add') + '</button></div>');
     w.addEventListener('click', function (e) {
       var rb = e.target.closest('[data-role]');
@@ -1414,7 +1440,7 @@
     if (added.length) {
       var lines = [];
       if (toShare.length) lines.push('Move ' + toShare.map(function (id) { return byId[id] ? byId[id].meta.name : id; }).join(', ') + ' into ' + (toShare.length === 1 ? 'its own private repository' : 'their own private repositories'));
-      lines.push('Invite ' + login + ' to ' + plural(added.length, 'project'));
+      lines.push('Invite ' + login + ' to ' + plural(added.length, UNIT, UNITS));
       if (confirm(lines.join('\n') + '\n\nGitHub emails the invitations. Go ahead?')) {
         op.share = toShare; op.invite = added.filter(function (id) { return toShare.indexOf(id) < 0; });
       } else if (!removed.length) { toast('Saved in People. Use “Give access” when you’re ready.'); return; }
@@ -1478,7 +1504,7 @@
     var share = g.unshared;
     if (!repos.length && !invite.length && !share.length) { toast((u.name || login) + ' already has access'); return; }
     var what = u.role === 'fte' ? 'Invite ' + login + ' to ' + repos.map(repoName).join(', ') :
-      (share.length ? 'Share ' + plural(share.length, 'project') + ' (each gets its own private repository) and invite ' + login : 'Invite ' + login + ' to ' + plural(invite.length, 'project repository', 'project repositories'));
+      (share.length ? 'Share ' + plural(share.length, UNIT, UNITS) + ' (each gets its own private repository) and invite ' + login : 'Invite ' + login + ' to ' + plural(invite.length, 'review repository', 'review repositories'));
     if (!confirm(what + '?\n\nGitHub emails the invitations.')) return;
     runAccessOps('Giving access to ' + login, [{ login: login, repos: repos, invite: invite, share: share }]);
   }
@@ -1510,7 +1536,7 @@
     }
     var names = ids.map(function (id) { return '• ' + byId[id].meta.name; });
     if (dirty.roster) names.push('• People & access');
-    if (!confirm('Discard unsynced changes?\n\n' + names.join('\n') + '\n\nThey go back to the last version on GitHub. A project that was never synced is removed from this browser. This can’t be undone.')) return;
+    if (!confirm('Discard unsynced changes?\n\n' + names.join('\n') + '\n\nThey go back to the last version on GitHub. A ' + UNIT + ' that was never synced is removed from this browser. This can’t be undone.')) return;
     var started = Object.assign({}, dirty);
     orphans.forEach(function (k) { delete dirty[k]; });
     syncing = true; renderSyncState('busy');
@@ -1531,7 +1557,7 @@
       render();
       var parts = [];
       if (restored) parts.push(plural(restored, 'item') + ' restored');
-      if (removed) parts.push(plural(removed, 'unsynced project') + ' removed');
+      if (removed) parts.push(plural(removed, 'unsynced ' + UNIT, 'unsynced ' + UNITS) + ' removed');
       if (res.failed.length) {
         var what = res.failed.map(function (f) { return f.id === 'roster' ? 'People & access' : (byId[f.id] ? byId[f.id].meta.name : f.id); });
         toast((parts.length ? 'Discarded ' + parts.join(', ') + '. ' : '') + 'Couldn’t reach GitHub for ' + what.join(', ') +
@@ -1627,8 +1653,8 @@
         syncing = false;
         render();
         openWantedItem();
-        if (res.dropped.length) toast(plural(res.dropped.length, 'project') + ' no longer shared with you ' + (res.dropped.length === 1 ? 'was' : 'were') + ' removed from this browser');
-        if (gone.length) toast(plural(gone.length, 'project') + ' deleted on GitHub ' + (gone.length === 1 ? 'was' : 'were') + ' removed from this browser');
+        if (res.dropped.length) toast(plural(res.dropped.length, UNIT, UNITS) + ' no longer shared with you ' + (res.dropped.length === 1 ? 'was' : 'were') + ' removed from this browser');
+        if (gone.length) toast(plural(gone.length, UNIT, UNITS) + ' deleted on GitHub ' + (gone.length === 1 ? 'was' : 'were') + ' removed from this browser');
         if (res.errors.length) toast(res.errors[0].message + (res.errors.length > 1 ? ' (+' + (res.errors.length - 1) + ' more)' : ''));
         else toast(res.pushed ? 'Synced — ' + plural(res.pushed, 'change') + ' pushed' : 'Up to date');
         if (syncAgain) { syncAgain = false; sync(); }
@@ -1709,14 +1735,14 @@
       var doc;
       if (M.isLegacy(data)) doc = M.importLegacy(data, me(), TEMPLATES);
       else if (data && data.meta && data.items) doc = data;
-      else { toast('Not a ' + C.product + ' project' + ((C.legacyTabs || []).length ? ' or old checklist export' : '')); return; }
+      else { toast('Not a ' + C.product + ' review' + ((C.legacyTabs || []).length ? ' or old checklist export' : '')); return; }
       var slug = doc.slug || M.slugify(doc.meta.name);
       if (projects[slug] && projects[slug].id !== doc.id) { var n = 2; while (projects[slug + '-' + n]) n++; slug = slug + '-' + n; }
       doc.slug = slug;
       projects[slug] = M.mergeProjects(projects[slug], doc);
       ui.slug = slug; ui.view = 'overview';
       touch(projects[slug]); saveUi(); render();
-      toast(M.isLegacy(data) ? 'Imported from the old checklist' : 'Project imported');
+      toast(M.isLegacy(data) ? 'Imported from the old checklist' : cap(UNIT) + ' imported');
     };
     reader.readAsText(file);
   }
@@ -1822,6 +1848,11 @@
         ui.slug = el.dataset.slug; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; selected = null;
         closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open'); $('#main').scrollTop = 0; break;
       case 'toggle-archived': ui.showArchived = !ui.showArchived; saveUi(); renderSidebar(); break;
+      case 'toggle-group': {
+        var cg = Object.assign({}, ui.closedGroups || {}), gk = el.dataset.group;
+        if (el.getAttribute('aria-expanded') === 'true') cg[gk] = true; else delete cg[gk];
+        ui.closedGroups = cg; saveUi(); renderSidebar(); break;
+      }
       case 'view':
         ui.view = el.dataset.view; ui.query = ''; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
       case 'filter': ui.filter = el.dataset.filter; saveUi(); renderPage(); break;
@@ -1865,11 +1896,11 @@
       case 'req-unlink': { var ru = reqOf(current(), selected); if (ru) setReq(selected, { links: (ru.links || []).filter(function (x) { return x !== id; }) }); break; }
       case 'req-delete': {
         var rd = reqOf(current(), selected);
-        if (rd && confirm('Delete ' + rd.ref + '? Its discussion is kept in the project history.')) { setReq(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); }
+        if (rd && confirm('Delete ' + rd.ref + '? Its discussion is kept in the ' + UNIT + ' history.')) { setReq(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); }
         break;
       }
       case 'delete-custom':
-        if (confirm('Delete this project check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); }
+        if (confirm('Delete this ' + UNIT + ' check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); }
         break;
       case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
@@ -1889,7 +1920,7 @@
       case 'accept-invites': acceptInvitations(); break;
       case 'person-projects': personSheet(el.dataset.login); break;
       case 'person-role':
-        if (el.dataset.login === settings.login && el.dataset.role !== 'fte' && !confirm('Make yourself a contractor? You would stop seeing most projects.')) break;
+        if (el.dataset.login === settings.login && el.dataset.role !== 'fte' && !confirm('Make yourself a contractor? You would stop seeing most ' + UNITS + '.')) break;
         if ((roster.users[el.dataset.login] || {}).role === el.dataset.role) break;
         setPerson(el.dataset.login, { role: el.dataset.role }); renderPage();
         if (el.dataset.role === 'fte') fixAccess(el.dataset.login);
@@ -1914,8 +1945,8 @@
       case 'export-csv': exportCsv(); break;
       case 'nav': toggleSidebar(); break;
       case 'project-menu':
-        menu(el, (isFte() ? [['edit', 'Project details\u2026']] : []).concat([['report', 'Review report'], ['csv', 'Export findings (CSV)'], ['json', 'Export project (JSON)']],
-          isFte() ? ['-', ['import', (C.legacyTabs || []).length ? 'Import project or old checklist\u2026' : 'Import project\u2026'], '-', ['archive', current().meta.archived ? 'Unarchive project' : 'Archive project', true]] : []))
+        menu(el, (isFte() ? [['edit', cap(UNIT) + ' details\u2026']] : []).concat([['report', 'Review report'], ['csv', 'Export findings (CSV)'], ['json', 'Export ' + UNIT + ' (JSON)']],
+          isFte() ? ['-', ['import', (C.legacyTabs || []).length ? 'Import ' + UNIT + ' or old checklist\u2026' : 'Import ' + UNIT + '\u2026'], '-', ['archive', current().meta.archived ? 'Unarchive ' + UNIT : 'Archive ' + UNIT, true]] : []))
           .then(function (choice) {
             if (choice === 'edit') projectSheet(current());
             else if (choice === 'report') openReport();
@@ -1992,7 +2023,7 @@
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {
       var parts = e.target.dataset.add.split('|');
       var id = addCustom(parts[0], parts[1], e.target.value);
-      if (id) { toast('Check added to this project'); var inp = document.querySelector('[data-add="' + parts[0] + '|' + parts[1] + '"]'); if (inp) inp.focus(); }
+      if (id) { toast('Check added to this ' + UNIT); var inp = document.querySelector('[data-add="' + parts[0] + '|' + parts[1] + '"]'); if (inp) inp.focus(); }
     }
   });
   document.addEventListener('focusout', function (e) {
@@ -2031,14 +2062,14 @@
     if (!wantProject) return;
     var slug = Object.keys(projects).filter(function (k) { return projects[k].id === wantProject; })[0];
     if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; wantItem = param('item'); saveUi(); }
-    else if (final) { toast('That project isn’t in this browser. Check that your token reaches its repository.'); wantProject = ''; }
+    else if (final) { toast('That ' + UNIT + ' isn’t in this browser. Check that your token reaches its repository.'); wantProject = ''; }
   }
   // After a render: open the check the link asked for, if this project has it.
   function openWantedItem() {
     var id = wantItem; wantItem = '';
     if (!id || !current()) return;
     if (!itemDef(current(), id).retired) gotoItem(id);
-    else toast('That check isn’t in this project.');
+    else toast('That check isn’t in this ' + UNIT + '.');
   }
   if (!DEMO) noticeToken();
   openWanted(DEMO || !getToken());

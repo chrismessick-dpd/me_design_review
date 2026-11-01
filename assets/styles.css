@@ -157,6 +157,13 @@ body.has-banner .app { height: calc(100dvh - 33px); }
 .proj.active .proj-dirty { background: #fff; }
 .side-empty { color: var(--text-3); font-size: 13px; padding: 12px 10px; }
 .side-archived { margin-top: 10px; }
+.side-group + .side-group { margin-top: 6px; }
+.side-group-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px 4px; border: 0; border-radius: 6px; background: none; color: var(--text-3); font: inherit; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; text-align: left; cursor: pointer; }
+.side-group-head:hover { color: var(--text-2); }
+.side-group-head svg { width: 12px; height: 12px; flex: none; transition: transform 0.15s; }
+.side-group-head[aria-expanded="false"] svg { transform: rotate(-90deg); }
+.side-group-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.side-group-count { font-weight: 500; letter-spacing: 0; }
 
 .side-foot { border-top: 1px solid var(--hair); padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
 .sync-pill {

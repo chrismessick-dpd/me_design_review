@@ -10,7 +10,9 @@
    repos.suite:    other repositories every FTE is invited to, next to this tool's own:
                    the other discipline's tool and data repos, and the hub.
    ids:            prefixes for new project, comment and custom-check IDs.
-   templatePrefixes: checklist id -> required prefix of its section and item IDs. */
+   templatePrefixes: checklist id -> required prefix of its section and item IDs.
+   words.unit(s):  what one review is called on screen (board / part). "Project" is the
+                   client project several reviews belong to (meta.project). */
 window.SIGNOFF_CONFIG = {
   "product": "Signoff ME",
   "discipline": "ME",
@@ -35,6 +37,8 @@ window.SIGNOFF_CONFIG = {
   "defaultStage": "Detailed design",
   "legacyTabs": [],
   "words": {
+    "unit": "part",
+    "units": "parts",
     "thing": "product",
     "general": "General product",
     "profile": "Product profile",
@@ -261,7 +265,8 @@ window.SIGNOFF_CONFIG = {
           "drawings": 0.2
         },
         "fields": {
-          "name": "Smart Thermostat — Enclosure",
+          "name": "Enclosure",
+          "project": "Smart Thermostat",
           "client": "Acme Climate",
           "board": "2100410-001",
           "revision": "B",
@@ -310,7 +315,8 @@ window.SIGNOFF_CONFIG = {
           "drawings": 0.1
         },
         "fields": {
-          "name": "Smart Thermostat — Wall Bracket",
+          "name": "Wall Bracket",
+          "project": "Smart Thermostat",
           "client": "Acme Climate",
           "board": "2100410-020",
           "revision": "A",
