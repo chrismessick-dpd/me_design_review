@@ -128,7 +128,10 @@
       .then(function (repos) {
         return repos.reduce(function (chain, repoFull) {
           return chain.then(function () {
-            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry })
+            // An FTE takes from a shared repo only the projects the shared map puts there, so a
+            // file planted in one contractor's repo can't stand in for another project.
+            var mine = st.dataAccess === 'ok' ? function (id) { return M.sharedRepo(st.roster, id).toLowerCase() === repoFull.toLowerCase(); } : undefined;
+            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry, belongsHere: mine })
               .then(function (res) { absorb(st, res, repoFull); out.pushed += res.pushed; })
               .catch(function (err) {
                 if (denied(err) && st.dataAccess !== 'ok') {
@@ -212,7 +215,11 @@
         function attempt(n) {
           var name = n === 1 ? base : base + '-' + n;
           log('Creating private repository ' + ws.full(name) + '…');
-          return ws.account.createRepo(ws.s.owner, name, isOrg, 'Signoff review: ' + doc.meta.name).then(function () { return ws.full(name); })
+          return ws.account.createRepo(ws.s.owner, name, isOrg, 'Signoff review: ' + doc.meta.name).then(function () {
+            // Contractors get push access; a review repo has no use for GitHub Actions, so a
+            // workflow pushed there can't run. Best effort: the share goes on without it.
+            return ws.account.disableActions(ws.s.owner, name).catch(function () { log('Couldn’t turn off GitHub Actions on ' + ws.full(name) + '; do it in the repo settings.'); });
+          }).then(function () { return ws.full(name); })
             .catch(function (err) {
               if (err.status !== 422 || n >= 9) throw err;
               // The name is taken. Adopt it if an earlier, interrupted share made it.

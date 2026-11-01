@@ -18,6 +18,10 @@
 
   function now() { return new Date().toISOString(); }
 
+  // A value from a fixed list, or the fallback. Review files come from repositories other
+  // people can write to, so a field that picks a CSS class or a label is never used as is.
+  function oneOf(list, value, fallback) { return list.indexOf(value) >= 0 ? value : fallback; }
+
   function uid(prefix) {
     return (prefix || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
@@ -131,7 +135,7 @@
 
   function row(project, id, def, applicable, sectionNA, custom) {
     var st = project.items[id] || {};
-    var explicit = st.status && st.status !== 'open' ? st.status : '';
+    var explicit = st.status && st.status !== 'open' ? oneOf(STATUSES, st.status, '') : '';
     var status;
     if (explicit) status = explicit;
     else if (sectionNA) status = 'na';
@@ -145,7 +149,8 @@
       auto: !explicit && status === 'na' ? (sectionNA ? 'section' : 'profile') : '',
       hidden: !applicable && !st.include && !explicit,
       custom: custom,
-      severity: st.severity || def.severity || 'minor',
+      severity: oneOf(SEVERITIES, st.severity, oneOf(SEVERITIES, def.severity, 'minor')),
+      resolution: oneOf(RESOLUTIONS, st.resolution, ''),
       comments: 0
     };
   }
@@ -159,7 +164,7 @@
       c.total++;
       c[r.status]++;
       if (r.status !== 'open') c.reviewed++;
-      if (r.status === 'issue' && !r.state.resolution) c.issuesOpen++;
+      if (r.status === 'issue' && !r.resolution) c.issuesOpen++;
     });
     c.pct = c.total ? Math.round(100 * c.reviewed / c.total) : 0;
     return c;
@@ -211,7 +216,7 @@
       checklistRows(project, t).forEach(function (g) {
         g.rows.forEach(function (r) {
           if (r.status !== 'issue' || r.auto === 'profile') return;
-          var res = r.state.resolution;
+          var res = r.resolution;
           if (res) { issues[res]++; return; }
           issues.open[r.severity] = (issues.open[r.severity] || 0) + 1;
           var text = String(r.def.text || '');
@@ -360,7 +365,7 @@
       if (project.meta.checklists.indexOf(t.id) < 0) return;
       checklistRows(project, t).forEach(function (g) {
         g.rows.forEach(function (r) {
-          out[r.id] = { id: r.id, status: r.status, text: r.def.text, template: t, section: g.section, custom: r.custom, resolution: (r.state || {}).resolution || '' };
+          out[r.id] = { id: r.id, status: r.status, text: r.def.text, template: t, section: g.section, custom: r.custom, resolution: r.resolution };
         });
       });
     });
@@ -636,7 +641,7 @@
 
   S.model = {
     STATUSES: STATUSES, SEVERITIES: SEVERITIES, RESOLUTIONS: RESOLUTIONS, TAGS: TAGS, STAGES: STAGES,
-    now: now, uid: uid, slugify: slugify, stamp: stamp, tokenTag: tokenTag,
+    now: now, oneOf: oneOf, uid: uid, slugify: slugify, stamp: stamp, tokenTag: tokenTag,
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary,

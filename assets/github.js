@@ -115,6 +115,9 @@
       return (list || []).map(function (i) { return { id: i.id, repo: i.repository && i.repository.full_name, owner: i.repository && i.repository.owner && i.repository.owner.login }; });
     });
   };
+  GitHubAccount.prototype.disableActions = function (owner, repo) {
+    return this.api('/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/actions/permissions', { method: 'PUT', body: { enabled: false } });
+  };
   GitHubAccount.prototype.acceptInvitation = function (id) {
     return this.api('/user/repository_invitations/' + id, { method: 'PATCH' });
   };
@@ -260,7 +263,11 @@
         got[0].forEach(function (f) {
           var id = idOf(f.path, dir);
           if (f.unchanged) { remote[id] = { path: f.path, sha: f.sha, unchanged: true }; return; }
-          try { remote[id] = { doc: JSON.parse(f.text), path: f.path, sha: f.sha }; } catch (e) { /* unreadable project file: leave it alone */ }
+          var doc = null;
+          try { doc = JSON.parse(f.text); } catch (e) { /* unreadable project file: leave it alone */ }
+          // A file holds the project its name says, or it is left alone: a file that claims
+          // another project's id must never merge into that project.
+          if (doc && typeof doc === 'object' && doc.id === id) remote[id] = { doc: doc, path: f.path, sha: f.sha };
         });
 
         // Local copies of projects that now live elsewhere are handed back, never pushed here.

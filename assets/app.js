@@ -135,12 +135,16 @@
   // ── People and access ────────────────────────────────────
   // GitHub decides what each person can open. An FTE's token reaches the data repo; a
   // contractor's reaches only the review-* repos of their projects, so their copy of
-  // Signoff never sees anything else. Without a token everything local is shown. With one,
-  // nothing is until a sync tells who it belongs to: after a token change the browser may
-  // hold another person's copy.
+  // Signoff never sees anything else. Without a token nothing real is shown (copies stay in
+  // the browser until a token comes back or Sign out clears them). With one, nothing is
+  // shown until a sync tells who it belongs to: after a token change the browser may hold
+  // another person's copy.
+  function signedOut() { return !DEMO && !getToken(); }
   function checking() { return !DEMO && !!getToken() && !dataAccess; }
   function myRole() {
-    if (DEMO || dataAccess === 'ok' || (!getToken() && dataAccess !== 'none')) return 'fte';
+    if (DEMO) return 'fte';
+    if (signedOut()) return 'signedout';
+    if (dataAccess === 'ok') return 'fte';
     return checking() ? 'checking' : 'contractor';
   }
   function isFte() { return myRole() === 'fte'; }
@@ -157,8 +161,8 @@
     invitations = []; save('invitations', invitations);
     return true;
   }
-  function visible() { return !checking(); }
-  function visibleProjects() { return checking() ? [] : Object.keys(projects).map(function (k) { return projects[k]; }); }
+  function visible() { return !checking() && !signedOut(); }
+  function visibleProjects() { return visible() ? Object.keys(projects).map(function (k) { return projects[k]; }) : []; }
   function workspace() { return new S.Workspace(settings, getToken(), undefined, function (doc) { return M.projectSummary(doc, TEMPLATES); }); }
   function homeOf(p) { return M.sharedRepo(roster, p.id) || homes[p.id] || settings.owner + '/' + settings.dataRepo; }
   function touchRoster() { dirty.roster = M.now(); persist(); renderSyncState(); renderToolbar(); }
@@ -328,7 +332,7 @@
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
         (dirty[p.id] ? '<span class="proj-dirty" title="Not synced yet"></span>' : '') + '</button>';
     }
-    var html = active.map(row).join('') || '<div class="side-empty">' + (q ? 'No matching projects.' : checking() ? 'Checking access…' : myRole() === 'fte' ? 'No projects yet.' : 'No projects shared with you yet.') + '</div>';
+    var html = active.map(row).join('') || '<div class="side-empty">' + (q ? 'No matching projects.' : signedOut() ? 'Sign in to see your reviews.' : checking() ? 'Checking access…' : myRole() === 'fte' ? 'No projects yet.' : 'No projects shared with you yet.') + '</div>';
     if (archived.length) {
       html += '<div class="side-archived"><div class="side-head"><span class="side-label">Archived</span><button class="btn-plain btn" style="padding:2px 6px;font-size:12px" data-act="toggle-archived">' + (ui.showArchived ? 'Hide' : 'Show ' + archived.length) + '</button></div>' +
         (ui.showArchived ? archived.map(row).join('') : '') + '</div>';
@@ -429,6 +433,11 @@
   }
 
   function emptyPage() {
+    if (signedOut()) {
+      return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
+        '<h2>Sign in with GitHub</h2><p>Reviews live in private GitHub repositories. Add your GitHub token in Settings to see the projects shared with you, or explore the demo.</p>' +
+        '<button class="btn btn-primary" data-act="settings">Set up GitHub</button> <a class="btn" href="' + esc(location.pathname) + '?demo">Open the demo</a></div></div>';
+    }
     if (checking()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
         '<h2>Checking who’s signed in</h2><p>Your projects show once a sync confirms which projects this GitHub token can open.</p>' +
@@ -576,7 +585,7 @@
     var sub = '';
     if (r.severity !== 'minor' || r.status === 'issue') sub += '<span class="sev ' + r.severity + '">' + r.severity[0].toUpperCase() + r.severity.slice(1) + '</span>';
     if (r.status === 'issue') {
-      var res = r.state.resolution;
+      var res = r.resolution;
       sub += '<span class="res ' + (res || 'open') + '">' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open') + '</span>';
       if (r.state.assignee) sub += '<span>→ ' + esc(r.state.assignee) + '</span>';
     }
@@ -604,21 +613,21 @@
     var rank = { critical: 0, major: 1, minor: 2 };
     var resRank = { '': 0, fixed: 1, waived: 2 };
     return out.sort(function (a, b) {
-      return (resRank[a.row.state.resolution || ''] - resRank[b.row.state.resolution || '']) || (rank[a.row.severity] - rank[b.row.severity]);
+      return (resRank[a.row.resolution] - resRank[b.row.resolution]) || (rank[a.row.severity] - rank[b.row.severity]);
     });
   }
 
   function findingsPage(p) {
     var f = allFindings(p);
     var counts = commentCounts(p);
-    var open = f.filter(function (x) { return !x.row.state.resolution; }).length;
+    var open = f.filter(function (x) { return !x.row.resolution; }).length;
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Findings</h1>' +
       '<div class="page-sub"><span>' + plural(f.length, 'issue') + '</span><span class="sep">·</span><span>' + open + ' open</span></div></div>' +
       '<button class="btn" data-act="export-csv">Export CSV</button></div>';
     if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner and resolution.</p></div></div>';
     html += '<div class="card" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
       f.map(function (x) {
-        var r = x.row, res = r.state.resolution;
+        var r = x.row, res = r.resolution;
         var last = M.liveComments(p, r.id).slice(-1)[0];
         return '<tr data-act="goto-item" data-id="' + esc(r.id) + '"><td><span class="sev ' + r.severity + '">' + r.severity[0].toUpperCase() + r.severity.slice(1) + '</span></td>' +
           '<td>' + esc(r.def.text) + '<div class="muted">' + esc(x.template.short + ' › ' + x.section.title) + '</div>' + (last ? '<div class="muted" style="margin-top:4px">“' + esc(last.text.slice(0, 140)) + (last.text.length > 140 ? '…' : '') + '” — ' + esc(last.author) + '</div>' : '') + '</td>' +
@@ -701,8 +710,8 @@
     if (d.template) {
       M.checklistRows(p, d.template).forEach(function (g) { g.rows.forEach(function (r) { if (r.id === selected) row = r; }); });
     }
-    var status = row ? row.status : (st.status || 'open');
-    var sev = st.severity || d.def.severity || 'minor';
+    var status = row ? row.status : M.oneOf(M.STATUSES, st.status, 'open');
+    var sev = M.oneOf(M.SEVERITIES, st.severity, M.oneOf(M.SEVERITIES, d.def.severity, 'minor'));
     var comments = M.liveComments(p, selected);
     var draft = el.querySelector('#comment-input');
     var draftText = draft ? draft.value : '';
@@ -1152,7 +1161,7 @@
         '<div class="field"><label for="s-prefix">Shared project repos start with</label><input class="input" id="s-prefix" value="' + esc(settings.prefix) + '"></div>' +
         (settings.suiteRepos.length ? '<p class="note">FTEs are also invited to the rest of the suite: ' + settings.suiteRepos.map(esc).join(', ') + ' (set in assets/config.js).</p>' : '') + '</details>' +
         '<div class="log" id="s-log" hidden></div>') +
-      '</div><div class="sheet-foot">' + (DEMO ? '' : '<button class="btn" data-sheet="test">Test connection</button>') + '<span class="spacer"></span>' +
+      '</div><div class="sheet-foot">' + (DEMO ? '' : '<button class="btn" data-sheet="test">Test connection</button><button class="btn" data-sheet="signout" title="Remove the token and every Signoff and Fabcheck copy kept in this browser">Sign out</button>') + '<span class="spacer"></span>' +
       '<button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">' + (DEMO ? 'Done' : 'Save & sync') + '</button></div>');
 
     var theme = settings.theme;
@@ -1172,6 +1181,7 @@
       var b = e.target.closest('[data-sheet]');
       if (!b) return;
       if (b.dataset.sheet === 'cancel') { applyTheme(settings.theme); return closeSheet(); }
+      if (b.dataset.sheet === 'signout') return signOut();
       var s = read();
       var tok = DEMO ? '' : cleanToken(w.querySelector('#s-token').value);
       if (b.dataset.sheet === 'test') {
@@ -1199,6 +1209,31 @@
       closeSheet(); render();
       if (!DEMO && tok) sync();
     });
+  }
+
+  // Sign out of this browser: the token goes, and so does every copy the suite keeps here
+  // (Signoff EE, ME and PL working copies, Fabcheck's runs and packages). Only the theme stays.
+  // Unsynced changes would be lost, so they're counted and named first.
+  var SUITE_NS = ['signoff.v1.', 'signoff-me.v1.', 'signoff-pl.v1.', 'fabcheck.v1.'];
+  function signOut() {
+    var unsynced = 0;
+    SUITE_NS.forEach(function (ns) {
+      try { unsynced += Object.keys(JSON.parse(localStorage.getItem(ns + 'dirty') || '{}') || {}).length; } catch (e) { /* unreadable: nothing counted */ }
+    });
+    try { unsynced += Object.keys((JSON.parse(localStorage.getItem('signoff.v1.held') || '{}') || {}).projects || {}).length; } catch (e) { /* ignore */ }
+    var ask = 'Sign out of this browser? This removes your GitHub token and every Signoff and Fabcheck copy kept here. Your reviews stay on GitHub.';
+    if (unsynced) ask = plural(unsynced, 'project or list has', 'projects or lists have') + ' changes that aren’t on GitHub yet and would be lost. Sync first unless you mean to throw them away.\n\n' + ask;
+    if (!confirm(ask)) return;
+    var theme = settings.theme;
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      Object.keys(localStorage).forEach(function (k) {
+        if (k === TOKEN_KEY || SUITE_NS.some(function (ns) { return k.indexOf(ns) === 0; })) localStorage.removeItem(k);
+      });
+    } catch (e) { /* storage blocked */ }
+    try { indexedDB.deleteDatabase('fabcheck'); } catch (e) { /* no IndexedDB */ }
+    saveSharedTheme(theme);
+    location.reload();
   }
 
   // A sheet that shows the steps of a multi-step GitHub operation.
@@ -1617,7 +1652,7 @@
       (st.outside ? '<p class="r-cmt">' + plural(st.outside, 'further check') + ' did not apply to this ' + W.thing + '’s profile (' + esc((m.profile || []).join(', ') || W.general.toLowerCase()) + ') and ' + (st.outside === 1 ? 'is' : 'are') + ' not counted.</p>' : '') +
       '<h2>Findings</h2>' + (f.length ? '<table><thead><tr><th>#</th><th>Severity</th><th>Finding</th><th>Owner</th><th>Status</th></tr></thead><tbody>' +
         f.map(function (x, i) {
-          var r = x.row, res = r.state.resolution;
+          var r = x.row, res = r.resolution;
           var cm = M.liveComments(p, r.id);
           return '<tr><td>' + (i + 1) + '</td><td><span class="sev ' + r.severity + '">' + r.severity[0].toUpperCase() + r.severity.slice(1) + '</span></td><td><b style="font-weight:500">' + esc(r.def.text) + '</b><div class="r-cmt">' + esc(x.template.short + ' › ' + x.section.title) + (r.state.ref ? ' · ' + esc(r.state.ref) : '') + '</div>' +
             cm.map(function (c) { return '<div class="r-cmt">' + esc(c.author) + ' (' + fmtDate(c.at) + '): ' + esc(c.text) + '</div>'; }).join('') + '</td>' +
@@ -1635,7 +1670,7 @@
     allFindings(p).forEach(function (x) {
       var r = x.row;
       rows.push([r.severity, x.template.title, x.section.title, r.def.text, r.state.ref || '', r.state.assignee || '',
-        r.state.resolution || 'open', M.liveComments(p, r.id).map(function (c) { return c.author + ': ' + c.text; }).join(' | ')]);
+        r.resolution || 'open', M.liveComments(p, r.id).map(function (c) { return c.author + ': ' + c.text; }).join(' | ')]);
     });
     download(p.slug + '-findings.csv', rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n'), 'text/csv');
   }
