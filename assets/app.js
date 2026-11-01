@@ -179,7 +179,12 @@
   function assignedContractors(projectId) {
     return M.liveUsers(roster).filter(function (u) { return u.role === 'contractor' && (u.projects || []).indexOf(projectId) >= 0; });
   }
-  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', closedGroups: ui.closedGroups || {} }); }
+  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', closedGroups: ui.closedGroups || {}, home: !!ui.home }); }
+  // Close the open review and show the home screen; it stays there on reload (ui.home).
+  function goHome() {
+    ui.slug = ''; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = true; selected = null;
+    closeInspector(); saveUi(); render(); $('#main').scrollTop = 0;
+  }
   // The sidebar slides over the page on narrow windows; on wide ones it collapses away and
   // stays that way until opened again.
   var narrow = window.matchMedia ? window.matchMedia('(max-width: 860px)') : { matches: false };
@@ -335,13 +340,16 @@
         '<span class="proj-sub">' + esc([p.meta.board, p.meta.revision && 'Rev ' + p.meta.revision].filter(Boolean).join(' · ') || p.meta.stage) + '</span></span>' +
         (dirty[p.id] ? '<span class="proj-dirty" title="Not synced yet"></span>' : '') + '</button>';
     }
-    // Grouped by client project once any review has one; a group can be folded, but never the
-    // one holding the open review, and a search shows every match.
+    // Grouped by client project once any review has one; a group can be folded, and folding the
+    // one holding the open review closes it (home). Opening a review unfolds its group, and a
+    // search shows every match.
     var groups = M.projectGroups(active), closed = ui.closedGroups || {};
-    var html = groups.length > 1 || (groups[0] && groups[0].name) ? groups.map(function (g) {
+    var grouped = groups.length > 1 || !!(groups[0] && groups[0].name);
+    var html = grouped ? groups.map(function (g) {
       var key = g.name.toLowerCase();
-      var open = !closed[key] || !!q || g.docs.some(function (p) { return keyOf.get(p) === ui.slug; });
-      return '<div class="side-group"><button class="side-group-head" data-act="toggle-group" data-group="' + esc(key) + '" aria-expanded="' + open + '">' +
+      var holds = g.docs.some(function (p) { return keyOf.get(p) === ui.slug; });
+      var open = !closed[key] || !!q || holds;
+      return '<div class="side-group"><button class="side-group-head" data-act="toggle-group" data-group="' + esc(key) + '"' + (holds ? ' data-holds-open' : '') + ' aria-expanded="' + open + '">' +
         '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
         '<span class="side-group-name">' + esc(g.name || 'No project') + '</span><span class="side-group-count">' + g.docs.length + '</span></button>' +
         (open ? g.docs.map(row).join('') : '') + '</div>';
@@ -356,7 +364,23 @@
         invitations.map(function (i) { return esc(String(i.repo).split('/')[1]); }).join(', ') + '</span><button class="btn btn-primary" data-act="accept-invites">Accept</button></div>' + html;
     }
     $('#project-list').innerHTML = html;
-    $('[data-act="new-project"]').hidden = !isFte();
+    var newBtn = $('[data-act="new-project"]');
+    newBtn.hidden = !isFte();
+    // Fold or unfold every project group; the button sits in the Boards header beside New.
+    var foldBtn = $('[data-act="fold-groups"]');
+    if (!foldBtn && newBtn.parentNode) {
+      foldBtn = document.createElement('button');
+      foldBtn.className = 'icon-btn side-fold'; foldBtn.dataset.act = 'fold-groups';
+      newBtn.parentNode.insertBefore(foldBtn, newBtn);
+    }
+    if (foldBtn) {
+      var allClosed = grouped && groups.every(function (g) { return closed[g.name.toLowerCase()]; });
+      var foldTip = (allClosed ? 'Expand' : 'Collapse') + ' all projects';
+      foldBtn.hidden = !grouped || !!q;
+      foldBtn.title = foldTip; foldBtn.setAttribute('aria-label', foldTip);
+      foldBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+        (allClosed ? '<path d="M5 6l3-3 3 3M5 10l3 3 3-3"/>' : '<path d="M5 3l3 3 3-3M5 13l3-3 3 3"/>') + '</svg>';
+    }
     var people = $('#people-link');
     people.hidden = DEMO || !isFte();
     // Links to the rest of the suite (hub, the other Signoff tool, Fabcheck) show for everyone:
@@ -1847,13 +1871,24 @@
       case 'people': ui.page = 'people'; selected = null; closeInspector(); renderSidebar(); renderPage(); $('#app').classList.remove('nav-open'); break;
       case 'edit-project': projectSheet(current()); break;
       case 'open-project':
-        ui.slug = el.dataset.slug; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; selected = null;
+        ui.slug = el.dataset.slug; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = false; selected = null;
         closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open'); $('#main').scrollTop = 0; break;
       case 'toggle-archived': ui.showArchived = !ui.showArchived; saveUi(); renderSidebar(); break;
       case 'toggle-group': {
         var cg = Object.assign({}, ui.closedGroups || {}), gk = el.dataset.group;
         if (el.getAttribute('aria-expanded') === 'true') cg[gk] = true; else delete cg[gk];
-        ui.closedGroups = cg; saveUi(); renderSidebar(); break;
+        ui.closedGroups = cg;
+        if (cg[gk] && el.hasAttribute('data-holds-open')) goHome(); else { saveUi(); renderSidebar(); }
+        break;
+      }
+      case 'fold-groups': {
+        var gs = M.projectGroups(visibleProjects().filter(function (p) { return !p.meta.archived; }));
+        var shut = Object.assign({}, ui.closedGroups || {});
+        var unfold = gs.every(function (g) { return shut[g.name.toLowerCase()]; });
+        gs.forEach(function (g) { if (unfold) delete shut[g.name.toLowerCase()]; else shut[g.name.toLowerCase()] = true; });
+        ui.closedGroups = shut;
+        if (unfold) { saveUi(); renderSidebar(); } else goHome();
+        break;
       }
       case 'view':
         ui.view = el.dataset.view; ui.query = ''; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
@@ -2075,7 +2110,7 @@
   }
   if (!DEMO) noticeToken();
   openWanted(DEMO || !getToken());
-  if (!projects[ui.slug]) ui.slug = Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
+  if (!projects[ui.slug] && !(ui.home && !ui.slug)) ui.slug =Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
   openWantedItem();
   if (!settings.user) settingsSheet();   // first opening, the demo included: ask for a name
