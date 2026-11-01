@@ -689,7 +689,8 @@
   function fabcheckBlock(p, def) {
     if (!isFabcheck(def)) return '';
     var src = def.source, run = src.run || null, locs = src.locations || [];
-    var canOpen = !DEMO && isFte() && run && run.id;
+    // Anyone with access to the board's repo can open a stored run (contractors too).
+    var canOpen = !DEMO && run && run.id;
     var stored = run && run.stored && run.stored.repo;
     var h = '<div class="fab-card"><div class="fab-head"><b>From Fabcheck</b>' +
       (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';
@@ -697,7 +698,8 @@
       h += '<div class="fab-meta">' + esc(run.package && run.package.name || 'Package') +
         (run.package && run.package.key ? ' <span class="muted">· ' + esc(run.package.key.slice(0, 8)) + '</span>' : '') + '<br>' +
         esc([fmtDate(run.at), run.by, run.settings && run.settings.profile && run.settings.profile + ' profile'].filter(Boolean).join(' · ')) + '<br>' +
-        (stored ? 'Package and results saved with the ' + UNIT : 'Run kept on ' + esc(run.by || 'the sender') + '’s computer only; others can drop the same package into Fabcheck to see it') + '</div>';
+        (stored ? 'Package and results stored in this ' + UNIT + '’s private repository'
+          : 'Not stored with the ' + UNIT + ': ' + esc(run.by || 'the sender') + ' can store it from Fabcheck (Recent runs, Store in project), or anyone can drop the same package into Fabcheck to see it') + '</div>';
     } else {
       h += '<div class="fab-meta">Sent before Fabcheck kept runs. Run Fabcheck on the package again and send it to link this check to the board.</div>';
     }
