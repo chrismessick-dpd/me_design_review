@@ -463,7 +463,7 @@
     ui.page = '';
     if (!p) { page.innerHTML = emptyPage(); renderToolbar(); return; }
     renderToolbar();
-    if (ui.view === 'overview') page.innerHTML = overviewPage(p);
+    if (ui.view === 'overview') { page.innerHTML = overviewPage(p); loadPicture(p); }
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
@@ -521,7 +521,8 @@
       '<div class="chips" style="margin-top:14px">' + (profile || '<span class="chip">' + esc(W.general) + '</span>') +
       (isFte() ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="edit-project">Edit profile</button>' : '') + '</div>' +
       (!DEMO && isFte() ? '<p class="note" style="margin-top:10px">' + (M.sharedRepo(roster, p.id) ? 'Shared through ' + esc(M.sharedRepo(roster, p.id)) + (assignedContractors(p.id).length ? ' with ' + assignedContractors(p.id).map(function (u) { return esc(u.name || u.login); }).join(', ') : '') : 'Internal \u2014 FTEs only') + '</p>' : '') + '</div>' +
-      ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + '</div>' +
+      '<div class="head-visual"><div class="head-pic" data-pic="' + esc(p.id) + '">' + picHtml(p) + '</div>' +
+      ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + '</div></div>' +
       '<div class="grid grid-4">' +
       stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue') +
       stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
@@ -693,6 +694,63 @@
     var d = itemDef(current(), id);
     if (d.template) { ui.view = d.template.id; ui.filter = 'all'; ui.query = ''; collapsed[(d.section || {}).id] = false; showHidden[(d.section || {}).id] = true; saveUi(); renderPage(); }
     select(id, true);
+  }
+
+  // ── Picture beside the progress ring (docs/fabcheck-link.md, "Board previews") ──
+  // The pictures a checker stored with the latest run, read from the project's home repo once
+  // per page load. A tool sets config.previews.dir (Fabcheck's folder for Signoff EE); without
+  // it, or without a stored picture, the header shows the ring alone.
+  var pics = {};   // project id -> { state: 'loading' | 'none' | 'ok', images: [{ key, url }], hero, runId }
+  var PIC_TYPES = { 'image/webp': 1, 'image/png': 1 };
+  function picDir(p) {
+    var home = homeOf(p), isData = home.toLowerCase() === (settings.owner + '/' + settings.dataRepo).toLowerCase();
+    return (isData && settings.dataPath ? settings.dataPath.replace(/\/+$/, '') + '/' : '') + C.previews.dir + p.id + '/preview/';
+  }
+  function loadPicture(p) {
+    if (!C.previews || pics[p.id]) return;
+    if (DEMO) {
+      var keys = ((C.demo || {}).pictures || {})[p.id];
+      pics[p.id] = keys ? { state: 'ok', hero: keys[0], runId: '', images: keys.map(function (k) { return { key: k, url: 'assets/demo-previews/' + p.id + '-' + k + '.svg' }; }) } : { state: 'none' };
+      return showPicture(p);
+    }
+    if (!getToken()) return;
+    pics[p.id] = { state: 'loading' };
+    var store = workspace().store(homeOf(p)), dir = picDir(p);
+    store.listTree(dir).then(function (entries) {
+      var sha = {};
+      entries.forEach(function (e) { sha[e.path] = e.sha; });
+      if (!sha[dir + 'index.json']) return null;
+      return store.blobBytes(sha[dir + 'index.json']).then(function (bytes) {
+        var doc = JSON.parse(new TextDecoder().decode(bytes)) || {};
+        // Stored by a tool contractors can run, so only known names and types are used.
+        var want = (Array.isArray(doc.images) ? doc.images : []).filter(function (i) {
+          return i && /^[a-z0-9-]{1,32}$/.test(i.key) && /^[a-z0-9-]{1,32}\.(webp|png)$/.test(i.file) && PIC_TYPES[i.type] && sha[dir + i.file];
+        });
+        return Promise.all(want.map(function (i) {
+          return store.blobBytes(sha[dir + i.file]).then(function (b) { return { key: i.key, url: URL.createObjectURL(new Blob([b], { type: i.type })) }; });
+        })).then(function (images) {
+          if (!images.length) return null;
+          return { state: 'ok', images: images, hero: images.some(function (x) { return x.key === doc.hero; }) ? doc.hero : images[0].key,
+            runId: /^[A-Za-z0-9_-]{1,64}$/.test(doc.runId || '') ? doc.runId : '' };
+        });
+      });
+    }).then(function (got) { pics[p.id] = got || { state: 'none' }; showPicture(p); }, function () { pics[p.id] = { state: 'none' }; });
+  }
+  function showPicture(p) {
+    var box = document.querySelector('.head-pic[data-pic="' + p.id + '"]');
+    if (box) box.innerHTML = picHtml(p);
+  }
+  function picHtml(p) {
+    var pc = pics[p.id];
+    if (!pc || pc.state !== 'ok') return '';
+    var key = pc.images.some(function (i) { return i.key === ui.picSide; }) ? ui.picSide : pc.hero;
+    var img = pc.images.filter(function (i) { return i.key === key; })[0];
+    var pic = '<img alt="' + esc(p.meta.name + ', ' + key) + '" src="' + esc(img.url) + '">';
+    return (pc.runId ? '<button class="head-pic-img" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, { run: { id: pc.runId } })) + '" title="Open the latest stored run in Fabcheck">' + pic + '</button>'
+      : '<span class="head-pic-img">' + pic + '</span>') +
+      (pc.images.length > 1 ? '<div class="seg">' + pc.images.map(function (i) {
+        return '<button class="' + (i.key === key ? 'on' : '') + '" data-act="pic-side" data-key="' + esc(i.key) + '">' + esc(i.key.charAt(0).toUpperCase() + i.key.slice(1)) + '</button>';
+      }).join('') + '</div>' : '');
   }
 
   // ── Fabcheck runs (docs/fabcheck-link.md) ────────────────
@@ -1941,6 +1999,7 @@
         break;
       case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
+      case 'pic-side': { ui.picSide = el.dataset.key; var pp = current(); if (pp) showPicture(pp); break; }
       case 'open-fabcheck': { var w = window.open(el.dataset.href, 'dovetail-fabcheck'); if (w) w.focus(); break; }
       case 'sync': if (!DEMO && lastError && el.id === 'sync-pill' && !syncing) toast(lastError); sync(); break;
       case 'settings': settingsSheet(); break;
