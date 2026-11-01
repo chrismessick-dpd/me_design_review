@@ -61,13 +61,20 @@
   function denied(err) { return err && (err.status === 404 || err.status === 403); }
 
   /* Sync everything this person can reach. Resolves { state, errors, invitations, templates,
-     version, pushed, dropped }. A repository that fails is reported and skipped; the others
-     still sync. Local work is only dropped when GitHub says a contractor lost access. */
+     version, pushed, dropped, gone }. A repository that fails is reported and skipped; the
+     others still sync. Local copies are dropped when GitHub says a contractor lost access
+     (`dropped`), and when a project this browser synced before no longer exists (`gone`):
+     its file was deleted, or its repo left the shared map. opts.keepLocal(id) marks copies
+     with unsynced edits; those are never dropped as gone, they're pushed back instead. */
   Workspace.prototype.sync = function (state0, opts) {
-    var ws = this, st = copyState(state0), errors = [], out = { pushed: 0, dropped: [], templates: null, version: null };
+    var ws = this, st = copyState(state0), errors = [], out = { pushed: 0, dropped: [], gone: [], templates: null, version: null };
     opts = opts || {};
     var msg = opts.message;
     var dataFull = ws.dataFull();
+    var keep = opts.keepLocal || function () { return false; };
+    function forget(ids) {
+      ids.forEach(function (id) { delete st.projects[id]; delete st.homes[id]; if (out.gone.indexOf(id) < 0) out.gone.push(id); });
+    }
 
     return (st.login ? Promise.resolve() : ws.account.user().then(function (u) { st.login = u.login.toLowerCase(); out.userName = u.name || u.login; }))
       .then(function () {
@@ -75,14 +82,23 @@
         var mine = subset(st, ws, dataFull);
         return ws.dataStore().sync(mine, st.roster, st.cache[dataFull], {
           roster: true, deleteStrays: true, message: msg, onRetry: opts.onRetry,
+          dropGone: true, keepLocal: keep,
           belongsHere: function (id, r) { return !M.sharedRepo(r, id); }
         }).then(function (res) {
           st.dataAccess = 'ok';
           st.roster = res.roster;
           absorb(st, res, dataFull);
+          forget(res.gone || []);
           // Projects shared since we last synced now live in their own repo; keep the local
           // copy (with any unsynced edits) and let step 3 merge it there.
           res.moved.forEach(function (id) { st.homes[id] = M.sharedRepo(st.roster, id); });
+          // A copy that last synced from a shared repo the shared map no longer lists (the
+          // project was removed and its repo deleted) has nowhere to sync to: it goes too.
+          forget(Object.keys(st.projects).filter(function (id) {
+            var h = st.homes[id];
+            if (!h || h === dataFull || M.sharedRepo(st.roster, id) || keep(id)) return false;
+            return !!(st.cache[h] || {})['projects/' + id + '.json'];
+          }));
           out.pushed += res.pushed;
         }).catch(function (err) {
           if (!denied(err)) throw err;
@@ -131,8 +147,8 @@
             // An FTE takes from a shared repo only the projects the shared map puts there, so a
             // file planted in one contractor's repo can't stand in for another project.
             var mine = st.dataAccess === 'ok' ? function (id) { return M.sharedRepo(st.roster, id).toLowerCase() === repoFull.toLowerCase(); } : undefined;
-            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry, belongsHere: mine })
-              .then(function (res) { absorb(st, res, repoFull); out.pushed += res.pushed; })
+            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry, belongsHere: mine, dropGone: true, keepLocal: keep })
+              .then(function (res) { absorb(st, res, repoFull); forget(res.gone || []); out.pushed += res.pushed; })
               .catch(function (err) {
                 if (denied(err) && st.dataAccess !== 'ok') {
                   Object.keys(subset(st, ws, repoFull)).forEach(function (id) { out.dropped.push(id); delete st.projects[id]; delete st.homes[id]; });
@@ -149,7 +165,16 @@
           out.invitations = inv.filter(function (i) { return i.owner && i.owner.toLowerCase() === ws.s.owner.toLowerCase(); });
         }).catch(function () { out.invitations = []; });
       })
-      .then(function () { out.state = st; out.errors = errors; return out; });
+      .then(function () {
+        // Forget what was cached about repos nothing here uses any more (a deleted project's
+        // repo, one this person lost access to), so no trace of those projects stays behind.
+        var used = {};
+        used[dataFull] = 1; used[ws.toolFull()] = 1;
+        Object.keys(st.homes).forEach(function (id) { used[st.homes[id]] = 1; });
+        Object.keys((st.roster && st.roster.shared) || {}).forEach(function (id) { var r = M.sharedRepo(st.roster, id); if (r) used[r] = 1; });
+        Object.keys(st.cache).forEach(function (r) { if (!used[r]) delete st.cache[r]; });
+        out.state = st; out.errors = errors; return out;
+      });
   };
 
   /* Throw away unsynced local changes: fetch what GitHub has now for each project in `ids`

@@ -179,7 +179,9 @@
                                    (model.withSummary); without it the stored one is kept.
      cfg.merge(local, remote):     merges two copies of a document; default model.mergeProjects.
                                    Tools whose documents aren't reviews (Signoff PL) pass their own.
-     Resolves { projects, roster, moved, cache, templates, version, pushed, commitUrl };
+     opts.dropGone, opts.keepLocal(id): see `gone` below.
+     Resolves { projects, roster, moved, gone, cache, templates, version, pushed, commitUrl };
+     gone: local copies of projects deleted here since the last sync (with opts.dropGone).
      templates is null when they haven't changed since the last sync. */
   GitHubStore.prototype.sync = function (local, roster, cache, opts) {
     var self = this;
@@ -272,8 +274,17 @@
 
         // Local copies of projects that now live elsewhere are handed back, never pushed here.
         var moved = Object.keys(local).filter(function (id) { return !belongsHere(id, mergedRoster); });
+        // With opts.dropGone, a local copy whose file the last sync saw here but which is gone
+        // now was deleted on GitHub: it comes back in `gone` instead of being pushed again,
+        // unless opts.keepLocal(id) says it has unsynced edits.
+        var present = {};
+        projectEntries.forEach(function (e) { present[e.path] = 1; });
+        var gone = Object.keys(local).filter(function (id) {
+          var p = dir + id + '.json';
+          return opts.dropGone && moved.indexOf(id) < 0 && !present[p] && cache[p] && !(opts.keepLocal && opts.keepLocal(id));
+        });
         var merged = {}, candidates = [];
-        var ids = Object.keys(remote).concat(Object.keys(local).filter(function (id) { return !remote[id] && moved.indexOf(id) < 0; }));
+        var ids = Object.keys(remote).concat(Object.keys(local).filter(function (id) { return !remote[id] && moved.indexOf(id) < 0 && gone.indexOf(id) < 0; }));
         ids.forEach(function (id) {
           var r = remote[id];
           var doc = r && r.unchanged ? local[id] : merge(local[id], r && r.doc);
@@ -294,7 +305,7 @@
           if (opts.deleteStrays) {
             strays.forEach(function (e) { changes.push({ path: e.path, remove: true, label: 'move ' + idOf(e.path, dir) }); });
           }
-          var result = { projects: merged, roster: mergedRoster, moved: moved, cache: nextCache, templates: templates, version: version, pushed: 0 };
+          var result = { projects: merged, roster: mergedRoster, moved: moved, gone: gone, cache: nextCache, templates: templates, version: version, pushed: 0 };
           if (!changes.length || opts.pullOnly) return result;
           return self.commit(snap, changes, opts.message).then(function (commit) {
             changes.forEach(function (c) {

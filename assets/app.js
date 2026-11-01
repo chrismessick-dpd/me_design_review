@@ -1283,7 +1283,13 @@
       (a.invited.indexOf(u.login) >= 0 ? pending : missing).push(r);
     });
     var unshared = u.role === 'contractor' ? (u.projects || []).filter(function (id) { return !M.sharedRepo(roster, id); }) : [];
-    return { want: want, missing: missing, pending: pending, unknown: unknown, unshared: unshared };
+    // A contractor still on (or invited to) a repo they aren't meant to be on, e.g. after
+    // being taken off a project when the access change didn't go through.
+    var extra = u.role === 'contractor' ? Object.keys(accessMap).filter(function (r) {
+      var a = accessMap[r];
+      return a && !a.error && want.indexOf(r) < 0 && (a.collaborators.indexOf(u.login) >= 0 || a.invited.indexOf(u.login) >= 0);
+    }) : [];
+    return { want: want, missing: missing, pending: pending, unknown: unknown, unshared: unshared, extra: extra };
   }
 
   function accessCell(u) {
@@ -1298,6 +1304,10 @@
       parts.push('<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="fix-access" data-login="' + esc(u.login) + '">Give access</button>');
     }
     if (g.pending.length) parts.push('<span class="res waived">Invite pending' + (g.pending.length > 1 ? ' ×' + g.pending.length : '') + '</span>');
+    if (g.extra.length) {
+      parts.push('<span class="res open">Still on ' + g.extra.map(repoName).map(esc).join(', ') + '</span>');
+      parts.push('<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="trim-access" data-login="' + esc(u.login) + '">Remove access</button>');
+    }
     if (!parts.length) parts.push('<span class="res fixed">' + (u.role === 'fte' ? 'All repos' : g.want.length ? 'Has access' : 'No projects') + '</span>');
     return parts.join(' ');
   }
@@ -1398,12 +1408,19 @@
     if (!getToken() || !isFte()) { toast('Saved. Access is applied when someone with GitHub admin rights syncs.'); return; }
     var byId = stateNow().projects;
     var toShare = added.filter(function (id) { return !M.sharedRepo(roster, id); });
-    var lines = [];
-    if (toShare.length) lines.push('Move ' + toShare.map(function (id) { return byId[id] ? byId[id].meta.name : id; }).join(', ') + ' into ' + (toShare.length === 1 ? 'its own private repository' : 'their own private repositories'));
-    if (added.length) lines.push('Invite ' + login + ' to ' + plural(added.length, 'project'));
-    if (removed.length) lines.push('Remove ' + login + ' from ' + plural(removed.length, 'project'));
-    if (!confirm(lines.join('\n') + '\n\nGitHub emails the invitations. Go ahead?')) { toast('Saved in People. Use “Give access” when you’re ready.'); return; }
-    runAccessOps('Updating access for ' + login, [{ login: login, share: toShare, invite: added.filter(function (id) { return toShare.indexOf(id) < 0; }), revoke: removed }]);
+    // Taking someone off a project always takes away their GitHub access, so their copy goes
+    // at their next sync. Only sharing and inviting (which email people) ask first.
+    var op = { login: login, revoke: removed };
+    if (added.length) {
+      var lines = [];
+      if (toShare.length) lines.push('Move ' + toShare.map(function (id) { return byId[id] ? byId[id].meta.name : id; }).join(', ') + ' into ' + (toShare.length === 1 ? 'its own private repository' : 'their own private repositories'));
+      lines.push('Invite ' + login + ' to ' + plural(added.length, 'project'));
+      if (confirm(lines.join('\n') + '\n\nGitHub emails the invitations. Go ahead?')) {
+        op.share = toShare; op.invite = added.filter(function (id) { return toShare.indexOf(id) < 0; });
+      } else if (!removed.length) { toast('Saved in People. Use “Give access” when you’re ready.'); return; }
+      else toast('Saved in People. The invitations wait for “Give access”.');
+    }
+    runAccessOps('Updating access for ' + login, [op]);
   }
 
   // ops: [{ login, share: [ids], invite: [ids], revoke: [ids], repos: [full] }]
@@ -1548,7 +1565,8 @@
     var names = Object.keys(dirty).map(function (k) { return k === 'roster' ? 'people' : st0.projects[k] ? st0.projects[k].meta.name : k; });
     var message = names.length ? 'Review update: ' + names.join(', ') + ' (' + me() + ')' : 'Review update (' + me() + ')';
     var currentId = projects[ui.slug] && projects[ui.slug].id;
-    workspace().sync(st0, { message: message, onRetry: function () { toast('Someone else just synced — merging their changes'); } })
+    workspace().sync(st0, { message: message, onRetry: function () { toast('Someone else just synced — merging their changes'); },
+      keepLocal: function (id) { return !!dirty[id]; } })
       .then(function (res) {
         var st = res.state;
         if (res.userName && !settings.user) settings.user = res.userName;
@@ -1557,8 +1575,9 @@
         var nowById = stateNow().projects, merged = {};
         Object.keys(st.projects).forEach(function (id) { merged[id] = nowById[id] ? M.mergeProjects(nowById[id], st.projects[id]) : st.projects[id]; });
         // Projects that only exist locally and weren't touched by this sync (e.g. its repo
-        // failed) are kept.
-        Object.keys(nowById).forEach(function (id) { if (!merged[id] && res.dropped.indexOf(id) < 0) merged[id] = nowById[id]; });
+        // failed) are kept. One deleted on GitHub goes, unless it was edited while this ran.
+        var gone = (res.gone || []).filter(function (id) { return dirty[id] === started[id]; });
+        Object.keys(nowById).forEach(function (id) { if (!merged[id] && res.dropped.indexOf(id) < 0 && gone.indexOf(id) < 0) merged[id] = nowById[id]; });
         var dataFull = settings.owner + '/' + settings.dataRepo;
         if (st.dataAccess === 'none') {
           // A contractor's token: unsynced internal work (an FTE's, in this browser) is held out
@@ -1597,7 +1616,7 @@
           var repo = k === 'roster' ? settings.owner + '/' + settings.dataRepo : st.homes[k] || (settings.owner + '/' + settings.dataRepo);
           if (failedRepos.indexOf(repo) < 0) delete dirty[k];
         });
-        res.dropped.forEach(function (id) { delete dirty[id]; });
+        res.dropped.concat(gone).forEach(function (id) { delete dirty[id]; });
         ui.slug = Object.keys(projects).filter(function (k) { return projects[k].id === currentId; })[0] || '';
         openWanted(true);
         if (res.templates && res.templates.length) { pulledTemplates = res.templates; save('templates', pulledTemplates); refreshTemplates(); }
@@ -1609,6 +1628,7 @@
         render();
         openWantedItem();
         if (res.dropped.length) toast(plural(res.dropped.length, 'project') + ' no longer shared with you ' + (res.dropped.length === 1 ? 'was' : 'were') + ' removed from this browser');
+        if (gone.length) toast(plural(gone.length, 'project') + ' deleted on GitHub ' + (gone.length === 1 ? 'was' : 'were') + ' removed from this browser');
         if (res.errors.length) toast(res.errors[0].message + (res.errors.length > 1 ? ' (+' + (res.errors.length - 1) + ' more)' : ''));
         else toast(res.pushed ? 'Synced — ' + plural(res.pushed, 'change') + ' pushed' : 'Up to date');
         if (syncAgain) { syncAgain = false; sync(); }
@@ -1860,6 +1880,11 @@
       case 'add-person': personSheet(null); break;
       case 'add-self': setPerson(settings.login, { name: settings.user || settings.login, role: 'fte', projects: [], deleted: false }); renderPage(); break;
       case 'fix-access': fixAccess(el.dataset.login); break;
+      case 'trim-access': {
+        var tu = roster.users[el.dataset.login], extra = tu ? accessGaps(tu).extra : [];
+        if (extra.length) runAccessOps('Removing access for ' + tu.login, [{ login: tu.login, revokeRepos: extra }]);
+        break;
+      }
       case 'refresh-access': accessMap = {}; loadAccess(true); renderPage(); break;
       case 'accept-invites': acceptInvitations(); break;
       case 'person-projects': personSheet(el.dataset.login); break;
@@ -1878,7 +1903,8 @@
         (function (login) {
           var u = roster.users[login], repos = u.role === 'fte' ? workspace().fteRepos(stateNow()) : (u.projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
           setPerson(login, { deleted: true, projects: [] }); renderPage();
-          if (getToken() && repos.length && confirm('Also take away their GitHub access to ' + repos.map(repoName).join(', ') + '?')) runAccessOps('Removing ' + login, [{ login: login, revokeRepos: repos }]);
+          // A contractor's access goes with them; for an FTE, ask first.
+          if (getToken() && repos.length && (u.role !== 'fte' || confirm('Also take away their GitHub access to ' + repos.map(repoName).join(', ') + '?'))) runAccessOps('Removing ' + login, [{ login: login, revokeRepos: repos }]);
         })(el.dataset.login);
         break;
 
