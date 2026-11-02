@@ -709,8 +709,9 @@
   function loadPicture(p) {
     if (!C.previews || pics[p.id]) return;
     if (DEMO) {
-      var keys = ((C.demo || {}).pictures || {})[p.id];
-      pics[p.id] = keys ? { state: 'ok', hero: keys[0], runId: '', images: keys.map(function (k) { return { key: k, url: 'assets/demo-previews/' + p.id + '-' + k + '.svg' }; }) } : { state: 'none' };
+      // ["top", ...] (SVGs), or { run, keys, ext }: the board's Fabcheck pictures and its demo run.
+      var dp = ((C.demo || {}).pictures || {})[p.id], keys = dp && (Array.isArray(dp) ? dp : dp.keys), ext = (dp && dp.ext) || 'svg';
+      pics[p.id] = keys ? { state: 'ok', hero: keys[0], runId: (dp && dp.run) || '', images: keys.map(function (k) { return { key: k, url: 'assets/demo-previews/' + p.id + '-' + k + '.' + ext }; }) } : { state: 'none' };
       return showPicture(p);
     }
     if (!getToken()) return;
@@ -771,8 +772,9 @@
   function fabcheckBlock(p, def) {
     if (!isFabcheck(def)) return '';
     var src = def.source, run = src.run || null, locs = src.locations || [];
-    // Anyone with access to the board's repo can open a stored run (contractors too).
-    var canOpen = !DEMO && run && run.id;
+    // Anyone with access to the board's repo can open a stored run (contractors too). The demo's
+    // runs open in Fabcheck's demo, which has their boards.
+    var canOpen = run && run.id;
     var stored = run && run.stored && run.stored.repo;
     var h = '<div class="fab-card"><div class="fab-head"><b>From Fabcheck</b>' +
       (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';

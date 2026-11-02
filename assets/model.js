@@ -206,6 +206,7 @@
     return last;
   }
 
+  var RECENT = 6;   // comments kept in summary.recent
   function projectSummary(project, templates) {
     var stats = projectStats(project, templates), meta = project.meta, checklists = {};
     var issues = { open: {}, fixed: 0, waived: 0 }, open = [];
@@ -232,6 +233,12 @@
       reqs = { total: q.total, approved: q.approved, pass: q.pass, fail: q.fail, risk: q.risk, open: q.open, unlinked: q.unlinked };
       reqList = reqSummaryList(project, idx);
     }
+    // summary.recent: the latest discussion (newest first), for Signoff PL's Recent discussion.
+    var index = checkIndex(project, templates), cut = function (t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+    var recent = liveComments(project).slice(-RECENT).reverse().map(function (c) {
+      var chk = c.item && index[c.item];
+      return { id: c.id, item: c.item || '', check: chk ? cut(chk.text, 160) : '', author: c.author || '', at: c.at || '', text: cut(c.text, 400) };
+    });
     var last = lastEdit(project);
     return {
       v: 1,
@@ -240,7 +247,7 @@
       stage: meta.stage || '', archived: !!meta.archived,
       total: stats.total, reviewed: stats.reviewed, pct: stats.pct,
       checklists: checklists, issues: issues, open: open.sort(function (a, b) { return SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity); }),
-      reqs: reqs, reqList: reqList,
+      reqs: reqs, reqList: reqList, recent: recent,
       at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
     };
   }
