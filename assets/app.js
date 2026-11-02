@@ -435,7 +435,7 @@
       return;
     }
     var st = M.projectStats(p, TEMPLATES);
-    var reqIdx = checkIdx(p), reqFail = M.liveReqs(p).some(function (q) { return reqFailing(q, reqIdx); });
+    var reqIdx = checkIdx(p), reqFail = M.liveReqs(p).some(function (q) { return reqTrouble(q, reqIdx); });
     var views = [{ id: 'overview', label: 'Overview' }].concat(reqsOn(p) ? [{ id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }] : [], projectTemplates(p).map(function (t) {
       var c = st.per[t.id];
       return { id: t.id, label: t.short, extra: c && c.issuesOpen ? '<span class="dot"></span>' : '' };
@@ -865,7 +865,7 @@
   // checks in the project's checklists, whose status then shows next to it.
   var REQ_LABEL = { inspection: 'Inspection', analysis: 'Analysis', demonstration: 'Demonstration', test: 'Test',
     draft: 'Draft', approved: 'Approved', changed: 'Changed', deprecated: 'Deprecated', open: 'Not verified', pass: 'Pass', fail: 'Fail',
-    shall: 'Shall', should: 'Should' };
+    shall: 'Shall', should: 'Should', sys: 'System', ee: 'EE', me: 'ME', fw: 'FW', other: 'Other' };
   function reqOf(p, id) { var q = p && p.reqs && p.reqs[id]; return q && !q.deleted ? q : null; }
   // Requirements is picked in the project sheet like a checklist ('reqs' in meta.checklists).
   // Projects from before that choice existed show it if they already have requirements.
@@ -913,12 +913,21 @@
   }
   function verifyChip(v) { return '<span class="res ' + (v === 'pass' ? 'fixed' : v === 'fail' ? 'open' : 'waived') + '">' + REQ_LABEL[v] + '</span>'; }
 
-  function reqFailing(q, idx) { return q.status !== 'deprecated' && (q.verify === 'fail' || M.reqTrace(q, idx).state === 'issue'); }
+  // Failing: its verification failed. At risk: an open issue on a check it traces to (model.reqState).
+  function reqFailing(q, idx) { return M.reqState(q, idx) === 'fail'; }
+  function reqAtRisk(q, idx) { return M.reqState(q, idx) === 'risk'; }
+  function reqTrouble(q, idx) { var s = M.reqState(q, idx); return s === 'fail' || s === 'risk'; }
+  // A requirement's discipline, shown only when it isn't this tool's own; and its Signoff PL parent.
+  function disciplineChip(q) { var d = M.reqDiscipline(q); return d === M.ownDiscipline() ? '' : '<span class="chip">' + REQ_LABEL[d] + '</span> '; }
+  function parentChip(q) {
+    var par = M.reqParent(q);
+    return par ? '<span class="chip accent" title="Flows down from ' + esc(par.ref) + ' in the project plan (Signoff PL): ' + esc(par.text) + '">↑ ' + esc(par.ref || 'project') + '</span> ' : '';
+  }
   function reqMatches(q, idx) {
     var f = ui.reqFilter || 'all';
     if (ui.reqQuery) {
       var s = ui.reqQuery.toLowerCase();
-      if ([q.ref, q.text, q.category, q.source].join(' ').toLowerCase().indexOf(s) < 0) return false;
+      if ([q.ref, q.text, q.category, q.source, REQ_LABEL[M.reqDiscipline(q)], (M.reqParent(q) || {}).ref].join(' ').toLowerCase().indexOf(s) < 0) return false;
     }
     // Deprecated requirements stay in All, lined out, and have a filter of their own.
     if (f === 'deprecated') return q.status === 'deprecated';
@@ -926,6 +935,8 @@
     if (f === 'draft') return q.status !== 'approved';
     if (f === 'open') return q.verify === 'open';
     if (f === 'fail') return reqFailing(q, idx);
+    if (f === 'risk') return reqAtRisk(q, idx);
+    if (f === 'parent') return !!M.reqParent(q);
     if (f === 'unlinked') return !(q.links || []).length;
     return true;
   }
@@ -934,11 +945,15 @@
     var idx = checkIdx(p), all = M.liveReqs(p), st = M.reqStats(p);
     var list = all.filter(function (q) { return reqMatches(q, idx); });
     var failing = all.filter(function (q) { return reqFailing(q, idx); }).length;
+    var atRisk = all.filter(function (q) { return reqAtRisk(q, idx); }).length;
+    var fromPlan = all.filter(function (q) { return q.status !== 'deprecated' && M.reqParent(q); }).length;
     var filters = [['all', 'All', st.total], ['draft', 'Not approved', st.total - st.approved], ['open', 'Not verified', st.open],
-      ['fail', 'Failing', failing], ['unlinked', 'Not traced', st.unlinked]].concat(st.deprecated ? [['deprecated', 'Deprecated', st.deprecated]] : []);
+      ['risk', 'At risk', atRisk], ['fail', 'Failing', failing], ['unlinked', 'Not traced', st.unlinked]]
+      .concat(fromPlan ? [['parent', 'From the project plan', fromPlan]] : [], st.deprecated ? [['deprecated', 'Deprecated', st.deprecated]] : []);
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Requirements</h1>' +
       '<div class="page-sub"><span>' + plural(st.total, 'requirement') + '</span><span class="sep">·</span><span>' + st.approved + ' approved</span>' +
       '<span class="sep">·</span><span>' + st.pass + ' verified</span>' +
+      (atRisk ? '<span class="sep">·</span><span style="color:var(--issue)">' + atRisk + ' at risk</span>' : '') +
       (failing ? '<span class="sep">·</span><span style="color:var(--issue)">' + failing + ' failing</span>' : '') +
       (st.deprecated ? '<span class="sep">·</span><span>' + st.deprecated + ' deprecated</span>' : '') + '</div></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="req-import">Import</button>' +
@@ -964,15 +979,22 @@
         return '<tr data-act="select-req" data-id="' + esc(q.id) + '"' + (cls ? ' class="' + cls + '"' : '') + '>' +
           '<td class="req-ref">' + esc(q.ref) + '</td>' +
           '<td>' + (q.text ? '<span class="req-text">' + esc(q.text) + '</span>' : '<span class="muted">No text yet</span>') +
-          '<div class="muted">' + esc([REQ_LABEL[q.kind], q.category, q.source].filter(Boolean).join(' · ')) +
+          '<div class="muted">' + parentChip(q) + disciplineChip(q) + esc([REQ_LABEL[q.kind], q.category, q.source].filter(Boolean).join(' · ')) +
           (n ? ' <span class="cmt-count">' + ICON.bubble + n + '</span>' : '') + '</div></td>' +
           '<td class="muted">' + REQ_LABEL[q.method] + '</td>' +
           '<td><span class="chip' + (q.status === 'approved' ? ' accent' : '') + '">' + REQ_LABEL[q.status] + '</span></td>' +
           (q.status === 'deprecated' ? '<td></td><td></td></tr>' :
-          '<td>' + verifyChip(q.verify) + '</td>' +
+          '<td>' + verifyChip(q.verify) + (reqAtRisk(q, idx) ? ' <span class="res open" title="An open issue on a check it traces to">At risk</span>' : '') + '</td>' +
           '<td>' + traceChip(M.reqTrace(q, idx)) + '</td></tr>');
       }).join('') + '</tbody></table></div></div>';
     return html;
+  }
+
+  // On a requirement that flows down from Signoff PL: the parent's snapshot, read-only.
+  function parentBlock(q) {
+    var par = M.reqParent(q);
+    return par ? '<div class="field"><span class="field-label">Flows down from</span><div class="card" style="padding:10px 12px;font-size:13px"><b>' + esc(par.ref) + '</b> · project plan<div>' + esc(par.text) + '</div>' +
+      '<p class="note" style="margin:6px 0 0">Set in Signoff PL. Rewording this requirement marks it Changed, so the project lead approves it again.</p></div></div>' : '';
   }
 
   function renderReqInspector(p, q) {
@@ -985,7 +1007,7 @@
     function seg(key, values) {
       return '<div class="seg full">' + values.map(function (v) {
         var tone = key === 'verify' && v !== 'open' ? ' s-' + (v === 'pass' ? 'pass' : 'issue') : '';
-        return '<button class="' + (q[key] === v ? 'on' : '') + tone + '" data-act="req-field" data-key="' + key + '" data-val="' + v + '">' + REQ_LABEL[v] + '</button>';
+        return '<button class="' + ((key === 'discipline' ? M.reqDiscipline(q) : q[key]) === v ? 'on' : '') + tone + '" data-act="req-field" data-key="' + key + '" data-val="' + v + '">' + REQ_LABEL[v] + '</button>';
       }).join('') + '</div>';
     }
     var links = (q.links || []).map(function (id) {
@@ -1003,9 +1025,11 @@
       '<div class="insp-body">' +
       '<div class="row2"><div class="field"><label for="req-ref">ID</label><input class="input" id="req-ref" value="' + esc(q.ref) + '" data-req-input="ref"></div>' +
       '<div class="field"><span class="field-label">Type</span>' + seg('kind', ['shall', 'should']) + '</div></div>' +
+      parentBlock(q) +
       '<div class="field"><label for="req-text">Requirement</label><textarea class="input" id="req-text" rows="3" data-req-input="text" placeholder="e.g. The ' + esc(W.thing) + ' shall run from 24 V DC ±10%.">' + esc(q.text) + '</textarea></div>' +
       '<div class="row2"><div class="field"><label for="req-cat">Category</label><input class="input" id="req-cat" value="' + esc(q.category) + '" placeholder="Power, interfaces…" data-req-input="category"></div>' +
       '<div class="field"><label for="req-src">Source</label><input class="input" id="req-src" value="' + esc(q.source) + '" placeholder="Spec and section" data-req-input="source"></div></div>' +
+      '<div class="field"><span class="field-label">Discipline</span>' + seg('discipline', M.REQ_DISCIPLINES) + '</div>' +
       '<div class="field"><span class="field-label">Verify by</span>' + seg('method', M.REQ_METHODS) + '</div>' +
       '<div class="field"><span class="field-label">Status</span>' + seg('status', M.REQ_STATUS) + '</div>' +
       '<div class="field"><span class="field-label">Verified</span>' + seg('verify', M.REQ_VERIFY) + '</div>' +
@@ -1054,7 +1078,7 @@
     var p = current(); if (!p) return;
     var w = sheet('<div class="sheet-head"><h2>Import requirements</h2><p>Paste rows from Excel or a CSV file, or choose a file. The first row names the columns: ' +
       '<b>Requirement</b> (or <b>Description</b>, needed), and optionally <b>ID</b>, <b>Name</b>, <b>Type</b> or <b>Priority</b> (shall / should), <b>Category</b>, <b>Source</b>, ' +
-      '<b>Verification</b> (inspection, analysis, demonstration, test) and <b>Status</b> (obsolete rows come in as deprecated). A row whose ID already exists updates that requirement.</p></div>' +
+      '<b>Verification</b> (inspection, analysis, demonstration, test), <b>Discipline</b> (system, EE, ME, FW, other) and <b>Status</b> (obsolete rows come in as deprecated). A row whose ID already exists updates that requirement.</p></div>' +
       '<div class="sheet-body"><textarea class="input" id="req-paste" rows="8" placeholder="ID, Requirement, Type, Category, Source, Verification"></textarea>' +
       '<p class="note" id="req-preview"></p><input type="file" id="req-file" accept=".csv,.tsv,.txt,text/csv"></div>' +
       '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Import</button></div>', { wide: true });
@@ -1092,6 +1116,7 @@
   function reqsCard(p) {
     var st = M.reqStats(p), idx = checkIdx(p);
     var failing = M.liveReqs(p).filter(function (q) { return reqFailing(q, idx); }).length;
+    var atRisk = M.liveReqs(p).filter(function (q) { return reqAtRisk(q, idx); }).length;
     var pct = st.total ? Math.round(100 * st.pass / st.total) : 0;
     return '<button class="card cl-card" data-act="view" data-view="reqs">' +
       '<div class="cl-card-top"><div><div class="cl-card-title">Requirements</div><div class="cl-card-desc">' +
@@ -1099,6 +1124,7 @@
       '</div></div>' + ring(pct, 46, 5, pct, '') + '</div>' +
       '<div class="bar"><i class="b-pass" style="width:' + (st.total ? 100 * st.pass / st.total : 0) + '%"></i><i class="b-issue" style="width:' + (st.total ? 100 * st.fail / st.total : 0) + '%"></i></div>' +
       '<div class="cl-card-foot"><span><b>' + st.pass + '</b>/' + st.total + ' verified</span>' +
+      (atRisk ? '<span style="color:var(--issue)"><b>' + atRisk + '</b> at risk</span>' : '') +
       (failing ? '<span style="color:var(--issue)"><b>' + failing + '</b> failing</span>' : '') +
       (st.total && st.unlinked ? '<span>' + st.unlinked + ' not traced</span>' : '') + '</div></button>';
   }
@@ -1106,8 +1132,8 @@
   function reqsReport(p) {
     var all = M.liveReqs(p);
     if (!all.length) return '';
-    var idx = checkIdx(p), st = M.reqStats(p);
-    return '<h2>Requirements</h2><p class="r-cmt" style="margin:0 0 8px">' + plural(st.total, 'requirement') + ', ' + st.approved + ' approved, ' + st.pass + ' verified' + (st.fail ? ', ' + st.fail + ' failed' : '') +
+    var idx = checkIdx(p), st = M.reqStats(p, idx);
+    return '<h2>Requirements</h2><p class="r-cmt" style="margin:0 0 8px">' + plural(st.total, 'requirement') + ', ' + st.approved + ' approved, ' + st.pass + ' verified' + (st.risk ? ', ' + st.risk + ' at risk' : '') + (st.fail ? ', ' + st.fail + ' failed' : '') +
       (st.deprecated ? '; ' + st.deprecated + ' deprecated, kept for reference' : '') + '.</p>' +
       '<table><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Traced checks</th></tr></thead><tbody>' +
       all.map(function (q) {
@@ -2148,20 +2174,26 @@
       location.reload();
     });
   }
-  // ?project=<id> opens that project, and &item=<check id> that check (Signoff PL links here).
+  // ?project=<id> opens that project, &item=<check id> that check, and &req=<requirement id> that
+  // requirement (Signoff PL links here).
   // A project not in this browser yet is looked for again after the first sync.
   function param(name) { var m = new RegExp('[?&]' + name + '=([^&#]+)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
-  var wantProject = param('project'), wantItem = '';
+  var wantProject = param('project'), wantItem = '', wantReq = '';
   // ?page=people opens People & access (the other tools link here).
   if (param('page') === 'people' && !DEMO) ui.page = 'people';
   function openWanted(final) {
     if (!wantProject) return;
     var slug = Object.keys(projects).filter(function (k) { return projects[k].id === wantProject; })[0];
-    if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; wantItem = param('item'); saveUi(); }
+    if (slug) { ui.slug = slug; ui.view = 'overview'; ui.page = ''; wantProject = ''; wantItem = param('item'); wantReq = param('req'); saveUi(); }
     else if (final) { toast('That ' + UNIT + ' isn’t in this browser. Check that your token reaches its repository.'); wantProject = ''; }
   }
   // After a render: open the check the link asked for, if this project has it.
   function openWantedItem() {
+    var rid = wantReq; wantReq = '';
+    if (rid && current()) {
+      if (reqOf(current(), rid)) { ui.view = 'reqs'; saveUi(); openReq(rid); }
+      else toast('That requirement isn’t in this ' + UNIT + '.');
+    }
     var id = wantItem; wantItem = '';
     if (!id || !current()) return;
     if (!itemDef(current(), id).retired) gotoItem(id);

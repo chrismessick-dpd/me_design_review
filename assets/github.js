@@ -329,6 +329,78 @@
     return once();
   };
 
+  /* Writes records into one map of one project file (kind: 'reqs') and changes nothing else.
+     For a writer that doesn't own the document (Signoff PL writing requirements into a review).
+     It never merges the whole document, so fields this copy of the engine doesn't know survive.
+       records:     [record with id], each stamped by the caller
+       opts.bases:  { id: updatedAt the caller started editing from ('' = it was new) }. A stored
+                    record that has moved on since is a conflict: it is not written.
+       opts.message the commit message
+     A record is written only where it's new or newer (model.newer) than the stored one. Before
+     committing it proves the write is additive: the file with the written ids taken out must
+     re-serialize to the original with them taken out, byte for byte. The file must round-trip
+     through stableStringify, or nothing is written. One commit, force:false; when someone
+     pushed first it reads again and redoes the patch. Afterwards it reads the file back.
+     Resolves { written: [ids], skipped: [ids], conflicts: [{ id, theirs }], commitUrl }. */
+  GitHubStore.prototype.patchRecords = function (path, kind, records, opts) {
+    var self = this, attempt = 0;
+    opts = opts || {};
+    var bases = opts.bases || {};
+    function readFile(snap) {
+      var e = snap.entries.filter(function (x) { return x.type === 'blob' && x.path === path; })[0];
+      if (!e) { var err = new Error(path + ' isn’t in ' + self.full()); err.status = 404; throw err; }
+      return self.blob(e.sha);
+    }
+    function once() {
+      attempt++;
+      var snap, written = [], skipped = [], conflicts = [];
+      return self.snapshot().then(function (s) {
+        snap = s;
+        if (!snap.head) { var err = new Error(self.full() + ' is empty'); err.status = 404; throw err; }
+        return readFile(snap);
+      }).then(function (text) {
+        var doc = JSON.parse(text);
+        if (M.stableStringify(doc) !== text) throw new Error(path + ' wasn’t written by Signoff, so it isn’t changed');
+        var map = doc[kind] && typeof doc[kind] === 'object' ? doc[kind] : {};
+        var next = Object.assign({}, doc);
+        next[kind] = Object.assign({}, map);
+        records.forEach(function (rec) {
+          var cur = map[rec.id];
+          if (cur && Object.prototype.hasOwnProperty.call(bases, rec.id) && (cur.updatedAt || '') !== bases[rec.id]) {
+            conflicts.push({ id: rec.id, theirs: cur }); return;
+          }
+          if (cur && (M.newer(cur, rec) !== rec || M.stableStringify(cur) === M.stableStringify(rec))) { skipped.push(rec.id); return; }
+          next[kind][rec.id] = rec;
+          written.push(rec.id);
+        });
+        var result = { written: written, skipped: skipped, conflicts: conflicts };
+        if (!written.length) return result;
+        function without(d) {
+          var c = Object.assign({}, d);
+          c[kind] = Object.assign({}, d[kind] || {});
+          written.forEach(function (id) { delete c[kind][id]; });
+          if (!d[kind]) delete c[kind];
+          return M.stableStringify(c);
+        }
+        if (without(doc) !== without(next)) throw new Error('The write to ' + path + ' would change more than the records it was given, so it was stopped');
+        var out = M.stableStringify(next);
+        return self.commit(snap, [{ path: path, text: out, label: path }], opts.message).then(function (commit) {
+          result.commitUrl = commit.html_url;
+          return self.snapshot().then(readFile).then(function (back) {
+            var got = JSON.parse(back)[kind] || {};
+            var missing = written.filter(function (id) { return M.stableStringify(got[id]) !== M.stableStringify(next[kind][id]); });
+            if (missing.length) throw new Error('Read back from ' + path + ': ' + missing.join(', ') + ' didn’t stick');
+            return result;
+          });
+        });
+      }).catch(function (err) {
+        if ((err.status === 422 || err.status === 409) && attempt < MAX_ATTEMPTS) return once();
+        throw err;
+      });
+    }
+    return once();
+  };
+
   GitHubStore.prototype.commit = function (snap, changes, message) {
     var self = this;
     return this.api('/git/trees', { method: 'POST', body: {

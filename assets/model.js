@@ -226,10 +226,11 @@
         });
       });
     });
-    var reqs = null;
+    var reqs = null, reqList;
     if (reqsEnabled(project)) {
-      var q = reqStats(project);
-      reqs = { total: q.total, approved: q.approved, pass: q.pass, fail: q.fail, open: q.open, unlinked: q.unlinked };
+      var idx = checkIndex(project, templates), q = reqStats(project, idx);
+      reqs = { total: q.total, approved: q.approved, pass: q.pass, fail: q.fail, risk: q.risk, open: q.open, unlinked: q.unlinked };
+      reqList = reqSummaryList(project, idx);
     }
     var last = lastEdit(project);
     return {
@@ -239,9 +240,25 @@
       stage: meta.stage || '', archived: !!meta.archived,
       total: stats.total, reviewed: stats.reviewed, pct: stats.pct,
       checklists: checklists, issues: issues, open: open.sort(function (a, b) { return SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity); }),
-      reqs: reqs,
+      reqs: reqs, reqList: reqList,
       at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
     };
+  }
+
+  // summary.reqList: every requirement that isn't deleted (deprecated ones too, flagged by
+  // status), with what Signoff PL shows and links by. `state` is reqState; `issues` are the
+  // linked checks with an open issue (their detail is in summary.open). Text is cut to 500.
+  function reqSummaryList(project, index) {
+    return liveReqs(project).map(function (q) {
+      var text = String(q.text || ''), parent = reqParent(q);
+      var issues = (q.links || []).filter(function (id) { var c = index[id]; return c && c.status === 'issue' && !c.resolution; });
+      var out = { id: q.id, ref: q.ref || '', text: text.length > 500 ? text.slice(0, 499) + '…' : text, discipline: reqDiscipline(q),
+        kind: oneOf(['shall', 'should'], q.kind, 'shall'), category: q.category || '', method: oneOf(REQ_METHODS, q.method, 'inspection'),
+        status: oneOf(REQ_STATUS, q.status, 'draft'), verify: oneOf(REQ_VERIFY, q.verify, 'open'), state: reqState(q, index),
+        links: (q.links || []).length, issues: issues, at: q.updatedAt || '', by: q.updatedBy || '' };
+      if (parent) out.parent = { tool: 'pl', project: parent.project, id: parent.id, ref: parent.ref };
+      return out;
+    });
   }
 
   // The document as written to its repository: the stored summary replaced by a fresh one.
@@ -331,13 +348,33 @@
   //   { id, ref: 'REQ-001', text, kind: 'shall' | 'should', category, source,
   //     method: inspection | analysis | demonstration | test,
   //     status: draft | approved | changed | deprecated, verify: open | pass | fail, evidence,
-  //     links: [check ids it traces to], createdAt, updatedAt, updatedBy, deleted }
+  //     links: [check ids it traces to], createdAt, updatedAt, updatedBy, deleted,
+  //     discipline: sys | ee | me | fw | other (missing: this tool's own),
+  //     parent: { tool: 'pl', project, id, ref, text } when it flows down from a Signoff PL
+  //             requirement. Written by PL; ref and text are a snapshot for people without PL. }
   // Comments on a requirement are ordinary comments with item = the requirement's id.
   // A deprecated requirement is kept for reference (lined out) but no longer counts: it's left
   // out of the totals, verification and failing flags.
   var REQ_METHODS = ['inspection', 'analysis', 'demonstration', 'test'];
   var REQ_STATUS = ['draft', 'approved', 'changed', 'deprecated'];
   var REQ_VERIFY = ['open', 'pass', 'fail'];
+  var REQ_DISCIPLINES = ['sys', 'ee', 'me', 'fw', 'other'];
+
+  // The discipline a requirement belongs to; records from before the field have this tool's.
+  function ownDiscipline() {
+    var d = String(C.discipline || '').toLowerCase();
+    return d === 'pl' ? 'sys' : REQ_DISCIPLINES.indexOf(d) >= 0 ? d : 'other';
+  }
+  function reqDiscipline(q) { return oneOf(REQ_DISCIPLINES, q && q.discipline, ownDiscipline()); }
+
+  // The PL requirement this one flows down from, or null. Review files are untrusted, so only
+  // the known fields come through, as strings.
+  function reqParent(q) {
+    var p = q && q.parent;
+    if (!p || typeof p !== 'object' || p.tool !== 'pl' || typeof p.id !== 'string' || typeof p.project !== 'string') return null;
+    var s = function (v) { return typeof v === 'string' ? v.slice(0, 2000) : ''; };
+    return { tool: 'pl', project: p.project.slice(0, 80), id: p.id.slice(0, 80), ref: s(p.ref).slice(0, 40), text: s(p.text) };
+  }
 
   function refNumber(ref) { var m = /(\d+)\s*$/.exec(ref || ''); return m ? parseInt(m[1], 10) : 0; }
 
@@ -368,7 +405,7 @@
   function newReq(project, fields, user) {
     var t = now();
     var q = Object.assign({ id: uid('q'), ref: nextReqRef(project), text: '', kind: 'shall', category: '', source: '',
-      method: 'inspection', status: 'draft', verify: 'open', evidence: '', links: [], createdAt: t }, fields || {});
+      method: 'inspection', status: 'draft', verify: 'open', evidence: '', links: [], discipline: ownDiscipline(), createdAt: t }, fields || {});
     return stamp(q, user);
   }
 
@@ -403,8 +440,19 @@
     return t;
   }
 
-  function reqStats(project) {
-    var s = { total: 0, approved: 0, draft: 0, changed: 0, deprecated: 0, pass: 0, fail: 0, open: 0, unlinked: 0, duplicates: [] };
+  // Where a requirement stands, worst first:
+  //   deprecated; fail (its verification failed); risk (an open issue on a check it traces to,
+  //   even if it was verified); pass (verified); open.
+  function reqState(q, index) {
+    if (q.status === 'deprecated') return 'deprecated';
+    if (q.verify === 'fail') return 'fail';
+    if (reqTrace(q, index || {}).state === 'issue') return 'risk';
+    return q.verify === 'pass' ? 'pass' : 'open';
+  }
+
+  // With the check index, `risk` counts the requirements at risk (see reqState).
+  function reqStats(project, index) {
+    var s = { total: 0, approved: 0, draft: 0, changed: 0, deprecated: 0, pass: 0, fail: 0, open: 0, risk: 0, unlinked: 0, duplicates: [] };
     var seen = {};
     liveReqs(project).forEach(function (q) {
       var k = (q.ref || '').toUpperCase();
@@ -415,6 +463,7 @@
       s[q.status] = (s[q.status] || 0) + 1;
       s[q.verify] = (s[q.verify] || 0) + 1;
       if (!(q.links || []).length) s.unlinked++;
+      if (index && reqState(q, index) === 'risk') s.risk++;
     });
     return s;
   }
@@ -451,8 +500,19 @@
     category: /^(category|area|group|sub-?\s*system)$/i,
     source: /^(source|spec|reference|doc(ument)?|origin|rationale)\b/i,
     method: /^(verification(\s*method)?|method|verify\s*by|v&v)$/i,
-    status: /^(status|state)$/i
+    status: /^(status|state)$/i,
+    discipline: /^(discipline|class|classification|domain)$/i
   };
+
+  // A spreadsheet's discipline words -> ours ('' keeps the requirement's own).
+  function importDiscipline(raw) {
+    if (!raw) return '';
+    if (/^sys|system|product/.test(raw)) return 'sys';
+    if (/^ee$|elec/.test(raw)) return 'ee';
+    if (/^me$|mech/.test(raw)) return 'me';
+    if (/^fw$|^sw$|firm|soft/.test(raw)) return 'fw';
+    return 'other';
+  }
 
   // A spreadsheet's status words -> ours ('' leaves the status as it is).
   function importStatus(raw) {
@@ -493,6 +553,8 @@
       };
       var status = importStatus(get('status').toLowerCase());
       if (status) fields.status = status;
+      var discipline = importDiscipline(get('discipline').toLowerCase());
+      if (discipline) fields.discipline = discipline;
       var ref = get('ref');
       var existing = ref && byRef[ref.toUpperCase()];
       var rec;
@@ -514,15 +576,16 @@
 
   // Compliance matrix as CSV: one row per requirement, with what it traces to.
   function reqsCsv(project, index) {
-    var rows = [['ID', 'Requirement', 'Type', 'Category', 'Source', 'Verification method', 'Status', 'Verified', 'Evidence', 'Traced checks', 'Trace status']];
+    var rows = [['ID', 'Requirement', 'Type', 'Discipline', 'Category', 'Source', 'Parent', 'Verification method', 'Status', 'Verified', 'Evidence', 'Traced checks', 'Trace status', 'State']];
     liveReqs(project).forEach(function (q) {
-      var t = reqTrace(q, index);
-      rows.push([q.ref, q.text, q.kind, q.category, q.source, q.method, q.status, q.verify, q.evidence,
+      var t = reqTrace(q, index), parent = reqParent(q);
+      rows.push([q.ref, q.text, q.kind, reqDiscipline(q), q.category, q.source, parent ? parent.ref + ' (Signoff PL)' : '', q.method, q.status, q.verify, q.evidence,
         (q.links || []).map(function (id) {
           var c = index[id];
           return c ? c.text + ' [' + c.status + (c.resolution ? ', ' + c.resolution : '') + ']' : id + ' [no longer in the project]';
         }).join(' | '),
-        t.state === 'none' ? 'not traced' : t.pass + ' pass, ' + t.issue + ' issue, ' + t.open + ' to review' + (t.na ? ', ' + t.na + ' N/A' : '')]);
+        t.state === 'none' ? 'not traced' : t.pass + ' pass, ' + t.issue + ' issue, ' + t.open + ' to review' + (t.na ? ', ' + t.na + ' N/A' : ''),
+        { fail: 'failing', risk: 'at risk', pass: 'verified', open: 'open', deprecated: 'deprecated' }[reqState(q, index)]]);
     });
     return rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n') + '\r\n';
   }
@@ -663,8 +726,9 @@
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,
-    REQ_METHODS: REQ_METHODS, REQ_STATUS: REQ_STATUS, REQ_VERIFY: REQ_VERIFY,
+    REQ_METHODS: REQ_METHODS, REQ_STATUS: REQ_STATUS, REQ_VERIFY: REQ_VERIFY, REQ_DISCIPLINES: REQ_DISCIPLINES,
     liveReqs: liveReqs, nextReqRef: nextReqRef, newReq: newReq, checkIndex: checkIndex, reqTrace: reqTrace, reqStats: reqStats,
+    reqState: reqState, reqDiscipline: reqDiscipline, ownDiscipline: ownDiscipline, reqParent: reqParent, reqSummaryList: reqSummaryList,
     parseTable: parseTable, importReqs: importReqs, reqsCsv: reqsCsv
   };
 })(window.Signoff = window.Signoff || {});
