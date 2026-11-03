@@ -1581,7 +1581,7 @@
         if (k === TOKEN_KEY || SUITE_NS.some(function (ns) { return k.indexOf(ns) === 0; })) localStorage.removeItem(k);
       });
     } catch (e) { /* storage blocked */ }
-    try { indexedDB.deleteDatabase('fabcheck'); } catch (e) { /* no IndexedDB */ }
+    try { ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo'].forEach(function (db) { indexedDB.deleteDatabase(db); }); } catch (e) { /* no IndexedDB */ }
     saveSharedTheme(theme);
     location.reload();
   }

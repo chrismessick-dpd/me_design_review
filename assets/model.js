@@ -642,18 +642,18 @@
   function hex(v, re) { v = typeof v === 'string' ? v.toLowerCase() : ''; return re.test(v) ? v : ''; }
 
   // A stored revision record as it's safe to use: known enums, text cut to size.
-  function cleanRevision(r) {
+  function cleanRevision(r, key) {
     var src = r.source && typeof r.source === 'object' ? r.source : {};
     var pkg = src.package && typeof src.package === 'object' ? src.package : {};
     var zip = src.zip && typeof src.zip === 'object' ? src.zip : null;
     var fab = r.fab && typeof r.fab === 'object' ? r.fab : {};
     return {
-      id: clip(r.id, 64), label: clip(r.label, 40), title: clip(r.title, 200), status: oneOf(REV_STATUS, r.status, 'sent'),
+      id: key, label: clip(r.label, 40), title: clip(r.title, 200), status: oneOf(REV_STATUS, r.status, 'sent'),
       source: { tool: oneOf(['fabcheck'], src.tool, ''), run: RUN_ID.test(src.run || '') ? src.run : '', at: isoTime(src.at),
         package: { key: hex(pkg.key, HEX16), sha256: hex(pkg.sha256, HEX64), name: clip(pkg.name, 200) },
         zip: zip ? { path: clip(zip.path, 400), sha256: hex(zip.sha256, HEX64), size: +zip.size || 0 } : null },
       fab: { house: clip(fab.house, 100), sentAt: isoDay(fab.sentAt), ref: clip(fab.ref, 100) },
-      notes: clip(r.notes, 4000), createdAt: isoTime(r.createdAt), updatedAt: r.updatedAt || '', updatedBy: clip(r.updatedBy, 100)
+      notes: clip(r.notes, 4000), createdAt: isoTime(r.createdAt), updatedAt: isoTime(r.updatedAt), updatedBy: clip(r.updatedBy, 100)
     };
   }
 
@@ -661,8 +661,9 @@
   // and "latest" follow this order.
   function liveRevisions(project) {
     var r = project.revisions || {};
-    return Object.keys(r).map(function (k) { return r[k]; }).filter(function (x) { return x && typeof x === 'object' && !x.deleted; })
-      .map(cleanRevision)
+    // The id is the record's key, so an edit always lands on the record it came from.
+    return Object.keys(r).filter(function (k) { var x = r[k]; return x && typeof x === 'object' && !x.deleted; })
+      .map(function (k) { return cleanRevision(r[k], k); })
       .sort(function (a, b) {
         return (a.source.at || a.createdAt).localeCompare(b.source.at || b.createdAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
       });
@@ -719,7 +720,7 @@
     if (!run || typeof run !== 'object' || !RUN_ID.test(run.id || '')) return null;
     var pkg = run.package && typeof run.package === 'object' ? run.package : {};
     var z = pkg.zip && typeof pkg.zip === 'object' ? pkg.zip : null, zip = null;
-    var m = z && typeof z.path === 'string' && z.path.indexOf('..') < 0 && /(?:^|\/)packages\/([0-9a-f]{16})\/([A-Za-z0-9][A-Za-z0-9._ -]{0,150}\.zip)$/.exec(z.path);
+    var m = z && typeof z.path === 'string' && z.path.indexOf('..') < 0 && /(?:^|\/)packages\/([0-9a-f]{16})\/([\w.+-][\w.+ -]{0,150}\.zip)$/.exec(z.path);
     if (m && HEX64.test(String(z.sha256 || '').toLowerCase())) {
       zip = { rel: 'packages/' + m[1] + '/' + m[2], path: z.path, name: m[2], sha256: z.sha256.toLowerCase(), size: +z.size || 0, root: clip(z.root, 200),
         files: (Array.isArray(z.files) ? z.files : []).filter(function (f) { return f && typeof f === 'object'; }).slice(0, 2000).map(function (f) {
@@ -750,16 +751,17 @@
       .sort(function (a, b) { return newest(a.runs[0], b.runs[0]); });
   }
 
-  // A run's zip contents grouped by folder, as in the zip: [{ folder, files: [{ name, path, size }] }],
-  // Fabrication and Assembly first, then other folders, then files at the top.
+  // A run's zip contents grouped by folder, as in the zip: [{ folder: 'Fabrication/Gerber', files:
+  // [{ name, path, size }] }], Fabrication's folders first, then Assembly's, then the rest, then
+  // files at the top.
   function zipFolders(zip) {
     var by = {}, root = zip && zip.root ? zip.root + '/' : '';
     ((zip && zip.files) || []).forEach(function (f) {
       var inZip = f.to && f.to.indexOf(root) === 0 ? f.to.slice(root.length) : (f.to || f.path);
-      var cut = inZip.indexOf('/'), folder = cut > 0 ? inZip.slice(0, cut) : '';
+      var cut = inZip.lastIndexOf('/'), folder = cut > 0 ? inZip.slice(0, cut) : '';
       (by[folder] = by[folder] || []).push({ name: cut > 0 ? inZip.slice(cut + 1) : inZip, path: f.path, size: f.size });
     });
-    var rank = function (f) { return f === 'Fabrication' ? 0 : f === 'Assembly' ? 1 : f ? 2 : 3; };
+    var rank = function (f) { var top = f.split('/')[0]; return top === 'Fabrication' ? 0 : top === 'Assembly' ? 1 : f ? 2 : 3; };
     return Object.keys(by).sort(function (a, b) { return rank(a) - rank(b) || a.localeCompare(b); }).map(function (f) {
       return { folder: f, files: by[f].sort(function (a, b) { return a.name.localeCompare(b.name); }) };
     });
