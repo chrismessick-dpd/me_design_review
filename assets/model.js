@@ -200,7 +200,7 @@
     var last = { updatedAt: '', updatedBy: '' };
     function see(rec) { if (rec && newer(last, rec) === rec) last = rec; }
     see(project.meta);
-    ['items', 'sections', 'comments', 'custom', 'reqs'].forEach(function (k) {
+    ['items', 'sections', 'comments', 'custom', 'reqs', 'revisions'].forEach(function (k) {
       Object.keys(project[k] || {}).forEach(function (id) { see(project[k][id]); });
     });
     return last;
@@ -240,7 +240,10 @@
       return { id: c.id, item: c.item || '', check: chk ? cut(chk.text, 160) : '', author: c.author || '', at: c.at || '', text: cut(c.text, 400) };
     });
     var last = lastEdit(project);
-    return {
+    // summary.revisions: the tagged revisions in order (Signoff PL, what was built for which
+    // build). Left out while there are none, so reviews without any keep their bytes.
+    var revs = liveRevisions(project).map(function (r) { return { label: r.label, status: r.status, sentAt: r.fab.sentAt }; });
+    var out = {
       v: 1,
       tool: C.discipline || '',
       name: meta.name, project: meta.project || '', client: meta.client || '', number: meta.board || '', revision: meta.revision || '',
@@ -250,6 +253,8 @@
       reqs: reqs, reqList: reqList, recent: recent,
       at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
     };
+    if (revs.length) out.revisions = revs;
+    return out;
   }
 
   // summary.reqList: every requirement that isn't deleted (deprecated ones too, flagged by
@@ -345,6 +350,8 @@
       comments: mergeMaps(local.comments, remote.comments),
       custom: mergeMaps(local.custom, remote.custom),
       reqs: mergeMaps(local.reqs || {}, remote.reqs || {}),
+      // Only once either copy has one, so documents without revisions keep their bytes.
+      revisions: local.revisions || remote.revisions ? mergeMaps(local.revisions || {}, remote.revisions || {}) : undefined,
       // Derived (see projectSummary): carried along for writers that can't rebuild it.
       summary: local.summary && remote.summary && (local.summary.at || '') > (remote.summary.at || '') ? local.summary : remote.summary || local.summary
     };
@@ -619,6 +626,145 @@
     return { projects: out, changed: changed };
   }
 
+  // ── Revisions (docs/fabcheck-link.md, "Revisions") ────────
+  // Tags on runs a checker stored with the review (Fabcheck's, for Signoff EE), in
+  // project.revisions, merged like every other record:
+  //   { id, label: '3.2', title, status: 'sent' | 'built' | 'withdrawn',
+  //     source: { tool: 'fabcheck', run, at, package: { key, sha256, name }, zip: { path, sha256, size } | null },
+  //     fab: { house, sentAt: 'YYYY-MM-DD', ref }, notes, createdAt, updatedAt, updatedBy, deleted }
+  // A review round (later) adds `round` beside these fields.
+  var REV_STATUS = ['sent', 'built', 'withdrawn'];
+  var REV_STATUS_LABEL = { sent: 'Sent to fab', built: 'Used for builds', withdrawn: 'Withdrawn' };
+  var RUN_ID = /^[A-Za-z0-9_-]{1,64}$/, HEX16 = /^[0-9a-f]{16}$/, HEX64 = /^[0-9a-f]{64}$/;
+  function clip(v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; }
+  function isoDay(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; }
+  function isoTime(v) { return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(v) ? v : ''; }
+  function hex(v, re) { v = typeof v === 'string' ? v.toLowerCase() : ''; return re.test(v) ? v : ''; }
+
+  // A stored revision record as it's safe to use: known enums, text cut to size.
+  function cleanRevision(r) {
+    var src = r.source && typeof r.source === 'object' ? r.source : {};
+    var pkg = src.package && typeof src.package === 'object' ? src.package : {};
+    var zip = src.zip && typeof src.zip === 'object' ? src.zip : null;
+    var fab = r.fab && typeof r.fab === 'object' ? r.fab : {};
+    return {
+      id: clip(r.id, 64), label: clip(r.label, 40), title: clip(r.title, 200), status: oneOf(REV_STATUS, r.status, 'sent'),
+      source: { tool: oneOf(['fabcheck'], src.tool, ''), run: RUN_ID.test(src.run || '') ? src.run : '', at: isoTime(src.at),
+        package: { key: hex(pkg.key, HEX16), sha256: hex(pkg.sha256, HEX64), name: clip(pkg.name, 200) },
+        zip: zip ? { path: clip(zip.path, 400), sha256: hex(zip.sha256, HEX64), size: +zip.size || 0 } : null },
+      fab: { house: clip(fab.house, 100), sentAt: isoDay(fab.sentAt), ref: clip(fab.ref, 100) },
+      notes: clip(r.notes, 4000), createdAt: isoTime(r.createdAt), updatedAt: r.updatedAt || '', updatedBy: clip(r.updatedBy, 100)
+    };
+  }
+
+  // Live revisions, oldest first: by the run they tag, then when they were tagged. "Superseded"
+  // and "latest" follow this order.
+  function liveRevisions(project) {
+    var r = project.revisions || {};
+    return Object.keys(r).map(function (k) { return r[k]; }).filter(function (x) { return x && typeof x === 'object' && !x.deleted; })
+      .map(cleanRevision)
+      .sort(function (a, b) {
+        return (a.source.at || a.createdAt).localeCompare(b.source.at || b.createdAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+      });
+  }
+
+  // The latest revision that wasn't withdrawn (else the latest), or null.
+  function latestRevision(project) {
+    var all = liveRevisions(project), live = all.filter(function (r) { return r.status !== 'withdrawn'; });
+    return live[live.length - 1] || all[all.length - 1] || null;
+  }
+
+  // The revision that came after this one, skipping withdrawn ones; null for the latest.
+  function supersededBy(project, id) {
+    var all = liveRevisions(project), i = all.map(function (r) { return r.id; }).indexOf(id);
+    if (i < 0 || all[i].status === 'withdrawn') return null;
+    for (var j = i + 1; j < all.length; j++) if (all[j].status !== 'withdrawn') return all[j];
+    return null;
+  }
+
+  // The revision a run is tagged as (the latest, if it's tagged twice), or null.
+  function revisionForRun(project, runId) {
+    var hits = runId ? liveRevisions(project).filter(function (r) { return r.source.run === runId; }) : [];
+    return hits[hits.length - 1] || null;
+  }
+
+  // The suggested next label: the last number of the latest label, plus one (3.1 → 3.2, 3.9 →
+  // 3.10). With none yet, the review's revision with .1, or 1.
+  function nextRevLabel(project) {
+    var all = liveRevisions(project), last = all[all.length - 1];
+    if (last && /\d+(?!.*\d)/.test(last.label)) return last.label.replace(/(\d+)(?!.*\d)/, function (n) { return String(parseInt(n, 10) + 1); });
+    var rev = String((project.meta && project.meta.revision) || '').trim();
+    return rev ? rev + '.1' : '1';
+  }
+
+  // A new revision tagging `run` (cleanRun's shape). fields: { label, title, status, house, sentAt, ref, notes }.
+  function newRevision(run, fields, user) {
+    var t = now();
+    return stamp({
+      id: uid('v'), label: clip(fields.label, 40), title: clip(fields.title, 200), status: oneOf(REV_STATUS, fields.status, 'sent'),
+      source: { tool: 'fabcheck', run: run.id, at: run.at, package: { key: run.package.key, sha256: run.package.sha256, name: run.package.name },
+        zip: run.zip ? { path: run.zip.path, sha256: run.zip.sha256, size: run.zip.size } : null },
+      fab: { house: clip(fields.house, 100), sentAt: isoDay(fields.sentAt), ref: clip(fields.ref, 100) },
+      notes: clip(fields.notes, 4000), createdAt: t, deleted: false
+    }, user);
+  }
+
+  // A run file Fabcheck stored ({ run, findings }, docs/fabcheck-link.md) as Signoff uses it, or
+  // null if it isn't one. Anyone who can write the review's repo wrote it, so ids, hashes and
+  // paths are checked and text is cut to size. The zip's place is kept relative to the run's
+  // folder (`packages/<key>/<name>.zip`): its stored path can name the data repo's folder from
+  // before the review was shared. `raw` is the record as stored, for handing on to Fabcheck.
+  function cleanRun(file) {
+    var run = file && file.run;
+    if (!run || typeof run !== 'object' || !RUN_ID.test(run.id || '')) return null;
+    var pkg = run.package && typeof run.package === 'object' ? run.package : {};
+    var z = pkg.zip && typeof pkg.zip === 'object' ? pkg.zip : null, zip = null;
+    var m = z && typeof z.path === 'string' && z.path.indexOf('..') < 0 && /(?:^|\/)packages\/([0-9a-f]{16})\/([A-Za-z0-9][A-Za-z0-9._ -]{0,150}\.zip)$/.exec(z.path);
+    if (m && HEX64.test(String(z.sha256 || '').toLowerCase())) {
+      zip = { rel: 'packages/' + m[1] + '/' + m[2], path: z.path, name: m[2], sha256: z.sha256.toLowerCase(), size: +z.size || 0, root: clip(z.root, 200),
+        files: (Array.isArray(z.files) ? z.files : []).filter(function (f) { return f && typeof f === 'object'; }).slice(0, 2000).map(function (f) {
+          return { path: clip(f.path, 400), to: clip(f.to, 400), size: +f.size || 0, sha256: hex(f.sha256, HEX64) };
+        }) };
+    }
+    var sum = run.summary && typeof run.summary === 'object' ? run.summary : {}, set = run.settings && typeof run.settings === 'object' ? run.settings : {};
+    return {
+      id: run.id, at: isoTime(run.at), by: clip(run.by, 100),
+      package: { key: hex(pkg.key, HEX16), sha256: hex(pkg.sha256, HEX64), name: clip(pkg.name, 200), size: +pkg.size || 0 },
+      summary: { error: +sum.error || 0, warn: +sum.warn || 0, info: +sum.info || 0 },
+      profile: clip(set.profileName || set.profile, 100), zip: zip,
+      raw: run, findings: Array.isArray(file.findings) ? file.findings : []
+    };
+  }
+
+  // Runs as the Revisions tab lists them: one group per package (by key), newest first, each with
+  // its runs newest first.
+  function groupRuns(runs) {
+    var by = {}, order = [];
+    runs.forEach(function (r) {
+      var k = r.package.key || r.package.sha256 || r.id;
+      if (!by[k]) { by[k] = { key: k, runs: [] }; order.push(k); }
+      by[k].runs.push(r);
+    });
+    var newest = function (a, b) { return b.at.localeCompare(a.at) || b.id.localeCompare(a.id); };
+    return order.map(function (k) { by[k].runs.sort(newest); return by[k]; })
+      .sort(function (a, b) { return newest(a.runs[0], b.runs[0]); });
+  }
+
+  // A run's zip contents grouped by folder, as in the zip: [{ folder, files: [{ name, path, size }] }],
+  // Fabrication and Assembly first, then other folders, then files at the top.
+  function zipFolders(zip) {
+    var by = {}, root = zip && zip.root ? zip.root + '/' : '';
+    ((zip && zip.files) || []).forEach(function (f) {
+      var inZip = f.to && f.to.indexOf(root) === 0 ? f.to.slice(root.length) : (f.to || f.path);
+      var cut = inZip.indexOf('/'), folder = cut > 0 ? inZip.slice(0, cut) : '';
+      (by[folder] = by[folder] || []).push({ name: cut > 0 ? inZip.slice(cut + 1) : inZip, path: f.path, size: f.size });
+    });
+    var rank = function (f) { return f === 'Fabrication' ? 0 : f === 'Assembly' ? 1 : f ? 2 : 3; };
+    return Object.keys(by).sort(function (a, b) { return rank(a) - rank(b) || a.localeCompare(b); }).map(function (f) {
+      return { folder: f, files: by[f].sort(function (a, b) { return a.name.localeCompare(b.name); }) };
+    });
+  }
+
   // ── People ───────────────────────────────────────────────
   // users.json in the FTE-only data repo:
   //   users:  { login: { login, name, role: 'fte' | 'contractor', projects: [ids] } }
@@ -736,6 +882,9 @@
     REQ_METHODS: REQ_METHODS, REQ_STATUS: REQ_STATUS, REQ_VERIFY: REQ_VERIFY, REQ_DISCIPLINES: REQ_DISCIPLINES,
     liveReqs: liveReqs, nextReqRef: nextReqRef, newReq: newReq, checkIndex: checkIndex, reqTrace: reqTrace, reqStats: reqStats,
     reqState: reqState, reqDiscipline: reqDiscipline, ownDiscipline: ownDiscipline, reqParent: reqParent, reqSummaryList: reqSummaryList,
-    parseTable: parseTable, importReqs: importReqs, reqsCsv: reqsCsv
+    parseTable: parseTable, importReqs: importReqs, reqsCsv: reqsCsv,
+    REV_STATUS: REV_STATUS, REV_STATUS_LABEL: REV_STATUS_LABEL, liveRevisions: liveRevisions, latestRevision: latestRevision,
+    supersededBy: supersededBy, revisionForRun: revisionForRun, nextRevLabel: nextRevLabel, newRevision: newRevision,
+    cleanRevision: cleanRevision, cleanRun: cleanRun, groupRuns: groupRuns, zipFolders: zipFolders
   };
 })(window.Signoff = window.Signoff || {});

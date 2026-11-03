@@ -441,6 +441,7 @@
       return { id: t.id, label: t.short, extra: c && c.issuesOpen ? '<span class="dot"></span>' : '' };
     }));
     views.push({ id: 'findings', label: 'Findings', extra: st.issue ? '<span class="count">' + st.issue + '</span>' : '' });
+    if (C.runs) views.push({ id: 'revisions', label: 'Revisions' });
     if (views.map(function (v) { return v.id; }).indexOf(ui.view) < 0) ui.view = 'overview';
     var segLeft = seg.scrollLeft;   // a narrow window scrolls the tabs sideways; keep the place
     seg.innerHTML = views.map(function (v) {
@@ -465,6 +466,7 @@
     renderToolbar();
     if (ui.view === 'overview') { page.innerHTML = overviewPage(p); loadPicture(p); }
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
+    else if (ui.view === 'revisions') { loadRuns(p); page.innerHTML = revisionsPage(p); }
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
@@ -522,7 +524,7 @@
       (isFte() ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="edit-project">Edit profile</button>' : '') + '</div>' +
       (!DEMO && isFte() ? '<p class="note" style="margin-top:10px">' + (M.sharedRepo(roster, p.id) ? 'Shared through ' + esc(M.sharedRepo(roster, p.id)) + (assignedContractors(p.id).length ? ' with ' + assignedContractors(p.id).map(function (u) { return esc(u.name || u.login); }).join(', ') : '') : 'Internal \u2014 FTEs only') + '</p>' : '') + '</div>' +
       '<div class="head-visual"><div class="head-pic" data-pic="' + esc(p.id) + '">' + picHtml(p) + '</div>' +
-      ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + '</div></div>' +
+      '<div class="head-ring">' + ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + revisionLine(p) + '</div></div></div>' +
       '<div class="grid grid-4">' +
       stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue') +
       stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
@@ -702,10 +704,13 @@
   // it, or without a stored picture, the header shows the ring alone.
   var pics = {};   // project id -> { state: 'loading' | 'none' | 'ok', images: [{ key, url }], hero, runId }
   var PIC_TYPES = { 'image/webp': 1, 'image/png': 1 };
-  function picDir(p) {
+  // A checker's folder for this review in its home repo (Fabcheck's fabcheck/<id>/), under the
+  // data path when the review lives in the data repo.
+  function checkerDir(p, dir) {
     var home = homeOf(p), isData = home.toLowerCase() === (settings.owner + '/' + settings.dataRepo).toLowerCase();
-    return (isData && settings.dataPath ? settings.dataPath.replace(/\/+$/, '') + '/' : '') + C.previews.dir + p.id + '/preview/';
+    return (isData && settings.dataPath ? settings.dataPath.replace(/\/+$/, '') + '/' : '') + dir + p.id + '/';
   }
+  function picDir(p) { return checkerDir(p, C.previews.dir) + 'preview/'; }
   function loadPicture(p) {
     if (!C.previews || pics[p.id]) return;
     if (DEMO) {
@@ -747,7 +752,7 @@
     var key = pc.images.some(function (i) { return i.key === ui.picSide; }) ? ui.picSide : pc.hero;
     var img = pc.images.filter(function (i) { return i.key === key; })[0];
     var pic = '<img alt="' + esc(p.meta.name + ', ' + key) + '" src="' + esc(img.url) + '">';
-    return (pc.runId ? '<button class="head-pic-img" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, { run: { id: pc.runId } })) + '" title="Open the latest stored run in Fabcheck">' + pic + '</button>'
+    return (pc.runId ? '<button class="head-pic-img" data-act="open-fabcheck" data-run="' + esc(pc.runId) + '" data-href="' + esc(fabcheckUrl(p, { run: { id: pc.runId } })) + '" title="Open the latest stored run in Fabcheck">' + pic + '</button>'
       : '<span class="head-pic-img">' + pic + '</span>') +
       (pc.images.length > 1 ? '<div class="seg">' + pc.images.map(function (i) {
         return '<button class="' + (i.key === key ? 'on' : '') + '" data-act="pic-side" data-key="' + esc(i.key) + '">' + esc(i.key.charAt(0).toUpperCase() + i.key.slice(1)) + '</button>';
@@ -757,11 +762,11 @@
   // ── Fabcheck runs (docs/fabcheck-link.md) ────────────────
   function isFabcheck(def) { return !!(def && def.source && def.source.tool === 'fabcheck'); }
 
-  // Link that opens the run in Fabcheck, zoomed to a location when one is given. The repo is
-  // where the project lives now; a run stored before the project was shared moved with it.
+  // Link that opens the run in Fabcheck, zoomed to a location when one is given. It names no repo:
+  // Fabcheck never reads one. Signoff hands it the run first (openFabcheck).
   function fabcheckUrl(p, src, loc) {
     var run = src.run || {};
-    var q = ['run=' + encodeURIComponent(run.id || ''), 'project=' + encodeURIComponent(p.id), 'repo=' + encodeURIComponent(homeOf(p)), 'check=' + encodeURIComponent(src.check || '')];
+    var q = ['run=' + encodeURIComponent(run.id || ''), 'project=' + encodeURIComponent(p.id), 'check=' + encodeURIComponent(src.check || '')];
     if (loc) {
       q.push('x=' + encodeURIComponent(loc.x), 'y=' + encodeURIComponent(loc.y));
       if (loc.layer) q.push('layer=' + encodeURIComponent(loc.layer));
@@ -776,14 +781,16 @@
     // runs open in Fabcheck's demo, which has their boards.
     var canOpen = run && run.id;
     var stored = run && run.stored && run.stored.repo;
-    var h = '<div class="fab-card"><div class="fab-head"><b>From Fabcheck</b>' +
-      (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';
+    var rev = canOpen && M.revisionForRun(p, run.id), runAttr = canOpen ? ' data-run="' + esc(run.id) + '"' : '';
+    var h = '<div class="fab-card"><div class="fab-head"><span><b>From Fabcheck</b>' +
+      (rev ? ' <button class="chip fab-rev" data-act="view" data-view="revisions" title="This run is tagged as a revision">from ' + esc(revName(rev)) + '</button>' : '') + '</span>' +
+      (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck"' + runAttr + ' data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';
     if (run) {
       h += '<div class="fab-meta">' + esc(run.package && run.package.name || 'Package') +
         (run.package && run.package.key ? ' <span class="muted">· ' + esc(run.package.key.slice(0, 8)) + '</span>' : '') + '<br>' +
         esc([fmtDate(run.at), run.by, run.settings && run.settings.profile && run.settings.profile + ' profile'].filter(Boolean).join(' · ')) + '<br>' +
         (stored ? 'Package and results stored in this ' + UNIT + '’s private repository'
-          : 'Not stored with the ' + UNIT + ': ' + esc(run.by || 'the sender') + ' can store it from Fabcheck (Recent runs, Store in project), or anyone can drop the same package into Fabcheck to see it') + '</div>';
+          : 'Not stored with the ' + UNIT + ': anyone can drop the same package into Fabcheck to see it') + '</div>';
     } else {
       h += '<div class="fab-meta">Sent before Fabcheck kept runs. Run Fabcheck on the package again and send it to link this check to the board.</div>';
     }
@@ -791,12 +798,217 @@
     if (locs.length) {
       h += '<div class="fab-locs">' + locs.map(function (l, i) {
         var label = (l.label ? l.label + ' — ' : '') + Number(l.x).toFixed(2) + ', ' + Number(l.y).toFixed(2) + ' mm' + (l.layer ? ' · ' + l.layer : '');
-        return canOpen ? '<button class="fab-loc" data-act="open-fabcheck" data-href="' + esc(fabcheckUrl(p, src, l)) + '">' + esc(label) + '</button>'
+        return canOpen ? '<button class="fab-loc" data-act="open-fabcheck"' + runAttr + ' data-href="' + esc(fabcheckUrl(p, src, l)) + '">' + esc(label) + '</button>'
           : '<span class="fab-loc">' + esc(label) + '</span>';
       }).join('') + '</div>';
     }
     if (def.hint) h += '<details class="fab-detail"><summary>Details</summary><div>' + esc(def.hint) + '</div></details>';
     return h + '</div>';
+  }
+
+  // ── Revisions: runs stored with the review, some tagged (docs/fabcheck-link.md, "Revisions") ──
+  // A tool lists runs when config.runs names the checker and its folder. Runs are read from the
+  // review's home repo once per page load (Refresh reads again); the tags are review records.
+  function revName(r) { return r.label + (r.title ? ' · ' + r.title : ''); }
+  function revStatus(r) { return M.REV_STATUS_LABEL[r.status] || ''; }
+  function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n >= 1024 ? Math.round(n / 1024) + ' kB' : n + ' B'; }
+
+  // The Overview's line under the ring: the latest revision and its status.
+  function revisionLine(p) {
+    var r = C.runs && M.latestRevision(p);
+    return r ? '<button class="head-rev" data-act="view" data-view="revisions" title="' + esc(revName(r)) + '"><b>' + esc(r.label) + '</b> · ' + esc(revStatus(r).toLowerCase()) + '</button>' : '';
+  }
+
+  var runsOf = {};   // project id -> { state: 'loading' | 'ok' | 'error' | 'none', runs: [model.cleanRun], entries, error, demo }
+  function loadRuns(p, again) {
+    if (!C.runs || (runsOf[p.id] && !again)) return;
+    if (DEMO) {
+      // The demo has no repo: its runs are the ones its Fabcheck issues carry, without a stored zip.
+      var seen = {}, runs = [];
+      Object.keys(p.custom).forEach(function (k) {
+        var c = p.custom[k], r = !c.deleted && isFabcheck(c) && c.source.run && M.cleanRun({ run: c.source.run, findings: [] });
+        if (r && !seen[r.id]) { seen[r.id] = 1; runs.push(r); }
+      });
+      runsOf[p.id] = { state: 'ok', runs: runs, demo: true };
+      return;
+    }
+    if (!getToken()) { runsOf[p.id] = { state: 'none' }; return; }
+    runsOf[p.id] = { state: 'loading' };
+    var dir = checkerDir(p, C.runs.dir);
+    workspace().store(homeOf(p)).listRuns(dir).then(function (got) {
+      // A run file holds the run its name says, or it's left out.
+      var runs = got.runs.map(function (f) { var r = M.cleanRun(f.data); return r && f.path === dir + 'runs/' + r.id + '.json' ? r : null; }).filter(Boolean);
+      runsOf[p.id] = { state: 'ok', runs: runs, entries: got.entries };
+    }, function (err) {
+      runsOf[p.id] = { state: 'error', error: err.message || String(err) };
+    }).then(function () { if (current() === p && ui.view === 'revisions') renderPage(); });
+  }
+  function runById(p, id) { var st = runsOf[p.id]; return st && st.runs ? st.runs.filter(function (r) { return r.id === id; })[0] || null : null; }
+
+  // Fabcheck issues a run raised or last updated (source.run is the latest run that saw them).
+  function runIssues(p, runId) {
+    return Object.keys(p.custom).map(function (k) { return p.custom[k]; }).filter(function (c) {
+      return !c.deleted && isFabcheck(c) && c.source.run && c.source.run.id === runId;
+    });
+  }
+
+  var revOpen = {};   // package key -> expanded
+  function revisionsPage(p) {
+    var st = runsOf[p.id] || { state: 'loading' }, revs = M.liveRevisions(p), latest = M.latestRevision(p);
+    var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Revisions</h1>' +
+      '<div class="page-sub"><span>' + plural(revs.length, 'revision') + '</span>' + (latest ? '<span class="sep">·</span><span>Latest ' + esc(latest.label) + ', ' + esc(revStatus(latest).toLowerCase()) + '</span>' : '') + '</div></div>' +
+      (DEMO ? '' : '<button class="btn" data-act="runs-reload">Refresh</button>') + '</div>';
+    if (st.state === 'none') return html + emptyCard('Sign in to see stored runs', 'Fabcheck stores each run it sends with this ' + UNIT + ', in its private repository. Add your GitHub token in Settings to list them.') + '</div>';
+    if (st.state === 'loading') return html + '<div class="card empty"><p>Reading the runs stored with this ' + UNIT + '…</p></div></div>';
+    if (st.state === 'error') return html + emptyCard('Couldn’t read the stored runs', esc(st.error)) + '</div>';
+    if (!st.runs.length) return html + emptyCard('No runs stored yet', 'Check the fab package in Fabcheck and send it to this ' + UNIT + '. Each run sent is stored here, and you can tag one as a revision: sent to fab, used for builds or withdrawn.') + '</div>';
+    if (st.demo) html += '<p class="note" style="margin:0 0 14px">In the demo, the runs are the ones the Fabcheck issues came from. A real ' + UNIT + ' stores each run’s fab package, which you can download here.</p>';
+    html += M.groupRuns(st.runs).map(function (g) {
+      var head = g.runs[0], open = !!revOpen[g.key];
+      return '<section class="card sec rev-group' + (open ? '' : ' collapsed') + '">' +
+        '<div class="sec-head" data-act="rev-toggle" data-key="' + esc(g.key) + '">' + ICON.chev + runLine(p, head, g.runs.length) + '</div>' +
+        (open ? '<div class="sec-body rev-body">' + runDetail(p, head) +
+          (g.runs.length > 1 ? '<div class="rev-sub">Earlier runs of this package</div>' + g.runs.slice(1).map(function (r) {
+            return '<div class="rev-older">' + runLine(p, r, 0) + runActions(p, r) + '</div>';
+          }).join('') : '') + '</div>' : '') + '</section>';
+    }).join('');
+    return html + '</div>';
+  }
+  function emptyCard(title, text) { return '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>' + esc(title) + '</h2><p>' + text + '</p></div>'; }
+  function runCounts(r) {
+    var s = r.summary;
+    return [s.error && plural(s.error, 'error'), s.warn && plural(s.warn, 'warning'), s.info && s.info + ' info'].filter(Boolean).join(' · ') || 'No findings';
+  }
+  function revChip(p, rev) {
+    var next = M.supersededBy(p, rev.id);
+    return '<span class="chip rev-chip ' + rev.status + '">' + esc(revName(rev)) + ' · ' + esc(revStatus(rev)) + '</span>' +
+      (next ? '<span class="muted rev-sup">superseded by ' + esc(next.label) + '</span>' : '');
+  }
+  function runLine(p, r, n) {
+    var rev = M.revisionForRun(p, r.id);
+    return '<div class="rev-line"><div class="rev-name">' + esc(r.package.name || 'Package') + (n > 1 ? ' <span class="muted">· ' + plural(n, 'run') + '</span>' : '') + '</div>' +
+      '<div class="rev-meta muted">' + esc([fmtDate(r.at), r.by, r.profile].filter(Boolean).join(' · ')) + ' · ' + esc(runCounts(r)) + '</div></div>' +
+      (rev ? '<div class="rev-tag">' + revChip(p, rev) + '</div>' : '');
+  }
+  function runActions(p, r) {
+    var rev = M.revisionForRun(p, r.id);
+    return '<div class="rev-acts">' +
+      '<button class="btn btn-primary" data-act="open-fabcheck" data-run="' + esc(r.id) + '" data-href="' + esc(fabcheckUrl(p, { run: r })) + '">Open in Fabcheck</button>' +
+      (r.zip && !DEMO ? '<button class="btn" data-act="run-download" data-run="' + esc(r.id) + '" title="SHA-256 ' + esc(r.zip.sha256) + '">Download ' + esc(fmtSize(r.zip.size)) + '</button>' : '') +
+      '<button class="btn" data-act="rev-tag" data-run="' + esc(r.id) + '">' + (rev ? 'Edit revision' : 'Tag as revision') + '</button></div>';
+  }
+  function runDetail(p, r) {
+    var rev = M.revisionForRun(p, r.id), h = runActions(p, r);
+    if (rev) {
+      var fab = [rev.fab.house, rev.fab.sentAt && 'sent ' + rev.fab.sentAt, rev.fab.ref && 'order ' + rev.fab.ref].filter(Boolean).join(' · ');
+      h += '<div class="rev-info">' + (fab ? '<div>' + esc(fab) + '</div>' : '') + (rev.notes ? '<div class="rev-notes">' + esc(rev.notes) + '</div>' : '') +
+        '<div class="muted">Tagged by ' + esc(rev.updatedBy || 'someone') + (rev.updatedAt ? ', ' + relTime(rev.updatedAt) : '') + '</div></div>';
+    }
+    if (r.zip) {
+      h += '<div class="rev-sub">' + esc(r.zip.name) + ' <span class="muted">· ' + esc(fmtSize(r.zip.size)) + '</span></div><div class="rev-files">' +
+        M.zipFolders(r.zip).map(function (g) {
+          return '<div class="rev-folder"><b>' + esc(g.folder ? g.folder + '/' : 'Top level') + '</b>' + g.files.map(function (f) {
+            return '<div class="rev-file"><span title="' + esc(f.path) + '">' + esc(f.name) + '</span><span class="muted">' + esc(fmtSize(f.size)) + '</span></div>';
+          }).join('') + '</div>';
+        }).join('') + '</div>';
+    } else if (!DEMO) {
+      h += '<p class="note">This run was stored without a package zip, so there’s nothing to download. Open in Fabcheck asks for the package to be dropped in.</p>';
+    }
+    var issues = runIssues(p, r.id);
+    h += '<div class="rev-sub">' + (issues.length ? 'Issues from this run' : 'No Fabcheck issues name this run') + '</div>';
+    if (issues.length) {
+      h += '<div class="rev-issues">' + issues.map(function (c) {
+        var it = p.items[c.id] || {}, res = M.oneOf(M.RESOLUTIONS, it.resolution, ''), sev = M.oneOf(M.SEVERITIES, it.severity, M.oneOf(M.SEVERITIES, c.severity, 'minor'));
+        return '<button class="rev-issue" data-act="goto-item" data-id="' + esc(c.id) + '"><span class="sev ' + sev + '">' + cap(sev) + '</span><span>' + esc(c.text) + '</span>' +
+          '<span class="res ' + (res || 'open') + '">' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open') + '</span></button>';
+      }).join('') + '</div>';
+    }
+    return h;
+  }
+
+  // Tag a run as a revision, or edit its tag. Anyone on the review can, like any review record.
+  function revisionSheet(p, run) {
+    var rev = M.revisionForRun(p, run.id);
+    var r = rev || { label: M.nextRevLabel(p), title: '', status: 'sent', fab: { house: '', sentAt: new Date().toISOString().slice(0, 10), ref: '' }, notes: '' };
+    var w = sheet('<div class="sheet-head"><h2>' + (rev ? 'Revision ' + esc(rev.label) : 'Tag as revision') + '</h2><p>' + esc(run.package.name || 'Package') + ' · ' + esc(fmtDate(run.at)) + (run.by ? ' · ' + esc(run.by) : '') + '</p></div>' +
+      '<div class="sheet-body">' +
+      '<div class="row2"><div class="field"><label for="v-label">Label</label><input class="input" id="v-label" value="' + esc(r.label) + '" maxlength="40" placeholder="e.g. 3.2"></div>' +
+      '<div class="field"><label for="v-status">Status</label><select class="input" id="v-status">' + M.REV_STATUS.map(function (s) { return '<option value="' + s + '"' + (s === r.status ? ' selected' : '') + '>' + esc(M.REV_STATUS_LABEL[s]) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label for="v-title">Title</label><input class="input" id="v-title" value="' + esc(r.title) + '" maxlength="200" placeholder="e.g. DFM updates"></div>' +
+      '<div class="row2"><div class="field"><label for="v-house">Fab house</label><input class="input" id="v-house" value="' + esc(r.fab.house) + '" maxlength="100" placeholder="Optional"></div>' +
+      '<div class="field"><label for="v-sent">Date sent</label><input class="input" type="date" id="v-sent" value="' + esc(r.fab.sentAt) + '"></div></div>' +
+      '<div class="field"><label for="v-ref">Order or quote ref</label><input class="input" id="v-ref" value="' + esc(r.fab.ref) + '" maxlength="100" placeholder="Optional"></div>' +
+      '<div class="field"><label for="v-notes">Notes</label><textarea class="input" id="v-notes" maxlength="4000" placeholder="What changed, what it was used for">' + esc(r.notes) + '</textarea></div>' +
+      '</div><div class="sheet-foot">' + (rev ? '<button class="btn btn-danger" data-sheet="untag">Remove tag</button><span class="spacer"></span>' : '') +
+      '<button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">' + (rev ? 'Save' : 'Tag') + '</button></div>');
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]');
+      if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      p.revisions = p.revisions || {};
+      if (b.dataset.sheet === 'untag') {
+        p.revisions[rev.id] = M.stamp(Object.assign({}, p.revisions[rev.id], { deleted: true }), me());
+        closeSheet(); touch(p); renderPage(); toast('Tag removed'); return;
+      }
+      var val = function (id) { return w.querySelector('#' + id).value.trim(); };
+      var fields = { label: val('v-label'), title: val('v-title'), status: val('v-status'), house: val('v-house'), sentAt: val('v-sent'), ref: val('v-ref'), notes: val('v-notes') };
+      if (!fields.label) { w.querySelector('#v-label').focus(); return; }
+      var rec = M.newRevision(run, fields, me());
+      if (rev) p.revisions[rev.id] = M.stamp(Object.assign({}, p.revisions[rev.id], { label: rec.label, title: rec.title, status: rec.status, fab: rec.fab, notes: rec.notes }), me());
+      else p.revisions[rec.id] = rec;
+      closeSheet(); touch(p); renderPage(); toast(rev ? 'Revision saved' : 'Tagged as ' + rec.label);
+    });
+  }
+
+  // Download a run's package zip from the review's repo, checked against its recorded SHA-256.
+  function downloadRun(p, r) {
+    if (!r || !r.zip) return;
+    var st = runsOf[p.id], path = checkerDir(p, C.runs.dir) + r.zip.rel;
+    var entries = st && st.entries && st.entries.some(function (e) { return e.path === path; }) ? st.entries : undefined;
+    toast('Downloading ' + r.zip.name + '…');
+    workspace().store(homeOf(p)).readVerified(path, r.zip.sha256, entries).then(function (bytes) {
+      download(r.zip.name, bytes, 'application/zip');
+      toast('Saved ' + r.zip.name + ' (SHA-256 checked)');
+    }, function (err) {
+      toast(err.code === 'mismatch' ? 'Not saved: the stored zip doesn’t match its recorded SHA-256' : err.code === 'missing' ? 'Not saved: the zip isn’t in the repository' : 'Not saved: ' + (err.message || err));
+    });
+  }
+
+  // Read a stored run and its zip with this tab's token and leave them for Fabcheck (S.handoff).
+  // Resolves 'ok', 'missing' (no such run file) or 'nozip' (stored without a zip).
+  function handOff(p, runId) {
+    var dir = checkerDir(p, C.runs.dir), store = workspace().store(homeOf(p));
+    return store.listTree(dir).then(function (entries) {
+      return store.readBytes(dir + 'runs/' + runId + '.json', entries).then(function (b) {
+        var r = null;
+        try { r = b && M.cleanRun(JSON.parse(new TextDecoder().decode(b))); } catch (e) { r = null; }
+        if (!r || r.id !== runId) return 'missing';
+        if (!r.zip) return 'nozip';
+        return store.readVerified(dir + r.zip.rel, r.zip.sha256, entries).then(function (zip) {
+          return S.handoff.put({ id: runId, run: r.raw, findings: r.findings, zip: zip, at: M.now() }, DEMO);
+        }).then(function () { return 'ok'; });
+      });
+    });
+  }
+
+  // Open in Fabcheck: its window opens at once (a later window.open would be blocked), the run is
+  // handed off, then the window goes to the run's link. The demo's runs open in Fabcheck's demo,
+  // which has their boards; without a token Fabcheck asks for the package.
+  function openFabcheck(el) {
+    var href = new URL(el.dataset.href, location.href).href, runId = el.dataset.run || '', p = current();
+    var w = window.open('', 'dovetail-fabcheck');
+    function go() {
+      if (w && !w.closed) { w.location.href = href; w.focus(); }
+      else { w = window.open(href, 'dovetail-fabcheck'); if (w) w.focus(); }
+    }
+    if (DEMO || !C.runs || !p || !getToken() || !/^[A-Za-z0-9_-]{1,64}$/.test(runId)) return go();
+    try { if (w && w.location.href === 'about:blank') { w.document.title = 'Fabcheck'; w.document.body.textContent = 'Reading the run from GitHub…'; } } catch (e) { /* Fabcheck already open there */ }
+    handOff(p, runId).then(function (res) {
+      if (res === 'missing') toast('This run isn’t stored with the ' + UNIT + '. Fabcheck asks for the package.');
+      else if (res === 'nozip') toast('This run was stored without a package zip. Fabcheck asks for the package.');
+    }, function (err) {
+      toast((err.code === 'mismatch' ? 'The stored zip doesn’t match its SHA-256' : 'Couldn’t read the run from GitHub') + '. Fabcheck asks for the package.');
+    }).then(go);
   }
 
   function renderInspector() {
@@ -2028,7 +2240,11 @@
       case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
       case 'pic-side': { ui.picSide = el.dataset.key; var pp = current(); if (pp) showPicture(pp); break; }
-      case 'open-fabcheck': { var w = window.open(el.dataset.href, 'dovetail-fabcheck'); if (w) w.focus(); break; }
+      case 'open-fabcheck': openFabcheck(el); break;
+      case 'runs-reload': { var rp = current(); if (rp) { loadRuns(rp, true); renderPage(); } break; }
+      case 'rev-toggle': revOpen[el.dataset.key] = !revOpen[el.dataset.key]; renderPage(); break;
+      case 'rev-tag': { var tp = current(), tr = tp && runById(tp, el.dataset.run); if (tr) revisionSheet(tp, tr); break; }
+      case 'run-download': { var dp = current(); if (dp) downloadRun(dp, runById(dp, el.dataset.run)); break; }
       case 'sync': if (!DEMO && lastError && el.id === 'sync-pill' && !syncing) toast(lastError); sync(); break;
       case 'settings': settingsSheet(); break;
       case 'theme': toggleTheme(); break;

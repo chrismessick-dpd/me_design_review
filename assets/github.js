@@ -443,6 +443,39 @@
     });
   };
 
+  // The run files a checker stored under `dir` (Fabcheck's fabcheck/<projectId>/), parsed but not
+  // checked (model.cleanRun does that): resolves { entries, runs: [{ path, data }] }. `entries`
+  // is the listing, to pass on to readBytes / readVerified. A file that isn't JSON is skipped.
+  GitHubStore.prototype.listRuns = function (dir) {
+    var self = this, base = dir + 'runs/';
+    return this.listTree(dir).then(function (entries) {
+      var files = entries.filter(function (e) { return e.path.indexOf(base) === 0 && /^[^/]+\.json$/.test(e.path.slice(base.length)); });
+      return Promise.all(files.map(function (e) {
+        return self.blobBytes(e.sha).then(function (b) {
+          try { return { path: e.path, data: JSON.parse(new TextDecoder().decode(b)) }; } catch (err) { return null; }
+        });
+      })).then(function (runs) { return { entries: entries, runs: runs.filter(Boolean) }; });
+    });
+  };
+
+  // A file's bytes, checked against the SHA-256 its record gives. Rejects with err.code 'missing'
+  // when it isn't there and 'mismatch' when its checksum differs, so a changed file is never used.
+  GitHubStore.prototype.readVerified = function (path, sha256, entries) {
+    return this.readBytes(path, entries).then(function (bytes) {
+      if (!bytes) { var e1 = new Error(path + ' isn’t in the repository'); e1.code = 'missing'; throw e1; }
+      return sha256Hex(bytes).then(function (got) {
+        if (got !== String(sha256 || '').toLowerCase()) { var e2 = new Error(path + ' doesn’t match its recorded SHA-256'); e2.code = 'mismatch'; throw e2; }
+        return bytes;
+      });
+    });
+  };
+
+  function sha256Hex(bytes) {
+    return crypto.subtle.digest('SHA-256', bytes).then(function (d) {
+      return Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    });
+  }
+
   /* Write several files in one commit.
      files: [{ path, bytes: Uint8Array } | { path, text } | { path, remove: true }]
      opts:  { message, onRetry(attempt), onProgress(done, total) }
@@ -522,8 +555,37 @@
     });
   };
 
+  // ── Hand-off to Fabcheck (docs/fabcheck-link.md, "Opening a run from Signoff") ──
+  // Fabcheck never reads a review's repo. Signoff reads a stored run and its package zip with its
+  // own token and leaves them in IndexedDB, where Fabcheck (same origin) takes the entry when it
+  // opens the run's link: database dovetail-handoff (dovetail-handoff-demo in demo mode), store
+  // runs, keyed by run id, { id, run, findings, zip: Uint8Array, at }.
+  function handoffDb(demo) {
+    return new Promise(function (res, rej) {
+      var r = indexedDB.open(demo ? 'dovetail-handoff-demo' : 'dovetail-handoff', 1);
+      r.onupgradeneeded = function () { if (!r.result.objectStoreNames.contains('runs')) r.result.createObjectStore('runs', { keyPath: 'id' }); };
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { rej(r.error); };
+    });
+  }
+  function handoffTx(demo, mode, fn) {
+    return handoffDb(demo).then(function (d) {
+      return new Promise(function (res, rej) {
+        var t = d.transaction('runs', mode), q = fn(t.objectStore('runs'));
+        t.oncomplete = function () { d.close(); res(q && q.result); };
+        t.onerror = function () { d.close(); rej(t.error); };
+      });
+    });
+  }
+  var handoff = {
+    put: function (entry, demo) { return handoffTx(demo, 'readwrite', function (s) { return s.put(entry); }); },
+    get: function (id, demo) { return handoffTx(demo, 'readonly', function (s) { return s.get(id); }); },
+    remove: function (id, demo) { return handoffTx(demo, 'readwrite', function (s) { return s.delete(id); }); }
+  };
+
   S.GitHubStore = GitHubStore;
   S.GitHubAccount = GitHubAccount;
+  S.handoff = handoff;
   S.github = { b64Encode: b64Encode, b64Decode: b64Decode, gitBlobSha: gitBlobSha,
-    bytesToB64: bytesToB64, b64ToBytes: b64ToBytes, gitBlobShaBytes: gitBlobShaBytes };
+    bytesToB64: bytesToB64, b64ToBytes: b64ToBytes, gitBlobShaBytes: gitBlobShaBytes, sha256Hex: sha256Hex };
 })(window.Signoff = window.Signoff || {});

@@ -588,6 +588,41 @@ span.fab-loc { color: var(--text-2); }
 .fab-detail { margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
 .fab-detail summary { cursor: pointer; color: var(--text-3); }
 .fab-detail div { white-space: pre-wrap; margin-top: 6px; }
+button.fab-rev { border: none; margin-left: 6px; cursor: pointer; background: var(--bg-elev); color: var(--accent-ink); }
+
+/* Revisions: stored runs and their tags */
+.head-ring { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.head-rev { border: none; border-radius: 980px; padding: 3px 11px; font-size: 12px; background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
+.rev-group .sec-head { align-items: flex-start; flex-wrap: wrap; }
+.rev-group .sec-chev { margin-top: 4px; }
+.rev-line { flex: 1; min-width: 0; }
+.rev-name { font: 600 14.5px var(--display); overflow-wrap: anywhere; }
+.rev-meta { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.rev-tag { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rev-chip { white-space: normal; }
+.rev-chip.sent { background: var(--accent-soft); color: var(--accent-ink); }
+.rev-chip.built { background: var(--pass-soft); color: var(--pass); }
+.rev-chip.withdrawn { background: var(--na-soft); color: var(--text-3); text-decoration: line-through; }
+.rev-sup { font-size: 12px; color: var(--text-3); }
+.rev-body { padding: 14px 18px 16px 44px; font-size: 13px; }
+.rev-acts { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 10px; }
+.rev-acts .btn { padding: 5px 13px; font-size: 12.5px; }
+.rev-info { color: var(--text-2); margin-bottom: 10px; line-height: 1.5; }
+.rev-notes { white-space: pre-wrap; margin: 4px 0; }
+.rev-sub { font-weight: 600; margin: 14px 0 6px; }
+.rev-sub .muted { font-weight: 400; color: var(--text-3); }
+.rev-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 22px; }
+.rev-folder b { display: block; font: 600 12px var(--mono); color: var(--text-2); margin-bottom: 3px; }
+.rev-file { display: flex; justify-content: space-between; gap: 12px; font: 12px var(--mono); padding: 1px 0; }
+.rev-file span:first-child { overflow-wrap: anywhere; }
+.rev-file .muted { color: var(--text-3); white-space: nowrap; }
+.rev-issues { display: flex; flex-direction: column; gap: 2px; }
+.rev-issue { display: flex; align-items: center; gap: 10px; text-align: left; border: none; background: transparent; border-radius: 7px; padding: 5px 7px; font-size: 13px; color: var(--text); cursor: pointer; }
+.rev-issue:hover { background: var(--bg-sunk); }
+.rev-issue > span:nth-child(2) { flex: 1; min-width: 0; }
+.rev-older { border-top: 1px solid var(--hair); padding-top: 10px; margin-top: 10px; }
+.rev-older .rev-acts { margin-top: 8px; }
+@media (max-width: 860px) { .rev-body { padding-left: 18px; } }
 
 /* ── Collapsible sidebar ── */
 .brand-text { flex: 1; min-width: 0; }
