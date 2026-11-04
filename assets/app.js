@@ -403,6 +403,7 @@
   function renderSyncState(state) {
     var dot = $('#sync-dot'), title = $('#sync-title'), sub = $('#sync-sub');
     var n = Object.keys(dirty).length;
+    syncDetailsButton(!DEMO && n > 0 && state !== 'busy');
     if (DEMO) { dot.dataset.tone = 'idle'; title.textContent = 'Demo mode'; sub.textContent = 'Changes stay in this browser'; return; }
     if (state === 'busy') { dot.dataset.tone = 'busy'; title.textContent = 'Syncing\u2026'; sub.textContent = settings.owner; return; }
     if (state === 'error') { dot.dataset.tone = 'error'; title.textContent = 'Sync failed'; sub.textContent = 'Click for details'; return; }
@@ -415,6 +416,85 @@
     if (errs) { dot.dataset.tone = 'warn'; title.textContent = 'Synced with problems'; sub.textContent = lastSync.errors[0].message; return; }
     sub.textContent = outdated ? 'Get the latest from ' + settings.toolRepo : (lastSync ? relTime(lastSync.at) : 'Ready') +
       (settings.login ? ' \u00b7 ' + settings.login + (myRole() === 'contractor' ? ' (contractor)' : '') : '');
+  }
+
+  // ── What's unsynced ─────────────────────────────────────
+  // Read-only: what the dirty list holds, itemized from each project's records edited since the
+  // last sync started (model.changesSince). A project with no home repo was never synced, so
+  // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
+  // it's listed without details. Nothing here touches dirty or sync.
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision' };
+  var CHANGES_SHOWN = 8;
+  function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
+  function unsyncedList() {
+    var base = lastSync ? (lastSync.startedAt || lastSync.at || '') : '';
+    return Object.keys(dirty).sort(function (a, b) { return (dirty[b] || '') < (dirty[a] || '') ? -1 : 1; }).map(function (k) {
+      if (k === 'roster') return { roster: true, at: dirty[k] };
+      var slug = slugOfId(k), p = slug && projects[slug];
+      if (!p) return { id: k, missing: true, at: dirty[k] };
+      if (!visible()) return { id: k, hidden: true, at: dirty[k] };   // signed out: nothing real shows
+      var fresh = !homes[k];
+      return { id: k, slug: slug, name: p.meta.name, fresh: fresh, at: dirty[k], changes: M.changesSince(p, fresh ? '' : base, TEMPLATES) };
+    });
+  }
+  function syncDetailsButton(show) {
+    var pill = $('#sync-pill'), btn = $('#sync-details');
+    if (!pill) return;
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.className = 'icon-btn sync-details'; btn.id = 'sync-details'; btn.dataset.act = 'sync-details';
+      btn.title = 'What isn’t synced yet'; btn.setAttribute('aria-label', 'What isn’t synced yet'); btn.setAttribute('aria-haspopup', 'true');
+      btn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 5.5h9M7 10h9M7 14.5h9"/><circle cx="3.6" cy="5.5" r=".9" fill="currentColor"/><circle cx="3.6" cy="10" r=".9" fill="currentColor"/><circle cx="3.6" cy="14.5" r=".9" fill="currentColor"/></svg>';
+      pill.parentNode.insertBefore(btn, pill.nextSibling);
+    }
+    btn.hidden = !show;
+    // The pill's tooltip names what changed (plain text: set as a property, never as HTML).
+    // Names only, so it stays cheap on every render; the list button has the details.
+    pill.title = show ? 'Not synced yet:\n' + Object.keys(dirty).map(function (k) {
+      var slug = k !== 'roster' && slugOfId(k), p = slug && projects[slug];
+      return '• ' + (k === 'roster' ? 'People & access' : !p ? 'A ' + UNIT + ' not in this browser' : visible() ? p.meta.name + (homes[k] ? '' : ' (new)') : 'A ' + UNIT + ' (sign in to see it)');
+    }).join('\n') + '\n\nClick to sync (Ctrl+S)' : 'Sync with GitHub (Ctrl+S)';
+    if (!show && $('#menu.sync-pop')) closeMenu();
+  }
+  function syncDetails(anchor) {
+    closeMenu();
+    var groups = unsyncedList();
+    var html = '<div class="sync-pop-head">' + esc(plural(groups.length, 'unsynced change')) + '<small>' + (DEMO || !getToken() ? 'Only in this browser' : 'Since the last sync' + (lastSync ? ', ' + esc(relTime(lastSync.at)) : '')) + '</small></div>';
+    html += groups.map(function (g) {
+      if (g.roster) return '<div class="sync-pop-group"><button data-act="people"><span class="sync-pop-name">People &amp; access</span><span class="sync-pop-sub">Edited ' + esc(relTime(g.at)) + '</span></button></div>';
+      if (g.missing) return '<div class="sync-pop-group"><div class="sync-pop-note">A ' + esc(UNIT) + ' that isn’t in this browser any more</div></div>';
+      if (g.hidden) return '<div class="sync-pop-group"><div class="sync-pop-note">A ' + esc(UNIT) + ' edited ' + esc(relTime(g.at)) + ' (sign in to see it)</div></div>';
+      var rows = g.changes.slice(0, CHANGES_SHOWN).map(function (c) {
+        return '<button data-act="goto-change" data-pid="' + esc(g.id) + '" data-kind="' + esc(c.kind) + '" data-id="' + esc(c.id) + '" data-item="' + esc(c.item) + '"' + (c.deleted ? ' data-deleted="1"' : '') + '>' +
+          '<span class="sync-pop-kind">' + esc((c.deleted ? 'Deleted ' + CHANGE_KIND[c.kind].toLowerCase() : CHANGE_KIND[c.kind]) || c.kind) + '</span>' +
+          '<span class="sync-pop-text">' + esc(c.label) + (c.detail ? ' <em>' + esc(c.detail) + '</em>' : '') + '</span>' +
+          '<span class="sync-pop-sub">' + esc([c.by, relTime(c.at)].filter(Boolean).join(' · ')) + '</span></button>';
+      }).join('');
+      var more = g.changes.length > CHANGES_SHOWN ? '<div class="sync-pop-note">+ ' + esc(plural(g.changes.length - CHANGES_SHOWN, 'more change')) + '</div>' : '';
+      var none = g.changes.length ? '' : '<div class="sync-pop-note">Changed, but no edits after the last sync to list (its repository may have failed then)</div>';
+      return '<div class="sync-pop-group"><button data-act="goto-change" data-pid="' + esc(g.id) + '" data-kind="project"><span class="sync-pop-name">' + esc(g.name) + '</span>' +
+        (g.fresh ? '<span class="sync-pop-badge">Not on GitHub yet</span>' : '') + '</button>' + rows + more + none + '</div>';
+    }).join('');
+    var m = document.createElement('div');
+    m.className = 'menu sync-pop'; m.id = 'menu'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-label', 'Unsynced changes');
+    m.innerHTML = html;
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect(), foot = anchor.closest('.side-foot') || anchor;
+    m.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+    m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, foot.getBoundingClientRect().left)) + 'px';
+  }
+  // Jump to an unsynced change: the project, then the check, requirement or revision.
+  function gotoChange(el) {
+    var slug = slugOfId(el.dataset.pid), p = slug && projects[slug];
+    closeMenu();
+    if (!p) return;
+    var kind = el.dataset.kind, id = el.dataset.id, item = el.dataset.item, gone = !!el.dataset.deleted;
+    ui.slug = slug; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = false; selected = null;
+    ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : 'overview';
+    closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open');
+    if (kind === 'req' && !gone && ui.view === 'reqs' && reqOf(p, id)) openReq(id);
+    else if ((kind === 'check' || kind === 'custom' || kind === 'comment') && item && (!gone || kind === 'comment') && !itemDef(p, item).retired) gotoItem(item);
+    else $('#main').scrollTop = 0;
   }
 
   // ── Toolbar ──────────────────────────────────────────────
@@ -1910,6 +1990,7 @@
     if (!settings.user) { settingsSheet(); return; }
     noticeToken();
     syncing = true; renderSyncState('busy');
+    var startedAt = M.now();   // the cutoff for the unsynced list (unsyncedList)
     var started = Object.assign({}, dirty);
     var st0 = stateNow();
     var names = Object.keys(dirty).map(function (k) { return k === 'roster' ? 'people' : st0.projects[k] ? st0.projects[k].meta.name : k; });
@@ -1971,7 +2052,7 @@
         openWanted(true);
         if (res.templates && res.templates.length) { pulledTemplates = res.templates; save('templates', pulledTemplates); refreshTemplates(); }
         invitations = res.invitations || [];
-        lastSync = { at: M.now(), version: res.version || (lastSync && lastSync.version), errors: res.errors };
+        lastSync = { at: M.now(), startedAt: startedAt, version: res.version || (lastSync && lastSync.version), errors: res.errors };
         save('cache2', cache); save('lastSync', lastSync); save('dataAccess', dataAccess); save('invitations', invitations); persist();
         lastError = res.errors.length ? res.errors[0].message : '';
         syncing = false;
@@ -2160,11 +2241,14 @@
   }
 
   document.addEventListener('click', function (e) {
+    var popWasOpen = !!$('#menu.sync-pop');
     if (!e.target.closest('#menu')) closeMenu();
     var el = e.target.closest('[data-act]');
     if (!el) return;
     var act = el.dataset.act, id = el.dataset.id;
     switch (act) {
+      case 'sync-details': if (popWasOpen) closeMenu(); else syncDetails(el); break;
+      case 'goto-change': gotoChange(el); break;
       case 'new-project': if (isFte()) projectSheet(null); break;
       case 'people': ui.page = 'people'; selected = null; closeInspector(); renderSidebar(); renderPage(); $('#app').classList.remove('nav-open'); break;
       case 'edit-project': projectSheet(current()); break;
@@ -2304,6 +2388,7 @@
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); sync(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.activeElement.id === 'comment-input') { e.preventDefault(); $('[data-act="post-comment"]').click(); return; }
     if (e.key === 'Escape') {
+      if ($('#menu')) { closeMenu(); return; }
       if ($('#sheet')) { closeSheet(); applyTheme(settings.theme); return; }
       if (!$('#report').hidden) { $('#report').hidden = true; return; }
       if (inField) { document.activeElement.blur(); return; }

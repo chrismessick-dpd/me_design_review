@@ -487,6 +487,26 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
 .menu button.danger:hover { background: var(--issue); color: #fff; }
 .menu hr { border: none; border-top: 1px solid var(--hair); margin: 4px 6px; }
 
+/* What's unsynced: the list above the sidebar's sync pill */
+.sync-pop { width: 340px; max-width: calc(100vw - 16px); max-height: min(70vh, 520px); overflow-y: auto; padding: 6px; }
+.sync-pop-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 10px 8px; font-size: 13px; font-weight: 600; }
+.sync-pop-head small { font-size: 11px; font-weight: 400; color: var(--text-3); }
+.sync-pop-group { border-top: 1px solid var(--hair); padding: 4px 0; }
+.sync-pop .sync-pop-group button { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 1px; align-items: baseline; padding: 6px 10px; }
+.sync-pop-name { grid-column: 1 / -1; font-weight: 600; font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-pop-name + .sync-pop-badge { grid-column: 1 / -1; justify-self: start; }
+.sync-pop-badge { font-size: 10.5px; padding: 1px 6px; border-radius: 980px; background: var(--hair); color: var(--text-2); }
+.sync-pop-kind { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-3); white-space: nowrap; }
+.sync-pop-text { font-size: 12.5px; min-width: 0; overflow-wrap: anywhere; }
+.sync-pop-text em { font-style: normal; color: var(--text-3); }
+.sync-pop-sub { grid-column: 2; font-size: 11px; color: var(--text-3); }
+.sync-pop-name + .sync-pop-sub { grid-column: 1 / -1; }
+.sync-pop .sync-pop-group button:hover .sync-pop-kind,
+.sync-pop .sync-pop-group button:hover .sync-pop-text em,
+.sync-pop .sync-pop-group button:hover .sync-pop-sub { color: rgba(255, 255, 255, 0.8); }
+.sync-pop-note { font-size: 11.5px; color: var(--text-3); padding: 4px 10px 6px; }
+.sync-details[hidden] { display: none; }
+
 /* Toast */
 .toasts { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { background: rgba(29, 29, 31, 0.92); color: #fff; padding: 9px 16px; border-radius: 980px; font-size: 13px; box-shadow: var(--shadow-lg); animation: rise 0.25s var(--ease); backdrop-filter: blur(12px); pointer-events: auto; }

@@ -206,6 +206,42 @@
     return last;
   }
 
+  // The records of a project edited after `since` (an ISO time; '' or missing: every record),
+  // newest first, for the "unsynced changes" list. Read-only. Each entry:
+  //   { kind: 'meta' | 'check' | 'section' | 'comment' | 'custom' | 'req' | 'revision',
+  //     id, item (the check a comment or check record is about, '' if none),
+  //     label (what it is), detail (its state or text), at, by, deleted }
+  // Values come straight from the document (untrusted): callers escape them.
+  function changesSince(project, since, templates) {
+    var out = [], index = {}, cut = function (t, n) { t = String(t == null ? '' : t); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+    since = since || '';
+    try { index = checkIndex(project, templates || []); } catch (e) { /* no checklists: ids stand in */ }
+    var secTitle = {};
+    Object.keys(index).forEach(function (k) { var s = index[k].section; if (s && s.id && !secTitle[s.id]) secTitle[s.id] = cut(s.title, 120); });
+    function checkText(id) { var c = id && index[id]; return c ? cut(c.text, 120) : String(id || ''); }
+    function add(kind, rec, id, item, label, detail) {
+      if (!rec || typeof rec !== 'object') return;
+      var at = typeof rec.updatedAt === 'string' ? rec.updatedAt : '';
+      if (since && !(at > since)) return;
+      out.push({ kind: kind, id: String(id || ''), item: String(item || ''), label: label, detail: detail,
+        at: at, by: typeof rec.updatedBy === 'string' ? rec.updatedBy : '', deleted: !!rec.deleted });
+    }
+    function each(k, fn) { var m = project[k] || {}; Object.keys(m).forEach(function (id) { fn(m[id] || {}, id); }); }
+    add('meta', project.meta, project.id, '', 'Name, stage, profile or checklists', '');
+    each('items', function (r, id) {
+      var st = oneOf(STATUSES, r.status, ''), res = r.resolution ? oneOf(RESOLUTIONS, r.resolution, '') : '';
+      add('check', r, id, id, checkText(id), (st || 'to review') + (res ? ', ' + res : ''));
+    });
+    each('sections', function (r, id) { add('section', r, id, '', 'Section: ' + (secTitle[id] || String(id)), r.na ? 'set aside (N/A)' : 'back in review'); });
+    each('comments', function (r, id) {
+      add('comment', r, id, r.item || '', r.item ? checkText(r.item) : 'Comment on the whole review', cut(r.text, 160));
+    });
+    each('custom', function (r, id) { add('custom', r, id, id, cut(r.text, 120) || String(id), 'added check'); });
+    each('reqs', function (r, id) { add('req', r, id, '', ((r.ref ? r.ref + ' ' : '') + cut(r.text, 120)).trim() || String(id), oneOf(REQ_VERIFY, r.verify, 'open')); });
+    each('revisions', function (r, id) { add('revision', r, id, '', 'Revision ' + cut(r.label, 40), oneOf(REV_STATUS, r.status, '')); });
+    return out.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
+  }
+
   var RECENT = 6;   // comments kept in summary.recent
   function projectSummary(project, templates) {
     var stats = projectStats(project, templates), meta = project.meta, checklists = {};
@@ -877,7 +913,7 @@
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
-    liveComments: liveComments, retiredItems: retiredItems,
+    liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,
