@@ -339,7 +339,7 @@
   }
 
   // Notes for the next revision: comments tagged @revnotes, grouped by the check they're on.
-  // Groups come in the order of their first tagged comment, comments oldest first. A custom
+  // Newest first: groups by their latest tagged comment, and comments within a group. A custom
   // issue whose own text carries the tag forms a group too (comments may be empty).
   var REVNOTE = /(^|[^\w@])@revnotes\b/i;
   function isRevNote(text) { return REVNOTE.test(String(text || '')); }
@@ -355,10 +355,9 @@
       var c = project.custom[k];
       if (c && !c.deleted && (isRevNote(c.text) || isRevNote(c.hint))) group(k, c.createdAt || c.updatedAt);
     });
-    return order.map(function (k) { return groups[k]; }).sort(function (a, b) {
-      var x = a.comments.length ? a.comments[0].at : a.at, y = b.comments.length ? b.comments[0].at : b.at;
-      return String(x || '').localeCompare(String(y || ''));
-    });
+    var latest = function (g) { return String((g.comments.length ? g.comments[0].at : g.at) || ''); };
+    return order.map(function (k) { groups[k].comments.reverse(); return groups[k]; })
+      .sort(function (a, b) { return latest(b).localeCompare(latest(a)); });
   }
 
   // Item states whose ID is in no current template and isn't a custom item:

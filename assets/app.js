@@ -960,20 +960,30 @@
     var html = '<div class="section-title">Next revision updates' + (groups.length ? ' <span class="muted rev-notes-count">' + plural(groups.length, 'item') + '</span>' : '') + '</div>';
     if (!groups.length) return html + '<div class="card empty rev-notes-empty"><p>Nothing noted yet. Write <b>@revnotes</b> in a comment on any check or issue, and it’s listed here for the next revision.</p></div>';
     return html + '<div class="card rev-notes-list">' + groups.map(function (g) {
+      var q = g.item && reqOf(p, g.item);
+      if (q) return revNoteGroup('open-req', g, '<span class="muted rev-note-cl">' + esc(q.ref || 'Requirement') + '</span><span>' + esc(q.text) + '</span>');
       var d = g.item ? itemDef(p, g.item) : null, it = (g.item && p.items[g.item]) || {};
       var st = M.oneOf(M.STATUSES, it.status, ''), res = M.oneOf(M.RESOLUTIONS, it.resolution, '');
       var chip = st === 'issue' ? '<span class="res ' + (res || 'open') + '">' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open issue') + '</span>'
         : st === 'pass' ? '<span class="res fixed">Pass</span>' : st === 'na' ? '<span class="res waived">N/A</span>' : '';
       var title = d ? M.stripRevNote(d.def.text) || d.def.text : 'On the whole ' + UNIT;
-      return '<div class="rev-note">' +
-        '<button class="rev-issue rev-note-head" data-act="goto-item" data-id="' + esc(g.item) + '"' + (g.item ? '' : ' disabled') + '>' +
-        (d && d.template ? '<span class="muted rev-note-cl">' + esc(d.template.short || d.template.title || '') + '</span>' : '<span></span>') +
-        '<span>' + esc(title) + '</span>' + chip + '</button>' +
-        g.comments.map(function (c) {
-          return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span>' + relTime(c.at) + '</span></div>' +
-            '<div class="cmt-text">' + esc(M.stripRevNote(c.text) || c.text) + '</div></div></div>';
-        }).join('') + '</div>';
+      return revNoteGroup('goto-item', g, (d && d.template ? '<span class="muted rev-note-cl">' + esc(d.template.short || d.template.title || '') + '</span>' : '<span></span>') +
+        '<span>' + esc(title) + '</span>' + chip);
     }).join('') + '</div>';
+  }
+  function revNoteGroup(act, g, head) {
+    return '<div class="rev-note">' +
+      '<button class="rev-issue rev-note-head" data-act="' + act + '" data-id="' + esc(g.item) + '"' + (g.item ? '' : ' disabled') + '>' + head + '</button>' +
+      g.comments.map(function (c) {
+        return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span>' + relTime(c.at) + '</span></div>' +
+          '<div class="cmt-text">' + esc(M.stripRevNote(c.text) || c.text) + '</div></div></div>';
+      }).join('') + '</div>';
+  }
+  // The composer's foot: the @revnotes hint (EE, where the Revisions tab lists them) over the post shortcut.
+  function composerFoot() {
+    return '<div class="composer-foot"><span class="composer-hints">' +
+      (C.runs ? '<span><b>@revnotes</b> notes it for the next revision</span>' : '') +
+      '<span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span></span><button class="btn btn-primary" data-act="post-comment">Comment</button></div>';
   }
   function emptyCard(title, text) { return '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>' + esc(title) + '</h2><p>' + text + '</p></div>'; }
   function runCounts(r) {
@@ -1164,7 +1174,7 @@
       }).join('') : '<p class="note">No comments yet. Note what you checked, what you found, or ask the designer a question.</p>') +
       '</div></div>' +
       '<div class="composer"><textarea class="input" id="comment-input" placeholder="Add a comment…" rows="2">' + esc(draftText) + '</textarea>' +
-      '<div class="composer-foot"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span><button class="btn btn-primary" data-act="post-comment">Comment</button></div></div>';
+      composerFoot() + '</div>';
     el.dataset.item = selected;
     if (keep) {
       var det = el.querySelector('.fab-detail');
@@ -1361,7 +1371,7 @@
           (c.author === me() ? '<button class="cmt-del" data-act="del-comment" data-id="' + esc(c.id) + '">Delete</button>' : '') + '</div><div class="cmt-text">' + esc(c.text) + '</div></div></div>';
       }).join('') : '<p class="note">No comments yet.</p>') + '</div></div>' +
       '<div class="composer"><textarea class="input" id="comment-input" placeholder="Add a comment…" rows="2">' + esc(draftText) + '</textarea>' +
-      '<div class="composer-foot"><span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span><button class="btn btn-primary" data-act="post-comment">Comment</button></div></div>';
+      composerFoot() + '</div>';
     el.dataset.item = q.id;
     if (keep) el.querySelector('.insp-body').scrollTop = keep.body;
   }
