@@ -338,6 +338,29 @@
       .sort(function (a, b) { return (a.at || '').localeCompare(b.at || ''); });
   }
 
+  // Notes for the next revision: comments tagged @revnotes, grouped by the check they're on.
+  // Groups come in the order of their first tagged comment, comments oldest first. A custom
+  // issue whose own text carries the tag forms a group too (comments may be empty).
+  var REVNOTE = /(^|[^\w@])@revnotes\b/i;
+  function isRevNote(text) { return REVNOTE.test(String(text || '')); }
+  function stripRevNote(text) { return String(text || '').replace(/(^|[^\w@])@revnotes\b:?/ig, '$1').replace(/[ \t]{2,}/g, ' ').trim(); }
+  function revNotes(project) {
+    var groups = {}, order = [];
+    function group(k, at) {
+      if (!groups[k]) { groups[k] = { item: k, at: at || '', comments: [] }; order.push(k); }
+      return groups[k];
+    }
+    liveComments(project).forEach(function (c) { if (isRevNote(c.text)) group(c.item || '', c.at).comments.push(c); });
+    Object.keys(project.custom || {}).forEach(function (k) {
+      var c = project.custom[k];
+      if (c && !c.deleted && (isRevNote(c.text) || isRevNote(c.hint))) group(k, c.createdAt || c.updatedAt);
+    });
+    return order.map(function (k) { return groups[k]; }).sort(function (a, b) {
+      var x = a.comments.length ? a.comments[0].at : a.at, y = b.comments.length ? b.comments[0].at : b.at;
+      return String(x || '').localeCompare(String(y || ''));
+    });
+  }
+
   // Item states whose ID is in no current template and isn't a custom item:
   // the template retired them. Their state and comments are kept and shown.
   function retiredItems(project, index) {
@@ -914,6 +937,7 @@
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
+    isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,

@@ -938,10 +938,10 @@
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Revisions</h1>' +
       '<div class="page-sub"><span>' + plural(revs.length, 'revision') + '</span>' + (latest ? '<span class="sep">·</span><span>Latest ' + esc(latest.label) + ', ' + esc(revStatus(latest).toLowerCase()) + '</span>' : '') + '</div></div>' +
       (DEMO ? '' : '<button class="btn" data-act="runs-reload">Refresh</button>') + '</div>';
-    if (st.state === 'none') return html + emptyCard('Sign in to see stored runs', 'Fabcheck stores each run it sends with this ' + UNIT + ', in its private repository. Add your GitHub token in Settings to list them.') + '</div>';
-    if (st.state === 'loading') return html + '<div class="card empty"><p>Reading the runs stored with this ' + UNIT + '…</p></div></div>';
-    if (st.state === 'error') return html + emptyCard('Couldn’t read the stored runs', esc(st.error)) + '</div>';
-    if (!st.runs.length) return html + emptyCard('No runs stored yet', 'Check the fab package in Fabcheck and send it to this ' + UNIT + '. Each run sent is stored here, and you can tag one as a revision: sent to fab, used for builds or withdrawn.') + '</div>';
+    if (st.state === 'none') return html + emptyCard('Sign in to see stored runs', 'Fabcheck stores each run it sends with this ' + UNIT + ', in its private repository. Add your GitHub token in Settings to list them.') + revNotesSection(p) + '</div>';
+    if (st.state === 'loading') return html + '<div class="card empty"><p>Reading the runs stored with this ' + UNIT + '…</p></div>' + revNotesSection(p) + '</div>';
+    if (st.state === 'error') return html + emptyCard('Couldn’t read the stored runs', esc(st.error)) + revNotesSection(p) + '</div>';
+    if (!st.runs.length) return html + emptyCard('No runs stored yet', 'Check the fab package in Fabcheck and send it to this ' + UNIT + '. Each run sent is stored here, and you can tag one as a revision: sent to fab, used for builds or withdrawn.') + revNotesSection(p) + '</div>';
     if (st.demo) html += '<p class="note" style="margin:0 0 14px">In the demo, the runs are the ones the Fabcheck issues came from. A real ' + UNIT + ' stores each run’s fab package, which you can download here.</p>';
     html += M.groupRuns(st.runs).map(function (g) {
       var head = g.runs[0], open = !!revOpen[g.key];
@@ -952,7 +952,28 @@
             return '<div class="rev-older">' + runLine(p, r, 0) + runActions(p, r) + '</div>';
           }).join('') : '') + '</div>' : '') + '</section>';
     }).join('');
-    return html + '</div>';
+    return html + revNotesSection(p) + '</div>';
+  }
+  // Next revision updates: comments tagged @revnotes (model.revNotes), under the runs.
+  function revNotesSection(p) {
+    var groups = M.revNotes(p);
+    var html = '<div class="section-title">Next revision updates' + (groups.length ? ' <span class="muted rev-notes-count">' + plural(groups.length, 'item') + '</span>' : '') + '</div>';
+    if (!groups.length) return html + '<div class="card empty rev-notes-empty"><p>Nothing noted yet. Write <b>@revnotes</b> in a comment on any check or issue, and it’s listed here for the next revision.</p></div>';
+    return html + '<div class="card rev-notes-list">' + groups.map(function (g) {
+      var d = g.item ? itemDef(p, g.item) : null, it = (g.item && p.items[g.item]) || {};
+      var st = M.oneOf(M.STATUSES, it.status, ''), res = M.oneOf(M.RESOLUTIONS, it.resolution, '');
+      var chip = st === 'issue' ? '<span class="res ' + (res || 'open') + '">' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open issue') + '</span>'
+        : st === 'pass' ? '<span class="res fixed">Pass</span>' : st === 'na' ? '<span class="res waived">N/A</span>' : '';
+      var title = d ? M.stripRevNote(d.def.text) || d.def.text : 'On the whole ' + UNIT;
+      return '<div class="rev-note">' +
+        '<button class="rev-issue rev-note-head" data-act="goto-item" data-id="' + esc(g.item) + '"' + (g.item ? '' : ' disabled') + '>' +
+        (d && d.template ? '<span class="muted rev-note-cl">' + esc(d.template.short || d.template.title || '') + '</span>' : '<span></span>') +
+        '<span>' + esc(title) + '</span>' + chip + '</button>' +
+        g.comments.map(function (c) {
+          return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span>' + relTime(c.at) + '</span></div>' +
+            '<div class="cmt-text">' + esc(M.stripRevNote(c.text) || c.text) + '</div></div></div>';
+        }).join('') + '</div>';
+    }).join('') + '</div>';
   }
   function emptyCard(title, text) { return '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>' + esc(title) + '</h2><p>' + text + '</p></div>'; }
   function runCounts(r) {

@@ -640,6 +640,15 @@ button.fab-rev { border: none; margin-left: 6px; cursor: pointer; background: va
 .rev-issue { display: flex; align-items: center; gap: 10px; text-align: left; border: none; background: transparent; border-radius: 7px; padding: 5px 7px; font-size: 13px; color: var(--text); cursor: pointer; }
 .rev-issue:hover { background: var(--bg-sunk); }
 .rev-issue > span:nth-child(2) { flex: 1; min-width: 0; }
+.rev-notes-count { font: 400 13px var(--sans); }
+.rev-notes-list { padding: 8px 12px; }
+.rev-notes-empty p { margin: 0; }
+.rev-note { padding: 6px 0 2px; }
+.rev-note + .rev-note { border-top: 1px solid var(--hair); }
+.rev-note-head { width: 100%; font-weight: 500; margin-bottom: 6px; }
+.rev-note-head:disabled { cursor: default; background: transparent; }
+.rev-note-cl { font-size: 12px; font-weight: 400; flex: none; min-width: 0; }
+.rev-note .cmt { margin: 0 0 10px 7px; }
 .rev-older { border-top: 1px solid var(--hair); padding-top: 10px; margin-top: 10px; }
 .rev-older .rev-acts { margin-top: 8px; }
 @media (max-width: 860px) { .rev-body { padding-left: 18px; } }
