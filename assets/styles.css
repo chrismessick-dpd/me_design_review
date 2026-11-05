@@ -569,6 +569,7 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
 .paper .r-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 18px; margin: 14px 0; }
 .paper .r-meta div span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #86868b; }
 .paper table { width: 100%; border-collapse: collapse; }
+.paper .r-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 .paper th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; padding: 6px 8px; border-bottom: 1px solid #d2d2d7; }
 .paper td { padding: 7px 8px; border-bottom: 1px solid #ececf0; vertical-align: top; }
 .paper .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -586,6 +587,7 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
   .paper { box-shadow: none; margin: 0; padding: 0; max-width: none; }
   .paper h2 { break-after: avoid; }
   .paper tr { break-inside: avoid; }
+  .paper .r-scroll { overflow: visible; }
   @page { margin: 16mm 14mm; }
 }
 
@@ -604,7 +606,6 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
   .inspector { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 86vh; border-radius: 18px 18px 0 0; transform: translateY(100%); }
   .quick { display: none; }
   .sec-meta .bar { display: none; }
-  .paper { padding: 28px 20px; }
   .paper .r-meta { grid-template-columns: repeat(2, 1fr); }
   .btn-label { display: none; }
   /* Phones: the page only scrolls up and down; wide pieces scroll inside themselves. */
@@ -613,6 +614,17 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
   .card.table-scroll { overflow-x: auto !important; overscroll-behavior-x: contain; }
   .card.table-scroll .table th, .card.table-scroll .table td { padding: 10px; }
   .card.table-scroll .table.reqs td:nth-child(2) { min-width: 180px; }
+}
+
+/* The report on a phone screen. Screen only: a phone's print page is narrow too, and print keeps its own layout. */
+@media screen and (max-width: 860px) {
+  .report { overflow-x: hidden; overscroll-behavior-x: none; }
+  .report-bar { padding: 10px 12px; gap: 8px; }
+  .paper { padding: 24px 16px; margin: 12px 8px 40px; }
+  .paper .r-scroll { margin: 0 -16px; padding: 0 16px; }
+  .paper th { letter-spacing: 0; }
+  .paper td { font-size: 12px; }
+  .paper th, .paper td { padding-left: 4px; padding-right: 4px; }
 }
 
 /* ── People & access ── */
