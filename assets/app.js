@@ -2110,7 +2110,6 @@
     var st0 = stateNow();
     var names = Object.keys(dirty).map(function (k) { return k === 'roster' ? 'people' : st0.projects[k] ? st0.projects[k].meta.name : k; });
     var message = names.length ? 'Review update: ' + names.join(', ') + ' (' + me() + ')' : 'Review update (' + me() + ')';
-    var currentId = projects[ui.slug] && projects[ui.slug].id;
     workspace().sync(st0, { message: message, onRetry: function () { toast('Someone else just synced — merging their changes'); },
       keepLocal: function (id) { return !!dirty[id]; } })
       .then(function (res) {
@@ -2153,6 +2152,8 @@
           while (next[slug]) slug = base + '-' + n++;
           next[slug] = doc;
         });
+        // Stay on whatever is open now: the user may have switched while the sync ran.
+        var currentId = projects[ui.slug] && projects[ui.slug].id;
         projects = next;
         homes = st.homes; cache = st.cache; dataAccess = st.dataAccess;
         roster = M.mergeRosters(roster, st.roster);
