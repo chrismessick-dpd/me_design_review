@@ -712,6 +712,27 @@
     return true;
   }
 
+  // The checks in a section still blank (open), among those the filter and search show.
+  function blankIn(g, counts) {
+    return g.rows.filter(function (r) { return r.status === 'open' && matches(r, counts); });
+  }
+  // Pass every blank check a section shows, as one change (and one sync).
+  function passBlank(secId) {
+    var p = current(), t = templateById(ui.view); if (!p || !t) return;
+    var g = M.checklistRows(p, t).filter(function (x) { return x.section.id === secId; })[0]; if (!g) return;
+    var rows = blankIn(g, commentCounts(p));
+    if (!rows.length) return;
+    if (rows.length > 1 && !confirm('Pass ' + plural(rows.length, 'unreviewed check') + ' in ' + g.section.title + '?')) return;
+    rows.forEach(function (r) {
+      var next = Object.assign({}, p.items[r.id] || {}, { status: 'pass' });
+      var d = itemDef(p, r.id);
+      if (!d.retired) { next.text = d.def.text; if (d.template) next.checklist = d.template.id; }
+      p.items[r.id] = M.stamp(next, me());
+    });
+    touch(p); renderPage(); renderInspector();
+    toast('Passed ' + plural(rows.length, 'check') + ' in ' + g.section.title);
+    syncSoon();
+  }
   function checklistPage(p, t) {
     if (!t) return emptyPage();
     var groups = M.checklistRows(p, t);
@@ -743,6 +764,7 @@
         '<div class="sec-head" data-act="toggle-sec" data-sec="' + esc(g.section.id) + '">' + ICON.chev +
         '<div class="sec-title">' + esc(g.section.title) + (!g.applies ? '<small>Not in profile</small>' : '') + '</div>' +
         '<div class="sec-meta">' + (gc.issue ? '<span style="color:var(--issue)">' + gc.issue + ' !</span>' : '') + '<span>' + gc.reviewed + '/' + gc.total + '</span>' + bar(gc) +
+        (blankIn(g, counts).length ? '<button class="sec-na sec-pass" data-act="sec-pass" data-sec="' + esc(g.section.id) + '" title="Pass the ' + plural(blankIn(g, counts).length, 'unreviewed check') + ' shown in this section">Pass rest (' + blankIn(g, counts).length + ')</button>' : '') +
         '<button class="sec-na' + (g.state.na ? ' on' : '') + '" data-act="sec-na" data-sec="' + esc(g.section.id) + '" title="Mark the whole section not applicable">N/A</button></div></div>' +
         '<div class="sec-body">' + visible.map(function (r) { return itemRow(r, counts); }).join('') +
         (hiddenCount ? '<div class="hidden-rows"><span>' + plural(hiddenCount, 'check') + ' not applicable to this ' + W.thing + '’s profile</span><button data-act="show-hidden" data-sec="' + esc(g.section.id) + '">Show</button></div>' :
@@ -2415,7 +2437,7 @@
         ui.view = el.dataset.view; ui.query = ''; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
       case 'filter': ui.filter = el.dataset.filter; saveUi(); renderPage(); break;
       case 'toggle-sec':
-        if (e.target.closest('[data-act="sec-na"]')) return;
+        if (e.target.closest('[data-act="sec-na"], [data-act="sec-pass"]')) return;
         collapsed[el.dataset.sec] = !collapsed[el.dataset.sec]; save('collapsed', collapsed);
         el.closest('.sec').classList.toggle('collapsed'); break;
       case 'collapse-all': {
@@ -2424,6 +2446,7 @@
         secs.forEach(function (s) { collapsed[s] = !all; }); save('collapsed', collapsed); renderPage(); break;
       }
       case 'sec-na': e.stopPropagation(); toggleSectionNA(el.dataset.sec); break;
+      case 'sec-pass': e.stopPropagation(); passBlank(el.dataset.sec); break;
       case 'show-hidden': showHidden[el.dataset.sec] = !showHidden[el.dataset.sec]; renderPage(); break;
       case 'select':
         if (e.target.closest('button')) return;
