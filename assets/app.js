@@ -1798,9 +1798,12 @@
   }
 
   // Sign out of this browser: the token goes, and so does every copy the suite keeps here
-  // (Signoff EE, ME and PL working copies, Fabcheck's runs and packages). Only the theme stays.
+  // (Signoff EE, ME, FW and PL working copies, PL's pictures and waiting model files, Fabcheck's
+  // runs and packages). Only the theme stays.
   // Unsynced changes would be lost, so they're counted and named first.
-  var SUITE_NS = ['signoff.v1.', 'signoff-me.v1.', 'signoff-pl.v1.', 'fabcheck.v1.'];
+  var SUITE_NS = ['signoff.v1.', 'signoff-me.v1.', 'signoff-fw.v1.', 'signoff-pl.v1.', 'fabcheck.v1.'];
+  // IndexedDB: Fabcheck's runs, hand-offs, and PL's pictures and model files waiting to upload.
+  var SUITE_DBS = ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo', 'signoff-pl-pictures', 'signoff-pl-uploads'];
   function signOut() {
     var unsynced = 0;
     SUITE_NS.forEach(function (ns) {
@@ -1817,7 +1820,7 @@
         if (k === TOKEN_KEY || SUITE_NS.some(function (ns) { return k.indexOf(ns) === 0; })) localStorage.removeItem(k);
       });
     } catch (e) { /* storage blocked */ }
-    try { ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo'].forEach(function (db) { indexedDB.deleteDatabase(db); }); } catch (e) { /* no IndexedDB */ }
+    try { SUITE_DBS.forEach(function (db) { indexedDB.deleteDatabase(db); }); } catch (e) { /* no IndexedDB */ }
     saveSharedTheme(theme);
     location.reload();
   }
