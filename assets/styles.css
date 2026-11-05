@@ -273,6 +273,8 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .stat-label { font-size: 12.5px; color: var(--text-3); margin-top: 6px; }
 .stat.pass .stat-num { color: var(--pass); }
 .stat.issue .stat-num { color: var(--issue); }
+.stat-link { border: none; text-align: left; font: inherit; color: inherit; transition: transform 0.2s var(--ease), box-shadow 0.2s; }
+.stat-link:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .section-title { font: 600 19px var(--display); letter-spacing: -0.012em; margin: 36px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 .cl-card { padding: 18px; border: none; text-align: left; display: flex; flex-direction: column; gap: 14px; transition: transform 0.2s var(--ease), box-shadow 0.2s; }

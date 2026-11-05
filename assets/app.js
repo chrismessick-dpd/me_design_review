@@ -642,7 +642,7 @@
       '<div class="head-visual"><div class="head-pic" data-pic="' + esc(p.id) + '">' + picHtml(p) + '</div>' +
       '<div class="head-ring">' + ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + revisionLine(p) + '</div></div></div>' +
       '<div class="grid grid-4">' +
-      stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue') +
+      stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue', 'findings') +
       stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
       (st.outside ? '<p class="note" style="margin-top:10px">' + plural(st.outside, 'check') + ' outside this ' + W.thing + '’s profile ' + (st.outside === 1 ? 'is' : 'are') + ' set aside and not counted.</p>' : '') +
       '<div class="section-title">Checklists</div><div class="grid grid-3">' + (reqsOn(p) ? reqsCard(p) : '') +
@@ -665,7 +665,12 @@
       (Object.keys(people).length ? ' · Reviewers: ' + Object.keys(people).map(esc).join(', ') : '') + '</p></div>';
     return html;
   }
-  function stat(n, label, cls) { return '<div class="card stat ' + cls + '"><div class="stat-num">' + n + '</div><div class="stat-label">' + esc(label) + '</div></div>'; }
+  // A stat with a view opens that tab when clicked (Issues opens Findings).
+  function stat(n, label, cls, view) {
+    var inner = '<div class="stat-num">' + n + '</div><div class="stat-label">' + esc(label) + '</div>';
+    return view ? '<button class="card stat stat-link ' + cls + '" data-act="view" data-view="' + esc(view) + '" title="Open ' + esc(view[0].toUpperCase() + view.slice(1)) + '">' + inner + '</button>' :
+      '<div class="card stat ' + cls + '">' + inner + '</div>';
+  }
   function avatar(name) { return '<div class="avatar" style="background:hsl(' + hue(name) + ' 45% 42%)">' + esc(initials(name)) + '</div>'; }
 
   var showHidden = {};   // section id -> show profile-hidden items
