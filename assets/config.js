@@ -102,7 +102,7 @@ window.SIGNOFF_CONFIG = {
         "by": "Lee Alvarez",
         "ref": "Stack 04, cover-to-back gap",
         "notes": [
-          "Gap stack uses drawing tolerances only. PC/ABS shrink variation on the 120 mm (4.72 in) front cover is missing."
+          "Gap stack uses drawing tolerances only. PC/ABS shrink variation across the 90 mm (3.54 in) front cover is missing."
         ],
         "res": ""
       },
@@ -111,7 +111,7 @@ window.SIGNOFF_CONFIG = {
         "sev": "major",
         "who": "",
         "by": "Dana Kim",
-        "ref": "Bosses B1–B6",
+        "ref": "Bosses B1–B4",
         "notes": [
           "Boss OD is 5.0 mm (197 mil) for an M2.5 thread-forming screw. The screw supplier's guide asks for about 2.5× the screw diameter.",
           "Increased to 6.3 mm (248 mil) and added gussets."
@@ -254,7 +254,7 @@ window.SIGNOFF_CONFIG = {
           "tol-fit-5",
           "asm-cbl-3"
         ],
-        "requirements": [{"ref": "REQ-001", "text": "Every visible face of the front cover shall meet the client's Class A cosmetic standard.", "category": "Cosmetic", "source": "Acme DT-SPEC-12 §7.1", "method": "inspection", "status": "approved", "verify": "open", "links": ["rq-id-2", "pd-cos-6"], "by": "Dana Kim"}, {"ref": "REQ-002", "text": "Venting shall keep the temperature sensor within 0.3 °C of room air while the relays switch full load.", "category": "Thermal", "source": "Acme DT-SPEC-12 §2.3", "method": "test", "status": "approved", "verify": "open", "links": ["enc-thm-4", "fea-th-13"], "by": "Lee Alvarez"}, {"ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g.", "category": "Mass", "source": "Acme DT-SPEC-12 §2.1", "method": "analysis", "status": "approved", "verify": "pass", "evidence": "CAD mass report rev C: 205 g including the bracket, boards and display.", "links": ["mat-sel-11"], "by": "Dana Kim"}, {"ref": "REQ-004", "text": "The front cover should come off the bracket with a flat screwdriver and no special tools.", "kind": "should", "category": "Service", "source": "Installer workshop 2026-09-15", "method": "demonstration", "status": "draft", "verify": "open", "links": [], "by": "Lee Alvarez"}],
+        "requirements": [{"parent": {"project": "pldemo", "id": "qdemo-cosmetic", "ref": "REQ-007", "text": "The front cover shall meet the client's Class A cosmetic standard."}, "ref": "REQ-001", "text": "Every visible face of the front cover shall meet the client's Class A cosmetic standard.", "category": "Cosmetic", "source": "Acme DT-SPEC-12 §7.1", "method": "inspection", "status": "approved", "verify": "open", "links": ["rq-id-2", "pd-cos-6"], "by": "Dana Kim"}, {"parent": {"project": "pldemo", "id": "qdemo-temp", "ref": "REQ-001", "text": "The thermostat shall measure room temperature to within ±0.5 °C from 5 to 35 °C."}, "ref": "REQ-002", "text": "Venting shall keep the temperature sensor within 0.3 °C of room air while the relays switch full load.", "category": "Thermal", "source": "Acme DT-SPEC-12 §2.3", "method": "test", "status": "approved", "verify": "open", "links": ["enc-thm-4", "fea-th-13"], "by": "Lee Alvarez"}, {"parent": {"project": "pldemo", "id": "qdemo-mass", "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g."}, "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g.", "category": "Mass", "source": "Acme DT-SPEC-12 §2.1", "method": "analysis", "status": "approved", "verify": "pass", "evidence": "CAD mass report rev C: 212 g including the bracket, boards and display.", "links": ["mat-sel-11"], "by": "Dana Kim"}, {"ref": "REQ-004", "text": "The front cover should come off the bracket with a flat screwdriver and no special tools.", "kind": "should", "category": "Service", "source": "Installer workshop 2026-09-15", "method": "demonstration", "status": "draft", "verify": "open", "links": [], "by": "Lee Alvarez"}],
         "ratios": {
           "requirements": 0.95,
           "part-design": 0.7,
@@ -306,7 +306,7 @@ window.SIGNOFF_CONFIG = {
         "comments": [
           "pd-sm-3"
         ],
-        "requirements": [{"ref": "REQ-001", "text": "The bracket shall mount to a single-gang electrical box and to drywall anchors using the same hole pattern.", "category": "Installation", "source": "Acme DT-SPEC-12 §8.2", "method": "inspection", "status": "approved", "verify": "open", "links": ["tol-dat-5"], "by": "Lee Alvarez"}, {"ref": "REQ-002", "text": "All fasteners supplied with the product shall be metric and use at most two drive types.", "category": "Assembly", "source": "Acme design guide", "method": "inspection", "status": "approved", "verify": "pass", "evidence": "Fastener list rev A: M3.5 and M4, Pozidriv PZ2 only.", "links": ["asm-thr-2"], "by": "Dana Kim"}],
+        "requirements": [{"parent": {"project": "pldemo", "id": "qdemo-mount", "ref": "REQ-008", "text": "The thermostat shall mount to a single-gang electrical box."}, "ref": "REQ-001", "text": "The bracket shall mount to a single-gang electrical box and to drywall anchors using the same hole pattern.", "category": "Installation", "source": "Acme DT-SPEC-12 §8.2", "method": "inspection", "status": "approved", "verify": "open", "links": ["tol-dat-5"], "by": "Lee Alvarez"}, {"ref": "REQ-002", "text": "All fasteners supplied with the product shall be metric and use at most two drive types.", "category": "Assembly", "source": "Acme design guide", "method": "inspection", "status": "approved", "verify": "pass", "evidence": "Fastener list rev B: M2.5 thread-forming screws in the cover bosses and M3.5 wall screws, Pozidriv PZ1 and PZ2.", "links": ["asm-thr-2"], "by": "Dana Kim"}],
         "ratios": {
           "part-design": 0.5,
           "tolerancing": 0.3,
@@ -319,9 +319,9 @@ window.SIGNOFF_CONFIG = {
           "project": "Smart Thermostat",
           "client": "Acme Climate",
           "board": "2100410-020",
-          "revision": "A",
+          "revision": "B",
           "stage": "Detailed design",
-          "description": "First review of the steel wall bracket. It mounts to an electrical box or drywall anchors, passes the HVAC wires through to the main PCBA's terminal block, and carries the catches the enclosure snaps onto.",
+          "description": "Rev B review of the steel wall bracket, before the first order from the sheet-metal shop. It mounts to an electrical box or drywall anchors, passes the HVAC wires through to the main PCBA's terminal block, and carries the catches the enclosure snaps onto.",
           "profile": [
             "sheet-metal",
             "high-volume"

@@ -82,6 +82,18 @@
           p.comments[id] = { id: id, item: f.id, author: f.by || by, at: t, text: n, updatedAt: t, updatedBy: f.by || by };
         });
       });
+      // The run tagged as a revision, as the Revisions tab does it ({ label, title, status, house,
+      // sent and at as fractions of the review period, ref, notes, by }).
+      var cleanRun = M.cleanRun({ run: run, findings: [] });
+      (fab.revisions || []).forEach(function (v, i) {
+        if (!cleanRun) return;
+        var rec = M.newRevision(cleanRun, { label: v.label, title: v.title, status: v.status, house: v.house,
+          sentAt: v.sent == null ? '' : at(v.sent).slice(0, 10), ref: v.ref, notes: v.notes }, v.by || run.by || users[0]);
+        rec.id = 'v' + seed + '-' + i;
+        rec.createdAt = rec.updatedAt = at(v.at == null ? 0.9 : v.at);
+        p.revisions = p.revisions || {};
+        p.revisions[rec.id] = rec;
+      });
     }
     // Requirements, traced only to checks this project actually has.
     var known = M.checkIndex(p, templates);
@@ -90,6 +102,8 @@
       var q = M.newReq(p, { ref: r.ref, text: r.text, kind: r.kind || 'shall', category: r.category || '', source: r.source || '',
         method: r.method || 'inspection', status: r.status || 'draft', verify: r.verify || 'open', evidence: r.evidence || '',
         links: (r.links || []).filter(function (id) { return known[id]; }), createdAt: when }, r.by || users[0]);
+      // Flow-down from Signoff PL's demo product (its fixed ids, signoff_pl/assets/demo.js).
+      if (r.parent) q.parent = { tool: 'pl', project: r.parent.project, id: r.parent.id, ref: r.parent.ref, text: r.parent.text };
       q.id = 'q' + seed + '-' + i; q.updatedAt = when;
       p.reqs[q.id] = q;
     });
@@ -107,7 +121,7 @@
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 6
+    VERSION: 7
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

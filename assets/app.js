@@ -105,6 +105,18 @@
   // this placeholder instead; it counts as no name.
   var DEMO_USER = 'Demo Reviewer';
   if (DEMO && settings.user === DEMO_USER) { settings.user = ''; save('settings', settings); }
+  if (DEMO && !settings.user) {
+    // First visit to this tool's demo: reuse the name given in another tool's demo (EE, ME, FW),
+    // so a visitor moving through the suite is asked once.
+    try {
+      Object.keys(localStorage).some(function (k) {
+        if (!/\.demo\.settings$/.test(k)) return false;
+        var u = (JSON.parse(localStorage.getItem(k) || '{}') || {}).user;
+        if (typeof u === 'string' && u.trim() && u !== DEMO_USER) { settings.user = u.trim().slice(0, 100); save('settings', settings); return true; }
+        return false;
+      });
+    } catch (e) { /* storage blocked */ }
+  }
   // A tab still running an older demo can write its copies of the sample projects back (other
   // ids, same names). Drop them, here and whenever another tab writes, so a sample project
   // never shows twice. Projects a visitor created in the demo are kept.
@@ -392,12 +404,13 @@
     people.hidden = DEMO || !isFte();
     // Links to the rest of the suite (hub, the other Signoff tool, Fabcheck) show for everyone:
     // FTEs, contractors and the demo. In the demo they point at the other tools' demos. A link
-    // marked data-internal is for FTEs only (Signoff PL).
+    // marked data-internal is for FTEs only (Signoff PL), and for everyone in the demo, whose
+    // product view is Signoff PL's demo.
     var tools = $('#side-tools');
     if (tools) {
       tools.hidden = false;
       if (!tools.dataset.fold) setupToolsFold(tools);
-      tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = DEMO || !isFte(); });
+      tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = !DEMO && !isFte(); });
       if (DEMO) {
         tools.querySelectorAll('a.side-link').forEach(function (a) {
           var href = a.getAttribute('href');
