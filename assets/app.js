@@ -437,6 +437,8 @@
   }
 
   function renderSyncState(state) {
+    if (syncing && !state) state = 'busy';   // a render during a sync keeps showing it
+    markSyncButtons();
     var dot = $('#sync-dot'), title = $('#sync-title'), sub = $('#sync-sub');
     var n = Object.keys(dirty).length;
     syncDetailsButton(!DEMO && n > 0 && state !== 'busy');
@@ -538,8 +540,24 @@
   function syncButtons() {
     if (DEMO) return '';
     var n = Object.keys(dirty).length;
-    return '<button class="btn" data-act="sync" title="Sync with GitHub (Ctrl+S)">' + ICON.sync + '<span class="btn-label">Sync</span>' + (n ? '<span class="badge">' + n + '</span>' : '') + '</button>' +
+    return '<button class="btn' + (syncing ? ' is-syncing' : '') + '" data-act="sync" title="' + (syncing ? 'Syncing with GitHub…' : 'Sync with GitHub (Ctrl+S)') + '">' + ICON.sync + '<span class="btn-label">' + (syncing ? 'Syncing…' : 'Sync') + '</span>' + (n ? '<span class="badge">' + n + '</span>' : '') + '</button>' +
       (n ? '<button class="btn" data-act="discard" title="Throw away unsynced changes and go back to what’s on GitHub">' + ICON.undo + '<span class="btn-label">Discard</span></button>' : '');
+  }
+  // A sync button on a page (the empty pages' Sync now): it turns while a sync runs.
+  function syncNowButton(label, primary) {
+    return '<button class="btn' + (primary ? ' btn-primary' : '') + (syncing ? ' is-syncing' : '') + '" data-act="sync" data-label="' + esc(label) + '">' +
+      ICON.sync + '<span class="btn-label">' + (syncing ? 'Syncing…' : esc(label)) + '</span></button>';
+  }
+  // Starting or ending a sync updates every Sync button in place, without a render.
+  function markSyncButtons() {
+    var on = !!syncing;
+    document.querySelectorAll('.btn[data-act="sync"]').forEach(function (b) {
+      if (b.classList.contains('is-syncing') === on) return;
+      b.classList.toggle('is-syncing', on);
+      var label = b.querySelector('.btn-label');
+      if (label) label.textContent = on ? 'Syncing…' : (b.dataset.label || 'Sync');
+      if (!b.dataset.label) b.title = on ? 'Syncing with GitHub…' : 'Sync with GitHub (Ctrl+S)';
+    });
   }
   function renderToolbar() {
     var p = current();
@@ -596,21 +614,21 @@
     }
     if (checking()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
-        '<h2>Checking who’s signed in</h2><p>Your ' + UNITS + ' show once a sync confirms which ones this GitHub token can open.</p>' +
-        '<button class="btn btn-primary" data-act="sync">Sync now</button></div></div>';
+        '<h2>' + (syncing ? 'Syncing with GitHub' : 'Checking who’s signed in') + '</h2><p>' + (syncing ? 'Checking which ' + UNITS + ' this GitHub token can open. They show here as soon as the sync finishes.' : 'Your ' + UNITS + ' show once a sync confirms which ones this GitHub token can open.') + '</p>' +
+        syncNowButton('Sync now', true) + '</div></div>';
     }
     if (!isFte()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
         '<h2>' + (!visibleProjects().length ? 'No ' + UNITS + ' shared with you yet' : 'Pick a ' + UNIT) + '</h2>' +
         '<p>' + (!visibleProjects().length ? 'Signed in as <b>' + esc(settings.login) + '</b>. ' + (invitations.length ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a ' + UNIT + ', then sync.') : 'Choose a ' + UNIT + ' from the sidebar.') + '</p>' +
-        '<button class="btn btn-primary" data-act="sync">Sync now</button></div></div>';
+        syncNowButton('Sync now', true) + '</div></div>';
     }
     var none = !visibleProjects().length;
     return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
       '<h2>' + (none ? 'Start a design review' : 'Pick a ' + UNIT) + '</h2>' +
       '<p>' + (none ? 'Create a review, choose the checklists and what kind of ' + W.thing + ' it is, and Signoff builds a review tailored to it.' : 'Choose a ' + UNIT + ' from the sidebar, or start a new one.') + '</p>' +
       '<button class="btn btn-primary" data-act="new-project">New project</button>' +
-      (none && !DEMO ? ' <button class="btn" data-act="sync">Pull from GitHub</button>' : '') +
+      (none && !DEMO ? ' ' + syncNowButton('Pull from GitHub') : '') +
       (none ? '<p class="note" style="margin-top:18px">' + TEMPLATES.length + ' checklists · ' + Object.keys(INDEX.items).length + ' checks available</p>' : '') +
       '</div></div>';
   }
@@ -2105,6 +2123,7 @@
     if (!settings.user) { settingsSheet(); return; }
     noticeToken();
     syncing = true; renderSyncState('busy');
+    if (!current() && ui.page !== 'people') renderPage();   // an empty page says the sync is running
     var startedAt = M.now();   // the cutoff for the unsynced list (unsyncedList)
     var started = Object.assign({}, dirty);
     var st0 = stateNow();
@@ -2183,6 +2202,7 @@
       .catch(function (err) {
         syncing = false; syncAgain = false; lastError = err.message;
         renderSyncState('error');
+        if (!current() && ui.page !== 'people') renderPage();
         if (err.status === 401) {
           // GitHub doesn't recognize the token at all (not a permissions problem).
           lastError = 'GitHub didn’t accept the token saved in this browser. Paste the token again in Settings.';

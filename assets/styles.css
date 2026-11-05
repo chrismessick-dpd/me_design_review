@@ -481,6 +481,16 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
 .busy-acts:empty { display: none; }
 @keyframes busy-spin { to { transform: rotate(360deg); } }
 
+/* A Sync button while a sync runs: the arrows turn and the button breathes, gently. It stays
+   clickable-looking but does nothing (sync() ignores a second start). */
+.btn.is-syncing { animation: sync-breathe 2.4s ease-in-out infinite; cursor: progress; }
+.btn.is-syncing:not(.btn-primary) { color: var(--accent-ink); }
+.btn.is-syncing svg { animation: busy-spin 1.2s linear infinite; }
+@keyframes sync-breathe { 50% { box-shadow: 0 0 0 4px var(--accent-soft); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-syncing, .btn.is-syncing svg { animation: none; }
+}
+
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .pick {
   border: none; border-radius: 11px; padding: 10px 12px; text-align: left; background: var(--bg-sunk);
