@@ -764,7 +764,7 @@
         '<div class="sec-head" data-act="toggle-sec" data-sec="' + esc(g.section.id) + '">' + ICON.chev +
         '<div class="sec-title">' + esc(g.section.title) + (!g.applies ? '<small>Not in profile</small>' : '') + '</div>' +
         '<div class="sec-meta">' + (gc.issue ? '<span style="color:var(--issue)">' + gc.issue + ' !</span>' : '') + '<span>' + gc.reviewed + '/' + gc.total + '</span>' + bar(gc) +
-        (blankIn(g, counts).length ? '<button class="sec-na sec-pass" data-act="sec-pass" data-sec="' + esc(g.section.id) + '" title="Pass the ' + plural(blankIn(g, counts).length, 'unreviewed check') + ' shown in this section">Pass rest (' + blankIn(g, counts).length + ')</button>' : '') +
+        (blankIn(g, counts).length ? '<button class="sec-na sec-pass" data-act="sec-pass" data-sec="' + esc(g.section.id) + '" title="Pass the ' + plural(blankIn(g, counts).length, 'unreviewed check') + ' shown in this section" aria-label="Pass all unreviewed checks in this section">' + ICON.check + 'All</button>' : '') +
         '<button class="sec-na' + (g.state.na ? ' on' : '') + '" data-act="sec-na" data-sec="' + esc(g.section.id) + '" title="Mark the whole section not applicable">N/A</button></div></div>' +
         '<div class="sec-body">' + visible.map(function (r) { return itemRow(r, counts); }).join('') +
         (hiddenCount ? '<div class="hidden-rows"><span>' + plural(hiddenCount, 'check') + ' not applicable to this ' + W.thing + '’s profile</span><button data-act="show-hidden" data-sec="' + esc(g.section.id) + '">Show</button></div>' :

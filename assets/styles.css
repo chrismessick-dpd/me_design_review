@@ -319,6 +319,9 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .sec-na { font-size: 11.5px; padding: 3px 9px; border-radius: 980px; border: none; background: transparent; color: var(--text-3); }
 .sec-na:hover { background: var(--bg-sunk); color: var(--text); }
 .sec-na.on { background: var(--na-soft); color: var(--text-2); }
+.sec-pass { display: inline-flex; align-items: center; gap: 4px; }
+.sec-pass svg { width: 11px; height: 11px; flex: none; }
+.sec-pass:hover { color: var(--pass); }
 .sec.collapsed .sec-body { display: none; }
 .sec.is-na .sec-title { color: var(--text-3); }
 .sec-body { border-top: 1px solid var(--hair); }
