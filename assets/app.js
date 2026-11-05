@@ -2337,7 +2337,7 @@
     var m = p.meta;
     var html = '<div class="report-bar"><b>Review report</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print / Save PDF</button></div></div>' +
       '<div class="paper">' +
-      '<div class="r-head"><div><div class="r-brand"><svg width="14" height="16" viewBox="0 0 16 18"><path d="M0 0h6v7.6L0 8.4zM0 9.6l6 .8V18H0z" fill="#004952"/><path d="M7 0l9 3v12l-9 3v-7.4l5-.9V8.3l-5-.9z" fill="#004952"/></svg>DOVETAIL · ' + esc(C.tagline.toUpperCase()) + '</div>' +
+      '<div class="r-head"><div><div class="r-brand"><svg width="10" height="16" viewBox="0 0 59.21 98.68"><path d="M0 0h18.19v41.88H0zM0 56.79h18.19v41.88H0zM18.2 41.89h1.59v14.91H18.2zM19.79 0v41.89l24.96-6.63v28.16L19.79 56.79v41.89l39.42-10.47V10.47z" fill="#004952"/></svg>DOVETAIL · ' + esc(C.tagline.toUpperCase()) + '</div>' +
       '<h1 style="margin-top:14px">' + esc(m.name) + '</h1><div style="color:#515154">' + esc([m.client, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).join(' · ')) + '</div></div>' +
       '<div style="text-align:right"><div style="font:600 30px var(--display);color:#004952">' + st.pct + '%</div><div style="color:#86868b;font-size:11px">reviewed</div></div></div>' +
       '<div class="r-meta"><div><span>Stage</span>' + esc(m.stage) + '</div><div><span>Date</span>' + fmtDate(M.now()) + '</div><div><span>Open issues</span>' + st.issuesOpen + '</div><div><span>Reviewers</span>' + (Object.keys(reviewers).map(esc).join(', ') || '—') + '</div></div>' +
