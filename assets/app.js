@@ -1774,17 +1774,22 @@
     });
   }
 
-  function settingsSheet() {
+  // first: the demo's first opening, which welcomes the visitor and asks only for a name.
+  function settingsSheet(first) {
     var token = getToken();
     var remembered = false;
     try { remembered = !!localStorage.getItem(TOKEN_KEY); } catch (e) { /* ignore */ }
-    var w = sheet('<div class="sheet-head"><h2>Settings</h2><p>' + (DEMO ? 'Your name goes on the comments and changes you make in this demo. Everything stays in this browser.' : 'Your name goes on comments and changes. Reviews sync through private GitHub repositories, so everyone works on the same copy.') + '</p></div>' +
+    var welcome = DEMO && first;
+    var w = sheet('<div class="sheet-head"><h2>' + (welcome ? 'Welcome to the ' + esc(C.product) + ' demo' : 'Settings') + '</h2><p>' +
+      (welcome ? 'A made-up product, a Smart Thermostat for Acme Climate, part way through its design reviews. Open a checklist, mark checks Pass, Issue or N/A, and comment on what you find. ' +
+        'Everything stays in this browser, and <b>Reset demo</b> in the banner starts over. Your name goes on what you change.'
+      : DEMO ? 'Your name goes on the comments and changes you make in this demo. Everything stays in this browser.' : 'Your name goes on comments and changes. Reviews sync through private GitHub repositories, so everyone works on the same copy.') + '</p></div>' +
       '<div class="sheet-body">' +
       '<div class="field"><label for="s-user">Your name</label><input class="input" id="s-user" value="' + esc(settings.user) + '" placeholder="First Last"></div>' +
-      '<div class="field"><span class="field-label">Appearance</span><div class="seg full" id="s-theme">' + [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(function (t) {
+      (welcome ? '' : '<div class="field"><span class="field-label">Appearance</span><div class="seg full" id="s-theme">' + [['auto', 'Automatic'], ['light', 'Light'], ['dark', 'Dark']].map(function (t) {
         return '<button type="button" class="' + (settings.theme === t[0] ? 'on' : '') + '" data-theme="' + t[0] + '">' + t[1] + '</button>';
-      }).join('') + '</div></div>' +
-      (DEMO ? '<p class="note">Git sync is off in demo mode. <a href="' + esc(location.pathname) + '">Open the full tool</a>.</p>' :
+      }).join('') + '</div></div>') +
+      (welcome ? '' : DEMO ? '<p class="note">Git sync is off in demo mode. <a href="' + esc(location.pathname) + '">Open the full tool</a>.</p>' :
         '<div class="field-label" style="margin-top:20px;font-size:13px;color:var(--text);font-weight:600">GitHub</div>' +
         (settings.login ? '<p class="note" style="margin:0 0 12px">Signed in as <b>' + esc(settings.login) + '</b> · ' +
           (dataAccess === 'none' ? 'Contractor: you see the ' + UNITS + ' shared with you' : dataAccess === 'ok' ? 'FTE: you see every ' + UNIT : 'not synced yet') + '</p>' : '') +
@@ -1805,7 +1810,7 @@
         (settings.suiteRepos.length ? '<p class="note">FTEs are also invited to the rest of the suite: ' + settings.suiteRepos.map(esc).join(', ') + ' (set in assets/config.js).</p>' : '') + '</details>' +
         '<div class="log" id="s-log" hidden></div>') +
       '</div><div class="sheet-foot">' + (DEMO ? '' : '<button class="btn" data-sheet="test">Test connection</button><button class="btn" data-sheet="signout" title="Remove the token and every Signoff and Fabcheck copy kept in this browser">Sign out</button>') + '<span class="spacer"></span>' +
-      '<button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">' + (DEMO ? 'Done' : 'Save & sync') + '</button></div>');
+      '<button class="btn" data-sheet="cancel">' + (welcome ? 'Skip' : 'Cancel') + '</button><button class="btn btn-primary" data-sheet="ok">' + (welcome ? 'Start' : DEMO ? 'Done' : 'Save & sync') + '</button></div>');
 
     var theme = settings.theme;
     function read() {
@@ -2787,7 +2792,7 @@
     try { if (localStorage.getItem('signoff.demo.welcomed')) return true; localStorage.setItem('signoff.demo.welcomed', '1'); } catch (e) { /* storage blocked */ }
     return false;
   }
-  if (!settings.user && !demoWelcomed()) settingsSheet();   // first opening, the demo included: ask for a name
+  if (!settings.user && !demoWelcomed()) settingsSheet(true);   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
 
