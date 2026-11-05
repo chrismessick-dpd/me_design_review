@@ -590,7 +590,8 @@
   }
 
   // ── Pages ────────────────────────────────────────────────
-  function renderPage() {
+  function renderPage() { var f = focusNow(); drawPage(); restoreFocus(f); }   // keeps the field being typed in (focusNow)
+  function drawPage() {
     var p = current();
     var page = $('#page');
     var scroll = $('#main').scrollTop;
@@ -1246,7 +1247,27 @@
     });
   }
 
-  function renderInspector() {
+  // Redraws keep the field you're typing in. A sync that finishes while you write a comment
+  // redraws the page and the details pane; without this the new text box wasn't focused, and the
+  // next keys went to the page's shortcuts. Fields are found again by id, with the caret and
+  // scroll they had.
+  function focusNow() {
+    var a = document.activeElement;
+    if (!a || !a.id || !/^(INPUT|TEXTAREA)$/.test(a.tagName)) return null;
+    var f = { el: a, id: a.id, top: a.scrollTop };
+    try { f.start = a.selectionStart; f.end = a.selectionEnd; f.dir = a.selectionDirection; } catch (e) { /* no selection on this input type */ }
+    return f;
+  }
+  function restoreFocus(f) {
+    if (!f || f.el.isConnected) return;   // not redrawn: nothing to do
+    var a = document.getElementById(f.id);
+    if (!a || a === document.activeElement || !/^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
+    a.focus({ preventScroll: true });
+    try { if (f.start != null) a.setSelectionRange(f.start, f.end, f.dir); } catch (e) { /* no selection on this input type */ }
+    a.scrollTop = f.top;
+  }
+  function renderInspector() { var f = focusNow(); drawInspector(); restoreFocus(f); }
+  function drawInspector() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
     var rq = reqOf(p, selected);
@@ -2628,7 +2649,7 @@
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 
   // ── Boot ─────────────────────────────────────────────────
-  function render() { renderSidebar(); renderSyncState(); renderPage(); renderInspector(); }
+  function render() { var f = focusNow(); renderSidebar(); renderSyncState(); drawPage(); drawInspector(); restoreFocus(f); }
 
   applyTheme(settings.theme);
   if (ui.sideCollapsed && !narrow.matches) $('#app').classList.add('side-collapsed');
