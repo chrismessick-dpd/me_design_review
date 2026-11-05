@@ -2780,7 +2780,14 @@
   render();
   openWantedItem();
   returnFromFabcheck();
-  if (!settings.user) settingsSheet();   // first opening, the demo included: ask for a name
+  // In the demo the first sheet shows once per browser across EE, ME and FW, even when it's
+  // skipped, so a visitor moving between pages isn't asked again and again.
+  function demoWelcomed() {
+    if (!DEMO) return false;
+    try { if (localStorage.getItem('signoff.demo.welcomed')) return true; localStorage.setItem('signoff.demo.welcomed', '1'); } catch (e) { /* storage blocked */ }
+    return false;
+  }
+  if (!settings.user && !demoWelcomed()) settingsSheet();   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
 
