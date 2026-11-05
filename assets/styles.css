@@ -667,8 +667,9 @@ a.side-link { text-decoration: none; }
 
 /* ── Fabcheck runs on an issue (docs/fabcheck-link.md) ── */
 .fab-card { border-radius: 12px; background: var(--accent-soft); padding: 12px 13px; margin-bottom: 16px; font-size: 13px; }
-.fab-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
-.fab-head .btn { padding: 5px 13px; font-size: 12.5px; }
+.fab-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; margin-bottom: 6px; }
+.fab-head > span { min-width: 0; }
+.fab-head .btn { padding: 5px 13px; font-size: 12.5px; flex: none; }
 .fab-meta { color: var(--text-2); font-size: 12.5px; line-height: 1.5; }
 .fab-meta .muted { color: var(--text-3); font-family: var(--mono); font-size: 11.5px; }
 .fab-locs { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; max-height: 220px; overflow: auto; }
@@ -678,7 +679,7 @@ span.fab-loc { color: var(--text-2); }
 .fab-detail { margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
 .fab-detail summary { cursor: pointer; color: var(--text-3); }
 .fab-detail div { white-space: pre-wrap; margin-top: 6px; }
-button.fab-rev { border: none; margin-left: 6px; cursor: pointer; background: var(--bg-elev); color: var(--accent-ink); }
+button.fab-rev { border: none; margin-left: 6px; cursor: pointer; background: var(--bg-elev); color: var(--accent-ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 
 /* Revisions: stored runs and their tags */
 .head-ring { display: flex; flex-direction: column; align-items: center; gap: 8px; }

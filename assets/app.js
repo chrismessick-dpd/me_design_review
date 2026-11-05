@@ -992,7 +992,7 @@
     var stored = run && run.stored && run.stored.repo;
     var rev = canOpen && M.revisionForRun(p, run.id), runAttr = canOpen ? ' data-run="' + esc(run.id) + '"' : '';
     var h = '<div class="fab-card"><div class="fab-head"><span><b>From Fabcheck</b>' +
-      (rev ? ' <button class="chip fab-rev" data-act="view" data-view="revisions" title="This run is tagged as a revision">from ' + esc(revName(rev)) + '</button>' : '') + '</span>' +
+      (rev ? ' <button class="chip fab-rev" data-act="view" data-view="revisions" title="This run is tagged as revision ' + esc(revName(rev)) + '">from ' + esc(rev.label) + '</button>' : '') + '</span>' +
       (canOpen ? '<button class="btn btn-primary" data-act="open-fabcheck"' + runAttr + ' data-href="' + esc(fabcheckUrl(p, src, locs[0])) + '">Open in Fabcheck</button>' : '') + '</div>';
     if (run) {
       h += '<div class="fab-meta">' + esc(run.package && run.package.name || 'Package') +
