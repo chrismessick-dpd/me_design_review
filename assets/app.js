@@ -919,7 +919,28 @@
   }
   function showPicture(p) {
     var box = document.querySelector('.head-pic[data-pic="' + p.id + '"]');
-    if (box) box.innerHTML = picHtml(p);
+    if (!box) return;
+    var was = box.childElementCount;
+    box.innerHTML = picHtml(p);
+    if (!was && box.childElementCount) scootIn(box);
+  }
+  // A picture arriving after the header drew grows in from nothing and pushes the ring over.
+  // It stays collapsed until the image has decoded, so the push is one smooth move.
+  function scootIn(box) {
+    if (!box.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var gap = parseFloat(getComputedStyle(box.parentElement).columnGap) || 0, img = box.querySelector('img');
+    var shut = { width: '0px', marginRight: -gap + 'px', opacity: 0 };
+    Object.assign(box.style, shut, { overflow: 'hidden' });
+    (img && img.decode ? img.decode() : Promise.resolve()).catch(function () {}).then(function () {
+      if (!box.isConnected) return;
+      Object.assign(box.style, { width: '', marginRight: '', opacity: '' });
+      var w = box.offsetWidth;
+      box.animate([
+        { width: '0px', marginRight: -gap + 'px', opacity: 0, transform: 'translateX(-12px)' },
+        { opacity: 0, offset: 0.25 },
+        { width: w + 'px', marginRight: '0px', opacity: 1, transform: 'none' }
+      ], { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }).onfinish = function () { box.style.overflow = ''; };
+    });
   }
   function picHtml(p) {
     var pc = pics[p.id];
