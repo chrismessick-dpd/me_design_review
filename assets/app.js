@@ -304,12 +304,13 @@
     var p = current(); if (!p || !p.comments[id]) return;
     p.comments[id] = M.stamp(Object.assign({}, p.comments[id], { deleted: true, text: '' }), me());
     touch(p); renderPage(); renderInspector();
+    syncSoon();
   }
   function addCustom(checklist, section, text) {
     var p = current(); if (!p || !text.trim()) return;
     var id = M.uid(C.ids.custom || 'x');
     p.custom[id] = M.stamp({ id: id, checklist: checklist, section: section, text: text.trim(), hint: '', severity: 'major', createdAt: M.now() }, me());
-    touch(p); renderPage();
+    touch(p); renderPage(); syncSoon();
     return id;
   }
   function updateMeta(fields) {
@@ -1125,7 +1126,7 @@
       p.revisions = p.revisions || {};
       if (b.dataset.sheet === 'untag') {
         p.revisions[rev.id] = M.stamp(Object.assign({}, p.revisions[rev.id], { deleted: true }), me());
-        closeSheet(); touch(p); renderPage(); toast('Tag removed'); return;
+        closeSheet(); touch(p); renderPage(); toast('Tag removed'); syncSoon(); return;
       }
       var val = function (id) { return w.querySelector('#' + id).value.trim(); };
       var fields = { label: val('v-label'), title: val('v-title'), status: val('v-status'), house: val('v-house'), sentAt: val('v-sent'), ref: val('v-ref'), notes: val('v-notes') };
@@ -1133,7 +1134,7 @@
       var rec = M.newRevision(run, fields, me());
       if (rev) p.revisions[rev.id] = M.stamp(Object.assign({}, p.revisions[rev.id], { label: rec.label, title: rec.title, status: rec.status, fab: rec.fab, notes: rec.notes }), me());
       else p.revisions[rec.id] = rec;
-      closeSheet(); touch(p); renderPage(); toast(rev ? 'Revision saved' : 'Tagged as ' + rec.label);
+      closeSheet(); touch(p); renderPage(); toast(rev ? 'Revision saved' : 'Tagged as ' + rec.label); syncSoon();
     });
   }
 
@@ -1535,7 +1536,7 @@
       r.records.forEach(function (q) { p.reqs[q.id] = q; });
       touch(p); closeSheet();
       ui.view = 'reqs'; saveUi(); renderPage();
-      toast('Imported — ' + r.added + ' added, ' + r.updated + ' updated');
+      toast('Imported — ' + r.added + ' added, ' + r.updated + ' updated'); syncSoon();
     });
   }
 
@@ -1645,7 +1646,7 @@
       var b = e.target.closest('[data-sheet]');
       if (!b) return;
       if (b.dataset.sheet === 'cancel') return closeSheet();
-      if (b.dataset.sheet === 'archive') { updateMeta({ archived: !m.archived }); closeSheet(); toast(m.archived ? cap(UNIT) + ' restored' : cap(UNIT) + ' archived'); return; }
+      if (b.dataset.sheet === 'archive') { updateMeta({ archived: !m.archived }); closeSheet(); toast(m.archived ? cap(UNIT) + ' restored' : cap(UNIT) + ' archived'); syncSoon(); return; }
       var name = w.querySelector('#f-name').value.trim();
       if (!name) { w.querySelector('#f-name').focus(); return; }
       var fields = {
@@ -1680,7 +1681,7 @@
       }
       // Requirements is chosen like a checklist; from now on that choice is explicit.
       fields.reqsDecided = true;
-      if (editing) { assign(p.id); updateMeta(fields); closeSheet(); return; }
+      if (editing) { assign(p.id); updateMeta(fields); closeSheet(); syncSoon(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
       doc.meta.reqsDecided = true;
       var slug = doc.slug, n = 2;
@@ -1690,7 +1691,7 @@
       ui.slug = slug; ui.view = 'overview'; ui.page = '';
       assign(doc.id);
       touch(doc); saveUi(); closeSheet(); render();
-      toast('Review created');
+      toast('Review created'); syncSoon();
     });
   }
 
@@ -2111,6 +2112,8 @@
   // ── Sync ─────────────────────────────────────────────────
   var syncing = false, lastError = '', syncAgain = false;
   // An automatic sync: quiet when GitHub isn't set up, and queued behind one already running.
+  // It follows deliberate saves (Comment, Save, Create, Tag, Import, adding or deleting a check,
+  // comment or requirement, archiving), not every click: statuses and typed notes wait for a sync.
   function syncSoon() {
     if (DEMO || !getToken() || !settings.owner || !settings.dataRepo || !settings.user) return;
     if (syncing) { syncAgain = true; return; }
@@ -2283,7 +2286,7 @@
       projects[slug] = M.mergeProjects(projects[slug], doc);
       ui.slug = slug; ui.view = 'overview';
       touch(projects[slug]); saveUi(); render();
-      toast(M.isLegacy(data) ? 'Imported from the old checklist' : cap(UNIT) + ' imported');
+      toast(M.isLegacy(data) ? 'Imported from the old checklist' : cap(UNIT) + ' imported'); syncSoon();
     };
     reader.readAsText(file);
   }
@@ -2451,11 +2454,11 @@
       case 'req-unlink': { var ru = reqOf(current(), selected); if (ru) setReq(selected, { links: (ru.links || []).filter(function (x) { return x !== id; }) }); break; }
       case 'req-delete': {
         var rd = reqOf(current(), selected);
-        if (rd && confirm('Delete ' + rd.ref + '? Its discussion is kept in the ' + UNIT + ' history.')) { setReq(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); }
+        if (rd && confirm('Delete ' + rd.ref + '? Its discussion is kept in the ' + UNIT + ' history.')) { setReq(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); syncSoon(); }
         break;
       }
       case 'delete-custom':
-        if (confirm('Delete this ' + UNIT + ' check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); }
+        if (confirm('Delete this ' + UNIT + ' check?')) { var pp = current(); pp.custom[id] = M.stamp(Object.assign({}, pp.custom[id], { deleted: true }), me()); touch(pp); closeInspector(); renderPage(); syncSoon(); }
         break;
       case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
@@ -2513,7 +2516,7 @@
             else if (choice === 'csv') exportCsv();
             else if (choice === 'json') download(current().slug + '.json', M.stableStringify(current()));
             else if (choice === 'import') $('#import-file').click();
-            else if (choice === 'archive') { updateMeta({ archived: !current().meta.archived }); }
+            else if (choice === 'archive') { updateMeta({ archived: !current().meta.archived }); syncSoon(); }
           });
         break;
     }
