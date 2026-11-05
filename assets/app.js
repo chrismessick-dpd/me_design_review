@@ -237,10 +237,16 @@
 
   function ring(pct, size, stroke, label, sub) {
     var r = (size - stroke) / 2, c = 2 * Math.PI * r;
+    // The number fits inside the ring with room to spare, sized for the widest it can show ("100"
+    // or "100%") so every ring of one size matches: at most 22px, smaller in small rings (a digit
+    // is about 0.6em wide; the widest text takes ~80% of the hole).
+    var text = label == null ? '' : String(label);
+    var fs = Math.min(22, Math.floor((size - 2 * stroke) * 0.8 / (0.6 * (/%/.test(text) ? 4 : 3))));
+    var fsStyle = fs < 22 ? ' style="font-size:' + fs + 'px"' : '';
     return '<div class="ring" style="width:' + size + 'px;height:' + size + 'px">' +
       '<svg width="' + size + '" height="' + size + '"><circle class="ring-track" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke-width="' + stroke + '"/>' +
       '<circle class="ring-val" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + c + '" stroke-dashoffset="' + (c * (1 - pct / 100)) + '"/></svg>' +
-      (label != null ? '<div class="ring-label"><div><b>' + label + '</b>' + (sub ? '<span>' + sub + '</span>' : '') + '</div></div>' : '') + '</div>';
+      (label != null ? '<div class="ring-label"><div><b' + fsStyle + '>' + label + '</b>' + (sub ? '<span>' + sub + '</span>' : '') + '</div></div>' : '') + '</div>';
   }
   function bar(c) {
     if (!c.total) return '<div class="bar"></div>';
@@ -1224,13 +1230,31 @@
     };
   }
   // Back from Fabcheck restores this page from the browser's cache, card and all.
-  window.addEventListener('pageshow', function (ev) { if (ev.persisted) { var b = $('#busy-wrap'); if (b) b.remove(); } });
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) { var b = $('#busy-wrap'); if (b) b.remove(); try { localStorage.removeItem(NS + 'fabReturn'); } catch (e) { /* storage blocked */ } } });
+  // Fabcheck's "Back to Signoff EE" loads this page again. Open in Fabcheck left a return point
+  // (fabReturn: the board, tab, open check and scroll), and Fabcheck sets the board and tab from
+  // it (signoff.js openFindings); this puts back the check and the scroll. It's used once, and
+  // only within the hour.
+  function returnFromFabcheck() {
+    var r = load('fabReturn', null);
+    if (!r) return;
+    try { localStorage.removeItem(NS + 'fabReturn'); } catch (e) { /* storage blocked */ }
+    var p = current();
+    if (!p || p.id !== r.project || ui.view !== r.view || !(Date.now() - Date.parse(r.at) < 3600000)) return;
+    $('#main').scrollTop = r.scroll || 0;
+    if (!r.selected) return;
+    selected = r.selected;
+    var el = document.querySelector('.item[data-id="' + CSS.escape(r.selected) + '"]');
+    if (el) el.classList.add('sel');
+    $('#inspector').classList.add('open'); renderInspector();
+  }
 
   // Open in Fabcheck, in this tab: a card says what Signoff is reading while it hands the run off,
   // then the tab goes to the run's link. The demo's runs open in Fabcheck's demo, which has their
   // boards; without a token Fabcheck asks for the package.
   function openFabcheck(el) {
     var href = new URL(el.dataset.href, location.href).href, runId = el.dataset.run || '', p = current();
+    if (p) save('fabReturn', { project: p.id, view: ui.view, selected: selected || '', scroll: $('#main').scrollTop, at: M.now() });
     var card = busyCard('Opening in Fabcheck');
     function go() { card.step('Opening Fabcheck…', 1); location.href = href; }
     if (DEMO || !C.runs || !p || !getToken() || !/^[A-Za-z0-9_-]{1,64}$/.test(runId)) return go();
@@ -2742,6 +2766,7 @@
   if (!projects[ui.slug] && !(ui.home && !ui.slug)) ui.slug =Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
   openWantedItem();
+  returnFromFabcheck();
   if (!settings.user) settingsSheet();   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
