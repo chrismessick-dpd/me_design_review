@@ -113,7 +113,10 @@ button { cursor: pointer; }
 
 /* ── App layout ── */
 .app { display: grid; grid-template-columns: 272px 1fr; height: 100vh; height: 100dvh; }
-body.has-banner .app { height: calc(100dvh - 33px); }
+/* The banner wraps to several lines on a phone, so the app takes what's left instead of a fixed 33px. */
+body.has-banner { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+body.has-banner .demo-banner { flex: none; }
+body.has-banner .app { flex: 1; min-height: 0; height: auto; }
 .sidebar {
   background: var(--sidebar);
   backdrop-filter: saturate(180%) blur(24px);
@@ -261,7 +264,11 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .head-pic .seg { position: absolute; right: 0; bottom: -10px; opacity: 0; transition: opacity 0.15s; }
 .head-pic:hover .seg, .head-pic:focus-within .seg { opacity: 1; }
 .head-pic .seg button { padding: 2px 8px; font-size: 11px; }
-@media (hover: none) { .head-pic .seg { opacity: 1; } }
+/* Touch screens: the side toggle sits under the picture, not over it. */
+@media (hover: none) {
+  .head-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .head-pic .seg { position: static; opacity: 1; }
+}
 
 /* Cards */
 .card { background: var(--bg-elev); border-radius: var(--radius); box-shadow: var(--shadow); }
@@ -600,6 +607,12 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
   .paper { padding: 28px 20px; }
   .paper .r-meta { grid-template-columns: repeat(2, 1fr); }
   .btn-label { display: none; }
+  /* Phones: the page only scrolls up and down; wide pieces scroll inside themselves. */
+  .main { overflow-x: hidden; overscroll-behavior-x: none; }
+  .filters .seg { flex-wrap: wrap; overflow: visible; }
+  .card.table-scroll { overflow-x: auto !important; overscroll-behavior-x: contain; }
+  .card.table-scroll .table th, .card.table-scroll .table td { padding: 10px; }
+  .card.table-scroll .table.reqs td:nth-child(2) { min-width: 180px; }
 }
 
 /* ── People & access ── */

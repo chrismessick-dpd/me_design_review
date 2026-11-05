@@ -834,7 +834,7 @@
       '<div class="page-sub"><span>' + plural(f.length, 'issue') + '</span><span class="sep">·</span><span>' + open + ' open</span></div></div>' +
       '<button class="btn" data-act="export-csv">Export CSV</button></div>';
     if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner and resolution.</p></div></div>';
-    html += '<div class="card" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
+    html += '<div class="card table-scroll" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
       f.map(function (x) {
         var r = x.row, res = r.resolution;
         var last = M.liveComments(p, r.id).slice(-1)[0];
@@ -1466,7 +1466,7 @@
       return '<button class="' + ((ui.reqFilter || 'all') === f[0] ? 'on' : '') + '" data-act="req-filter" data-filter="' + f[0] + '">' + f[1] + ' <span class="count">' + f[2] + '</span></button>';
     }).join('') + '</div><div class="search">' + ICON.search + '<input id="req-search" type="search" placeholder="Filter requirements" value="' + esc(ui.reqQuery || '') + '" autocomplete="off"></div></div>';
     if (!list.length) return html + '<div class="empty"><h2>Nothing here</h2><p>No requirements match this filter.</p></div></div>';
-    html += '<div class="card" style="overflow:hidden"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
+    html += '<div class="card table-scroll" style="overflow:hidden"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
       list.map(function (q) {
         var n = M.liveComments(p, q.id).length;
         var cls = [selected === q.id ? 'sel' : '', q.status === 'deprecated' ? 'deprecated' : ''].filter(Boolean).join(' ');
@@ -1959,7 +1959,7 @@
       html += '<div class="card" style="padding:18px 20px;margin-bottom:14px"><b>No one is listed yet.</b> Add yourself and the other FTEs first, then contractors.' +
         (settings.login ? ' <button class="btn btn-plain" data-act="add-self">Add me (' + esc(settings.login) + ') as FTE</button>' : '') + '</div>';
     } else {
-      html += '<div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
+      html += '<div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
         people.map(function (u) {
           var projs = u.role === 'fte' ? '<span class="muted">All ' + UNITS + '</span>' :
             ((u.projects || []).map(function (id) { return byId[id] ? '<span class="chip">' + esc(byId[id].meta.name) + '</span>' : ''; }).join(' ') || '<span class="muted">None yet</span>') +
@@ -1975,7 +1975,7 @@
     }
     var sharedIds = Object.keys(roster.shared || {}).filter(function (id) { return M.sharedRepo(roster, id); });
     if (sharedIds.length) {
-      html += '<div class="section-title">Shared review repositories</div><div class="card" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Contractors</th></tr></thead><tbody>' +
+      html += '<div class="section-title">Shared review repositories</div><div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Contractors</th></tr></thead><tbody>' +
         sharedIds.map(function (id) {
           var repo = M.sharedRepo(roster, id), p = byId[id];
           var names = assignedContractors(id).map(function (u) { return esc(u.name || u.login); }).join(', ') || '<span class="muted">None</span>';
