@@ -448,12 +448,11 @@
     if (state === 'error') { dot.dataset.tone = 'error'; title.textContent = 'Sync failed'; sub.textContent = 'Click for details'; return; }
     if (!getToken()) { dot.dataset.tone = n ? 'warn' : 'idle'; title.textContent = n ? plural(n, 'unsynced change') : 'Local only'; sub.textContent = 'Set up Git sync'; return; }
     if (n) { dot.dataset.tone = 'warn'; title.textContent = plural(n, 'unsynced change'); sub.textContent = 'Click to sync'; return; }
-    var outdated = lastSync && lastSync.version && window.SIGNOFF_VERSION && lastSync.version.hash !== window.SIGNOFF_VERSION.hash;
-    dot.dataset.tone = outdated ? 'warn' : 'ok';
-    title.textContent = outdated ? 'Newer tool available' : 'Synced';
+    dot.dataset.tone = 'ok';
+    title.textContent = 'Synced';
     var errs = lastSync && lastSync.errors && lastSync.errors.length;
     if (errs) { dot.dataset.tone = 'warn'; title.textContent = 'Synced with problems'; sub.textContent = lastSync.errors[0].message; return; }
-    sub.textContent = outdated ? 'Get the latest from ' + settings.toolRepo : (lastSync ? relTime(lastSync.at) : 'Ready') +
+    sub.textContent = (lastSync ? relTime(lastSync.at) : 'Ready') +
       (settings.login ? ' \u00b7 ' + settings.login + (myRole() === 'contractor' ? ' (contractor)' : '') : '');
   }
 
@@ -2226,6 +2225,7 @@
         if (res.errors.length) toast(res.errors[0].message + (res.errors.length > 1 ? ' (+' + (res.errors.length - 1) + ' more)' : ''));
         else toast(res.pushed ? 'Synced — ' + plural(res.pushed, 'change') + ' pushed' : 'Up to date');
         if (syncAgain) { syncAgain = false; sync(); }
+        else checkForUpdate();
       })
       .catch(function (err) {
         syncing = false; syncAgain = false; lastError = err.message;
@@ -2667,6 +2667,55 @@
     if (!itemDef(current(), id).retired) gotoItem(id);
     else toast('That check isn’t in this ' + UNIT + '.');
   }
+  // ── Tool updates ─────────────────────────────────────────
+  // A page left open keeps running the version it loaded. Now and then (on opening, every few
+  // minutes, when the tab comes back into view, after a sync) it asks this site which version it
+  // serves now. If that's another one, it reloads into it as soon as nothing is being typed or
+  // edited, and the new page says "Tool updated". Everything is already saved in the browser, so
+  // a reload loses nothing. A version it already reloaded for is never tried twice, so a stale
+  // cache can't make it loop.
+  var UPDATE_KEY = 'signoff.toolUpdate';   // sessionStorage: { tried: hash, from: hash }
+  var updateWaiting = '', updateBusy = false;
+  function updateMemo(v) {
+    try {
+      if (v === undefined) return JSON.parse(sessionStorage.getItem(UPDATE_KEY) || '{}') || {};
+      if (v) sessionStorage.setItem(UPDATE_KEY, JSON.stringify(v)); else sessionStorage.removeItem(UPDATE_KEY);
+    } catch (e) { return null; }
+  }
+  function pageIdle() {
+    var a = document.activeElement;
+    var typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
+    return !syncing && !typing && !$('#sheet') && !$('#busy-wrap') && !$('#menu') && !document.hidden;
+  }
+  function reloadWhenIdle() {
+    if (!updateWaiting) return;
+    if (!pageIdle()) { setTimeout(reloadWhenIdle, 3000); return; }
+    var have = (window.SIGNOFF_VERSION || {}).hash;
+    if (updateMemo({ tried: updateWaiting, from: have }) === null) { updateWaiting = ''; return; }   // storage blocked: no loop guard, so no reload
+    location.reload();
+  }
+  function checkForUpdate() {
+    var have = (window.SIGNOFF_VERSION || {}).hash;
+    if (!have || updateBusy || updateWaiting || !window.fetch) return;
+    updateBusy = true;
+    fetch('assets/version.js?nc=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (text) {
+        updateBusy = false;
+        var m = /hash:\s*'([0-9a-f]+)'/.exec(text || '');
+        if (!m || m[1] === have || (updateMemo() || {}).tried === m[1]) return;
+        updateWaiting = m[1];
+        reloadWhenIdle();
+      }, function () { updateBusy = false; });
+  }
+  (function () {
+    var memo = updateMemo() || {};
+    if (memo.from && memo.from !== (window.SIGNOFF_VERSION || {}).hash) { updateMemo({ tried: memo.tried }); setTimeout(function () { toast('Tool updated'); }, 300); }
+    setTimeout(checkForUpdate, 5000);
+    setInterval(checkForUpdate, 5 * 60000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) checkForUpdate(); });
+  })();
+
   if (!DEMO) noticeToken();
   openWanted(DEMO || !getToken());
   if (!projects[ui.slug] && !(ui.home && !ui.slug)) ui.slug =Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
