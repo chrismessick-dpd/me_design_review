@@ -389,6 +389,7 @@
     var tools = $('#side-tools');
     if (tools) {
       tools.hidden = false;
+      if (!tools.dataset.fold) setupToolsFold(tools);
       tools.querySelectorAll('[data-internal]').forEach(function (a) { a.hidden = DEMO || !isFte(); });
       if (DEMO) {
         tools.querySelectorAll('a.side-link').forEach(function (a) {
@@ -398,6 +399,41 @@
       }
     }
     people.classList.toggle('active', ui.page === 'people');
+  }
+
+  // The suite switcher starts folded to a row of tool icons. The chevron opens the full list,
+  // which folds again 10 s after the pointer and keyboard focus have left it.
+  var TOOLS_FOLD_MS = 10000;
+  function setupToolsFold(tools) {
+    var head = tools.querySelector('.side-head');
+    if (!head) return;
+    tools.dataset.fold = '1';
+    var label = head.textContent.trim() || 'Dovetail Signoff';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'side-tools-toggle';
+    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg>' +
+      '<span class="side-label">' + esc(label) + '</span>';
+    head.textContent = '';
+    head.appendChild(btn);
+    // In use while hovered, or while keyboard focus (not the focus a click leaves) is inside.
+    var timer = null;
+    function inUse() { return tools.matches(':hover') || !!tools.querySelector(':focus-visible'); }
+    function stop() { if (timer) { clearTimeout(timer); timer = null; } }
+    function arm() { stop(); if (!tools.classList.contains('folded') && !inUse()) timer = setTimeout(function () { set(true); }, TOOLS_FOLD_MS); }
+    function set(folded) {
+      tools.classList.toggle('folded', folded);
+      var tip = (folded ? 'Show ' : 'Hide ') + label + ' tools';
+      btn.setAttribute('aria-expanded', String(!folded));
+      btn.title = tip; btn.setAttribute('aria-label', tip);
+      if (folded) stop(); else arm();
+    }
+    btn.addEventListener('click', function () { set(!tools.classList.contains('folded')); });
+    tools.addEventListener('mouseenter', stop);
+    tools.addEventListener('mouseleave', function () { setTimeout(arm, 0); });
+    tools.addEventListener('focusin', function () { if (inUse()) stop(); });
+    tools.addEventListener('focusout', function () { setTimeout(arm, 0); });
+    set(true);
   }
 
   function renderSyncState(state) {
@@ -771,6 +807,13 @@
     else if ($('#inspector').classList.contains('open')) renderInspector();
   }
   function closeInspector() { $('#inspector').classList.remove('open'); }
+  // A click on blank space in the main area (nothing to click or type in there, no text being
+  // selected) closes an open details pane, as × and Esc do.
+  var LIVE = 'a, button, input, select, textarea, label, summary, [contenteditable], [role="button"], [tabindex], .item, canvas, svg';
+  function blankClick(e) {
+    return $('#inspector').classList.contains('open') && !!e.target.closest('#main') && !e.target.closest(LIVE) &&
+      !String(window.getSelection ? window.getSelection() : '');
+  }
   // Show a check in its checklist (even if its section is collapsed or set aside) and open it.
   function gotoItem(id) {
     var d = itemDef(current(), id);
@@ -1087,39 +1130,75 @@
 
   // Read a stored run and its zip with this tab's token and leave them for Fabcheck (S.handoff).
   // Resolves 'ok', 'missing' (no such run file) or 'nozip' (stored without a zip).
-  function handOff(p, runId) {
+  // step(text, fraction) reports progress, if given.
+  function handOff(p, runId, step) {
+    step = step || function () {};
     var dir = checkerDir(p, C.runs.dir), store = workspace().store(homeOf(p));
+    step('Listing the ' + UNIT + '’s stored runs…', 0.1);
     return store.listTree(dir).then(function (entries) {
+      step('Reading run ' + runId + '…', 0.3);
       return store.readBytes(dir + 'runs/' + runId + '.json', entries).then(function (b) {
         var r = null;
         try { r = b && M.cleanRun(JSON.parse(new TextDecoder().decode(b))); } catch (e) { r = null; }
         if (!r || r.id !== runId) return 'missing';
         if (!r.zip) return 'nozip';
+        step('Downloading the fab package' + (r.zip.size ? ' (' + (r.zip.size / 1048576).toFixed(1) + ' MB)' : '') + '…', 0.5);
         return store.readVerified(dir + r.zip.rel, r.zip.sha256, entries).then(function (zip) {
+          step('Handing the run to Fabcheck…', 0.9);
           return S.handoff.put({ id: runId, run: r.raw, findings: r.findings, zip: zip, at: M.now() }, DEMO);
         }).then(function () { return 'ok'; });
       });
     });
   }
 
-  // Open in Fabcheck: its window opens at once (a later window.open would be blocked), the run is
-  // handed off, then the window goes to the run's link. The demo's runs open in Fabcheck's demo,
-  // which has their boards; without a token Fabcheck asks for the package.
+  // A wait that says what it is doing: a card over the page with a spinner, a step line and a bar.
+  // Returns { step(text, fraction), stop(text, actions) , close() }; actions are [label, fn, primary].
+  function busyCard(title) {
+    var old = $('#busy-wrap'); if (old) old.remove();
+    var w = document.createElement('div');
+    w.className = 'sheet-wrap'; w.id = 'busy-wrap';
+    w.innerHTML = '<div class="sheet busy" role="status" aria-live="polite"><div class="busy-row"><span class="busy-spin" aria-hidden="true"></span><div style="flex:1;min-width:0">' +
+      '<div class="busy-title">' + esc(title) + '</div><div class="busy-step"></div><div class="busy-bar"><i></i></div></div></div><div class="busy-acts"></div></div>';
+    document.body.appendChild(w);
+    var card = w.firstChild, stepEl = w.querySelector('.busy-step'), bar = w.querySelector('.busy-bar i'), acts = w.querySelector('.busy-acts');
+    return {
+      step: function (text, frac) { stepEl.textContent = text; if (frac != null) bar.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%'; },
+      stop: function (text, actions, newTitle) {
+        card.classList.add('done'); stepEl.textContent = text;
+        if (newTitle) w.querySelector('.busy-title').textContent = newTitle;
+        acts.innerHTML = '';
+        (actions || []).forEach(function (a) {
+          var b = document.createElement('button');
+          b.className = 'btn' + (a[2] ? ' btn-primary' : ''); b.textContent = a[0];
+          b.addEventListener('click', a[1]); acts.appendChild(b);
+        });
+        var first = acts.querySelector('.btn-primary'); if (first) first.focus();
+      },
+      close: function () { w.remove(); }
+    };
+  }
+  // Back from Fabcheck restores this page from the browser's cache, card and all.
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) { var b = $('#busy-wrap'); if (b) b.remove(); } });
+
+  // Open in Fabcheck, in this tab: a card says what Signoff is reading while it hands the run off,
+  // then the tab goes to the run's link. The demo's runs open in Fabcheck's demo, which has their
+  // boards; without a token Fabcheck asks for the package.
   function openFabcheck(el) {
     var href = new URL(el.dataset.href, location.href).href, runId = el.dataset.run || '', p = current();
-    var w = window.open('', 'dovetail-fabcheck');
-    function go() {
-      if (w && !w.closed) { w.location.href = href; w.focus(); }
-      else { w = window.open(href, 'dovetail-fabcheck'); if (w) w.focus(); }
-    }
+    var card = busyCard('Opening in Fabcheck');
+    function go() { card.step('Opening Fabcheck…', 1); location.href = href; }
     if (DEMO || !C.runs || !p || !getToken() || !/^[A-Za-z0-9_-]{1,64}$/.test(runId)) return go();
-    try { if (w && w.location.href === 'about:blank') { w.document.title = 'Fabcheck'; w.document.body.textContent = 'Reading the run from GitHub…'; } } catch (e) { /* Fabcheck already open there */ }
-    handOff(p, runId).then(function (res) {
-      if (res === 'missing') toast('This run isn’t stored with the ' + UNIT + '. Fabcheck asks for the package.');
-      else if (res === 'nozip') toast('This run was stored without a package zip. Fabcheck asks for the package.');
+    // If the run can't be handed over, say why and let them choose; Fabcheck would ask for the package.
+    function ask(why) {
+      card.stop(why + ' Fabcheck will ask for the package instead.', [['Stay here', card.close], ['Open Fabcheck', go, true]], 'The run can’t be handed over');
+    }
+    handOff(p, runId, card.step).then(function (res) {
+      if (res === 'missing') ask('This run isn’t stored with the ' + UNIT + '.');
+      else if (res === 'nozip') ask('This run was stored without a package zip.');
+      else go();
     }, function (err) {
-      toast((err.code === 'mismatch' ? 'The stored zip doesn’t match its SHA-256' : 'Couldn’t read the run from GitHub') + '. Fabcheck asks for the package.');
-    }).then(go);
+      ask(err.code === 'mismatch' ? 'The stored zip doesn’t match its SHA-256.' : 'Couldn’t read the run from GitHub' + (err.message ? ' (' + err.message + ')' : '') + '.');
+    });
   }
 
   function renderInspector() {
@@ -2275,7 +2354,7 @@
     var popWasOpen = !!$('#menu.sync-pop');
     if (!e.target.closest('#menu')) closeMenu();
     var el = e.target.closest('[data-act]');
-    if (!el) return;
+    if (!el) { if (blankClick(e)) closeInspector(); return; }
     var act = el.dataset.act, id = el.dataset.id;
     switch (act) {
       case 'sync-details': if (popWasOpen) closeMenu(); else syncDetails(el); break;
