@@ -128,8 +128,9 @@ body.has-banner .app { flex: 1; min-height: 0; height: auto; }
 
 /* ── Sidebar ── */
 .brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px 14px; }
-.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: #004952; display: grid; place-items: center; flex: none; }
-.brand-mark svg { width: 16px; height: 18px; }
+/* A touch taller than the name and subtitle beside it (44 px when the subtitle wraps). */
+.brand-mark { width: 46px; height: 46px; border-radius: 12px; background: #004952; display: grid; place-items: center; flex: none; }
+.brand-mark svg { width: 17px; height: 28px; }
 .brand-text { line-height: 1.1; }
 .brand-name { font: 600 15px/1.1 var(--display); letter-spacing: -0.01em; }
 .brand-sub { font-size: 11px; color: var(--text-3); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
