@@ -150,6 +150,9 @@
       auto: !explicit && status === 'na' ? (sectionNA ? 'section' : 'profile') : '',
       hidden: !applicable && !st.include && !explicit,
       custom: custom,
+      // A reference copy, not a check: findings a checker (Fabcheck) waived, kept to read. Counted
+      // nowhere (progress, issue tallies, the project summary), and shown as waived info.
+      reference: !!(custom && def.reference === true),
       severity: oneOf(SEVERITIES, st.severity, oneOf(SEVERITIES, def.severity, 'minor')),
       resolution: oneOf(RESOLUTIONS, st.resolution, ''),
       comments: 0
@@ -158,9 +161,11 @@
 
   // Checks set aside by the board profile aren't counted at all (a new review starts at
   // 0%). Section N/A is a reviewer's decision, so those count as reviewed.
+  // Reference rows (waived findings kept to read) aren't checks, so they count nowhere either.
   function countStatuses(rows) {
-    var c = { total: 0, pass: 0, issue: 0, na: 0, open: 0, reviewed: 0, issuesOpen: 0, outside: 0 };
+    var c = { total: 0, pass: 0, issue: 0, na: 0, open: 0, reviewed: 0, issuesOpen: 0, outside: 0, reference: 0 };
     rows.forEach(function (r) {
+      if (r.reference) { c.reference++; return; }
       if (r.auto === 'profile') { c.outside++; return; }
       c.total++;
       c[r.status]++;
@@ -253,7 +258,7 @@
       checklists[t.id] = { name: t.short || t.title || t.id, total: c.total, reviewed: c.reviewed, pct: c.pct, issuesOpen: c.issuesOpen };
       checklistRows(project, t).forEach(function (g) {
         g.rows.forEach(function (r) {
-          if (r.status !== 'issue' || r.auto === 'profile') return;
+          if (r.status !== 'issue' || r.auto === 'profile' || r.reference) return;
           var res = r.resolution;
           if (res) { issues[res]++; return; }
           issues.open[r.severity] = (issues.open[r.severity] || 0) + 1;
@@ -271,7 +276,7 @@
     }
     // summary.recent: the latest discussion (newest first), for Signoff PL's Recent discussion.
     var index = checkIndex(project, templates), cut = function (t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-    var recent = liveComments(project).slice(-RECENT).reverse().map(function (c) {
+    var recent = liveComments(project).filter(function (c) { return !(c.item && index[c.item] && index[c.item].reference); }).slice(-RECENT).reverse().map(function (c) {
       var chk = c.item && index[c.item];
       return { id: c.id, item: c.item || '', check: chk ? cut(chk.text, 160) : '', author: c.author || '', at: c.at || '', text: cut(c.text, 400) };
     });
@@ -488,7 +493,7 @@
       if (project.meta.checklists.indexOf(t.id) < 0) return;
       checklistRows(project, t).forEach(function (g) {
         g.rows.forEach(function (r) {
-          out[r.id] = { id: r.id, status: r.status, text: r.def.text, template: t, section: g.section, custom: r.custom, resolution: r.resolution };
+          out[r.id] = { id: r.id, status: r.status, text: r.def.text, template: t, section: g.section, custom: r.custom, resolution: r.resolution, reference: r.reference };
         });
       });
     });

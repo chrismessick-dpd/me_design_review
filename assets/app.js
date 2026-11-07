@@ -732,8 +732,8 @@
       var q = ui.query.toLowerCase();
       if ((r.def.text + ' ' + (r.def.hint || '')).toLowerCase().indexOf(q) < 0) return false;
     }
-    if (ui.filter === 'open') return r.status === 'open';
-    if (ui.filter === 'issue') return r.status === 'issue';
+    if (ui.filter === 'open') return r.status === 'open' && !r.reference;
+    if (ui.filter === 'issue') return r.status === 'issue' && !r.reference;
     if (ui.filter === 'comments') return !!counts[r.id];
     return true;
   }
@@ -809,7 +809,19 @@
     return html + '</div>';
   }
 
+  // A reference row (findings Fabcheck waived, kept to read): no severity, status or quick buttons,
+  // and it counts nowhere (model.row, countStatuses).
+  function referenceRow(r, counts) {
+    var n = counts[r.id] || 0;
+    var sub = '<span class="res waived">Waived</span><span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : cap(UNIT) + ' check') + '</span><span class="tag">Reference, not counted</span>';
+    return '<div class="item st-reference' + (selected === r.id ? ' sel' : '') + '" data-act="select" data-id="' + esc(r.id) + '">' +
+      '<span class="ref-dot" aria-hidden="true">i</span>' +
+      '<div><div class="item-text">' + esc(r.def.text) + '</div><div class="item-sub">' + sub + '</div></div>' +
+      '<div class="item-right">' + (n ? '<span class="cmt-count">' + ICON.bubble + n + '</span>' : '') + '</div></div>';
+  }
+
   function itemRow(r, counts) {
+    if (r.reference) return referenceRow(r, counts);
     var n = counts[r.id] || 0;
     var sub = '';
     if (r.severity !== 'minor' || r.status === 'issue') sub += '<span class="sev ' + r.severity + '">' + r.severity[0].toUpperCase() + r.severity.slice(1) + '</span>';
@@ -832,11 +844,15 @@
       (n ? '<span class="cmt-count">' + ICON.bubble + n + '</span>' : '') + '</div></div>';
   }
 
-  function allFindings(p) {
+  // The review's issues; reference rows (waived findings kept to read) go to `refs` when given.
+  function allFindings(p, refs) {
     var out = [];
     projectTemplates(p).forEach(function (t) {
       M.checklistRows(p, t).forEach(function (g) {
-        g.rows.forEach(function (r) { if (r.status === 'issue') out.push({ row: r, template: t, section: g.section }); });
+        g.rows.forEach(function (r) {
+          if (r.reference) { if (refs) refs.push({ row: r, template: t, section: g.section }); }
+          else if (r.status === 'issue') out.push({ row: r, template: t, section: g.section });
+        });
       });
     });
     var rank = { critical: 0, major: 1, minor: 2 };
@@ -846,14 +862,29 @@
     });
   }
 
+  // Waived findings a checker sent for reference: listed apart, after the issues, counted nowhere.
+  function referenceHtml(p, refs, counts) {
+    if (!refs.length) return '';
+    return '<div class="section-title">Waived in Fabcheck</div><p class="note" style="margin:-6px 0 10px">Kept for reference: these aren’t issues and aren’t counted anywhere.</p>' +
+      '<div class="card table-scroll" style="overflow:hidden"><table class="table ref-table"><tbody>' +
+      refs.map(function (x) {
+        var r = x.row;
+        return '<tr data-act="goto-item" data-id="' + esc(r.id) + '"><td style="width:1%"><span class="ref-dot" aria-hidden="true">i</span></td>' +
+          '<td>' + esc(r.def.text) + '<div class="muted">' + esc(x.template.short + ' › ' + x.section.title) + '</div></td>' +
+          '<td style="width:1%"><span class="res waived">Waived</span></td>' +
+          '<td class="muted" style="width:1%">' + (counts[r.id] ? '<span class="cmt-count">' + ICON.bubble + counts[r.id] + '</span>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
   function findingsPage(p) {
-    var f = allFindings(p);
+    var refs = [];
+    var f = allFindings(p, refs);
     var counts = commentCounts(p);
     var open = f.filter(function (x) { return !x.row.resolution; }).length;
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Findings</h1>' +
       '<div class="page-sub"><span>' + plural(f.length, 'issue') + '</span><span class="sep">·</span><span>' + open + ' open</span></div></div>' +
       '<button class="btn" data-act="export-csv">Export CSV</button></div>';
-    if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner and resolution.</p></div></div>';
+    if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner and resolution.</p></div>' + referenceHtml(p, refs, counts) + '</div>';
     html += '<div class="card table-scroll" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
       f.map(function (x) {
         var r = x.row, res = r.resolution;
@@ -863,7 +894,7 @@
           '<td class="muted">' + esc(r.state.assignee || '—') + '</td>' +
           '<td><span class="res ' + (res || 'open') + '">' + (res === 'fixed' ? 'Fixed' : res === 'waived' ? 'Waived' : 'Open') + '</span></td>' +
           '<td class="muted">' + (counts[r.id] ? '<span class="cmt-count">' + ICON.bubble + counts[r.id] + '</span>' : '') + '</td></tr>';
-      }).join('') + '</tbody></table></div></div>';
+      }).join('') + '</tbody></table></div>' + referenceHtml(p, refs, counts) + '</div>';
     return html;
   }
 
@@ -1356,11 +1387,13 @@
       details: !!(el.querySelector('.fab-detail') || {}).open
     } : null;
     var statusBtn = function (s, label) { return '<button class="s-' + s + (status === s ? ' on' : '') + '" data-act="set" data-status="' + s + '" data-id="' + esc(selected) + '">' + label + '</button>'; };
+    el.classList.toggle('is-reference', !!(row && row.reference));
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">' + esc(d.template ? d.template.short + ' › ' + (d.section ? d.section.title : '') : 'Retired check') + '</div>' +
       '<button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<div class="insp-title"' + (d.custom ? ' contenteditable="true" data-edit-custom="' + esc(selected) + '"' : '') + '>' + esc(d.def.text) + '</div>' +
       fabcheckBlock(p, d.def) +
+      (row && row.reference ? '<div class="note ref-note">Waived in Fabcheck and kept here for reference. It isn’t an issue and isn’t counted in progress, issues or the project summary.</div>' : '') +
       (d.def.hint && !isFabcheck(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
       tracedBy(p, selected) +
       (row && row.auto ? '<div class="note" style="margin:-4px 0 12px">' + (row.auto === 'section' ? 'Counted as N/A because the section is marked N/A.' : 'Counted as N/A: outside this ' + W.thing + '’s profile (' + esc((d.def.tags || d.section.tags || []).join(', ')) + '). Set a status to review it anyway.') + '</div>' : '') +

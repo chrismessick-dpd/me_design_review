@@ -761,3 +761,8 @@ button.req-link-main:hover { background: var(--hair-2); }
 .req-results button:last-child { border-bottom: none; }
 .req-results button:hover { background: var(--accent-soft); }
 .field-label .res { margin-left: 6px; font-size: 11px; }
+/* Reference rows: findings a checker (Fabcheck) waived, kept to read and counted nowhere. */
+.item.st-reference .item-text { color: var(--text-2); }
+.ref-dot { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; margin-top: 1px; background: var(--na-soft); color: var(--text-3); font: italic 600 12px/1 Georgia, serif; flex: none; }
+.ref-note { margin: -4px 0 12px; }
+#inspector.is-reference .insp-body > .field, #inspector.is-reference .issue-box { display: none; }
