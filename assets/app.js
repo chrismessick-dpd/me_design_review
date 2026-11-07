@@ -206,6 +206,13 @@
     $('#app').classList.toggle('side-collapsed', ui.sideCollapsed);
     saveUi();
   }
+  // On a narrow window a tap outside the open menu (on its scrim, styles.css) closes it and goes
+  // no further, as in Loom and the hub.
+  document.addEventListener('click', function (e) {
+    var app = $('#app');
+    if (!app.classList.contains('nav-open') || e.target !== app) return; // the scrim is #app's ::after
+    app.classList.remove('nav-open'); e.preventDefault(); e.stopPropagation();
+  }, true);
 
   // ── Small helpers ────────────────────────────────────────
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -2720,7 +2727,9 @@
   function render() { var f = focusNow(); renderSidebar(); renderSyncState(); drawPage(); drawInspector(); restoreFocus(f); }
 
   applyTheme(settings.theme);
-  if (ui.sideCollapsed && !narrow.matches) $('#app').classList.add('side-collapsed');
+  // Applied on narrow windows too (styles.css only hides it above 860 px), so widening the window
+  // later shows the sidebar as it was left.
+  if (ui.sideCollapsed) $('#app').classList.add('side-collapsed');
   if (DEMO) {
     var banner = $('#demo-banner');
     banner.hidden = false;

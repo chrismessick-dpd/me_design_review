@@ -597,6 +597,8 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
   .app { grid-template-columns: 1fr; }
   .sidebar { position: fixed; inset: 0 auto 0 0; width: 280px; z-index: 50; transform: translateX(-100%); transition: transform 0.28s var(--ease); background: var(--bg-elev); }
   .app.nav-open .sidebar { transform: none; box-shadow: var(--shadow-lg); }
+  /* The open menu's scrim: a tap on it closes the menu and goes no further (each tool's app.js). */
+  .app.nav-open::after { content: ''; position: fixed; inset: 0; z-index: 49; background: rgba(0, 0, 0, 0.32); }
   .menu-toggle { display: inline-grid; }
   .toolbar { padding: 0 12px; }
   .toolbar-title { display: none; }
