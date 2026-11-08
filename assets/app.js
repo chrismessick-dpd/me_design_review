@@ -194,7 +194,7 @@
     touchRoster();
   }
   function assignedContractors(projectId) {
-    return M.liveUsers(roster).filter(function (u) { return u.role === 'contractor' && (u.projects || []).indexOf(projectId) >= 0; });
+    return M.liveUsers(roster).filter(function (u) { return M.isOutside(u) && (u.projects || []).indexOf(projectId) >= 0; });
   }
   function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', closedGroups: ui.closedGroups || {}, home: !!ui.home }); }
   // Close the open review and show the home screen; it stays there on reload (ui.home).
@@ -484,7 +484,7 @@
     var errs = lastSync && lastSync.errors && lastSync.errors.length;
     if (errs) { dot.dataset.tone = 'warn'; title.textContent = 'Synced with problems'; sub.textContent = lastSync.errors[0].message; return; }
     sub.textContent = (lastSync ? relTime(lastSync.at) : 'Ready') +
-      (settings.login ? ' \u00b7 ' + settings.login + (myRole() === 'contractor' ? ' (contractor)' : '') : '');
+      (settings.login ? ' \u00b7 ' + settings.login + (myRole() === 'contractor' ? ' (shared access)' : '') : '');
   }
 
   // ── What's unsynced ─────────────────────────────────────
@@ -1738,7 +1738,7 @@
 
   function projectSheet(p) {
     var editing = !!p;
-    var contractors = M.liveUsers(roster).filter(function (u) { return u.role === 'contractor'; });
+    var contractors = M.liveUsers(roster).filter(M.isOutside);   // clients and contractors
     var defaults = C.defaultChecklists || TEMPLATES.map(function (t) { return t.id; });
     // A new review starts in the project of the one that's open, the usual next step.
     var cur = !p && current();
@@ -1769,7 +1769,7 @@
       '<div class="field"><span class="field-label">' + esc(W.profile) + ' — select everything that applies</span><div class="pick-grid" id="f-profile">' + M.TAGS.map(function (t) {
         return '<button type="button" class="pick' + (m.profile.indexOf(t.id) >= 0 ? ' on' : '') + '" data-pick="' + t.id + '"><b>' + esc(t.label) + '</b><span>' + esc(t.desc) + '</span></button>';
       }).join('') + '</div><p class="note" id="f-count"></p></div>' +
-      (!DEMO && contractors.length ? '<div class="field"><span class="field-label">Contractors on this ' + UNIT + ' \u2014 ' + (editing && M.sharedRepo(roster, p.id) ? 'shared as ' + esc(M.sharedRepo(roster, p.id)) : 'adding one moves it into its own private repository') + '</span><div class="pick-grid" id="f-people">' + contractors.map(function (u) {
+      (!DEMO && contractors.length ? '<div class="field"><span class="field-label">Clients and contractors on this ' + UNIT + ' \u2014 ' + (editing && M.sharedRepo(roster, p.id) ? 'shared as ' + esc(M.sharedRepo(roster, p.id)) : 'adding one moves it into its own private repository') + '</span><div class="pick-grid" id="f-people">' + contractors.map(function (u) {
         return '<button type="button" class="pick' + (editing && (u.projects || []).indexOf(p.id) >= 0 ? ' on' : '') + '" data-pick="' + esc(u.login) + '"><b>' + esc(u.name || u.login) + '</b><span>@' + esc(u.login) + '</span></button>';
       }).join('') + '</div></div>' : '') +
       '</div><div class="sheet-foot">' +
@@ -1859,7 +1859,7 @@
       (welcome ? '' : DEMO ? '<p class="note">Git sync is off in demo mode. <a href="' + esc(location.pathname) + '">Open the full tool</a>.</p>' :
         '<div class="field-label" style="margin-top:20px;font-size:13px;color:var(--text);font-weight:600">GitHub</div>' +
         (settings.login ? '<p class="note" style="margin:0 0 12px">Signed in as <b>' + esc(settings.login) + '</b> · ' +
-          (dataAccess === 'none' ? 'Contractor: you see the ' + UNITS + ' shared with you' : dataAccess === 'ok' ? 'FTE: you see every ' + UNIT : 'not synced yet') + '</p>' : '') +
+          (dataAccess === 'none' ? 'Client or contractor: you see the ' + UNITS + ' shared with you' : dataAccess === 'ok' ? 'FTE: you see every ' + UNIT : 'not synced yet') + '</p>' : '') +
         '<details class="guide"' + (getToken() ? '' : ' open') + '><summary>New to GitHub? Set up in four steps</summary><ol>' +
         '<li>Create a free account at <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a>.</li>' +
         '<li>Send your username to your Dovetail contact.</li>' +
@@ -2000,10 +2000,10 @@
       if (a.collaborators.indexOf(u.login) >= 0) return;
       (a.invited.indexOf(u.login) >= 0 ? pending : missing).push(r);
     });
-    var unshared = u.role === 'contractor' ? (u.projects || []).filter(function (id) { return !M.sharedRepo(roster, id); }) : [];
+    var unshared = M.isOutside(u) ? (u.projects || []).filter(function (id) { return !M.sharedRepo(roster, id); }) : [];
     // A contractor still on (or invited to) a repo they aren't meant to be on, e.g. after
     // being taken off a project when the access change didn't go through.
-    var extra = u.role === 'contractor' ? Object.keys(accessMap).filter(function (r) {
+    var extra = M.isOutside(u) ? Object.keys(accessMap).filter(function (r) {
       var a = accessMap[r];
       return a && !a.error && want.indexOf(r) < 0 && (a.collaborators.indexOf(u.login) >= 0 || a.invited.indexOf(u.login) >= 0);
     }) : [];
@@ -2056,18 +2056,19 @@
       (role === 'checking' || !EMBED ? '' : '<p><a class="btn" href="' + esc(location.pathname) + '" target="_top">Open ' + here + '</a></p>') + '</div></div>';
   }
 
+  var ROLES = [['fte', 'FTE'], ['client', 'Client'], ['contractor', 'Contractor']];
   function peoplePage() {
     loadAccess(false);
     var people = M.liveUsers(roster);
     var byId = stateNow().projects;
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">People &amp; access · ' + esc(settings.owner) + '</div><h1 class="page-title">' + esc(C.product) + '</h1>' +
-      '<div class="page-sub"><span>FTEs can open every ' + UNIT + '. A contractor can open only the ' + UNITS + ' shared with them, each in its own private repository.</span></div></div>' +
+      '<div class="page-sub"><span>FTEs can open every ' + UNIT + '. Clients and contractors can open only the ' + UNITS + ' shared with them, each in its own private repository.</span></div></div>' +
       '<div style="display:flex;gap:8px"><button class="btn" data-act="refresh-access">Refresh</button><button class="btn btn-primary" data-act="add-person">Add person</button></div></div>';
     if (!isOwner()) {
       html += '<div class="card" style="padding:14px 18px;margin-bottom:14px;font-size:13.5px">Only <b>' + esc(settings.owner) + '</b> can create review repositories and invite people while the repos are in a personal account. You can still edit this list; the owner applies the access.</div>';
     }
     if (!people.length) {
-      html += '<div class="card" style="padding:18px 20px;margin-bottom:14px"><b>No one is listed yet.</b> Add yourself and the other FTEs first, then contractors.' +
+      html += '<div class="card" style="padding:18px 20px;margin-bottom:14px"><b>No one is listed yet.</b> Add yourself and the other FTEs first, then clients and contractors.' +
         (settings.login ? ' <button class="btn btn-plain" data-act="add-self">Add me (' + esc(settings.login) + ') as FTE</button>' : '') + '</div>';
     } else {
       html += '<div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
@@ -2076,7 +2077,7 @@
             ((u.projects || []).map(function (id) { return byId[id] ? '<span class="chip">' + esc(byId[id].meta.name) + '</span>' : ''; }).join(' ') || '<span class="muted">None yet</span>') +
             ' <button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="person-projects" data-login="' + esc(u.login) + '">Edit</button>';
           return '<tr><td><div style="display:flex;gap:10px;align-items:center">' + avatar(u.name || u.login) + '<div><div>' + esc(u.name || u.login) + (u.login === settings.login ? ' <span class="muted">(you)</span>' : '') + '</div><div class="muted">@' + esc(u.login) + '</div></div></div></td>' +
-            '<td><div class="seg">' + [['fte', 'FTE'], ['contractor', 'Contractor']].map(function (r) {
+            '<td><div class="seg">' + ROLES.map(function (r) {
               return '<button class="' + (u.role === r[0] ? 'on' : '') + '" data-act="person-role" data-login="' + esc(u.login) + '" data-role="' + r[0] + '">' + r[1] + '</button>';
             }).join('') + '</div></td>' +
             '<td style="max-width:300px">' + projs + '</td>' +
@@ -2086,7 +2087,7 @@
     }
     var sharedIds = Object.keys(roster.shared || {}).filter(function (id) { return M.sharedRepo(roster, id); });
     if (sharedIds.length) {
-      html += '<div class="section-title">Shared review repositories</div><div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Contractors</th></tr></thead><tbody>' +
+      html += '<div class="section-title">Shared review repositories</div><div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Clients and contractors</th></tr></thead><tbody>' +
         sharedIds.map(function (id) {
           var repo = M.sharedRepo(roster, id), p = byId[id];
           var names = assignedContractors(id).map(function (u) { return esc(u.name || u.login); }).join(', ') || '<span class="muted">None</span>';
@@ -2094,7 +2095,7 @@
         }).join('') + '</tbody></table></div>';
     }
     html += '<p class="note" style="margin-top:14px">Internal ' + UNITS + ' live in <b>' + esc(settings.dataRepo) + '</b>, which only FTEs can open. ' +
-      'Adding a contractor to a ' + UNIT + ' moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
+      'Adding a client or contractor to a ' + UNIT + ' moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
       (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tools’ shared reviews are granted from their own tabs here. ' : '') +
       'On a personal account every collaborator can push to the repositories they’re on; an organization allows narrower roles.</p></div>';
     return html;
@@ -2105,11 +2106,11 @@
     var list = visibleProjects().filter(function (p) { return !p.meta.archived; }).sort(function (a, b) { return a.meta.name.localeCompare(b.meta.name); });
     var role = u ? u.role : 'contractor';
     var picked = u ? (u.projects || []).slice() : [];
-    var w = sheet('<div class="sheet-head"><h2>' + (u ? esc(u.name || u.login) : 'Add person') + '</h2><p>' + (u ? 'Choose the ' + UNITS + ' this contractor works on. Each one is shared through its own private repository.' : 'They’ll need a free GitHub account. Use their GitHub username here.') + '</p></div>' +
+    var w = sheet('<div class="sheet-head"><h2>' + (u ? esc(u.name || u.login) : 'Add person') + '</h2><p>' + (u ? 'Choose the ' + UNITS + ' ' + (u.role === 'client' ? 'this client sees' : 'this contractor works on') + '. Each one is shared through its own private repository.' : 'They’ll need a free GitHub account. Use their GitHub username here.') + '</p></div>' +
       '<div class="sheet-body">' +
       (u ? '' : '<div class="row2"><div class="field"><label for="p-name">Name</label><input class="input" id="p-name" placeholder="First Last"></div>' +
         '<div class="field"><label for="p-login">GitHub username</label><input class="input" id="p-login" placeholder="username" autocomplete="off"></div></div>' +
-        '<div class="field"><span class="field-label">Role</span><div class="seg full" id="p-role"><button type="button" data-role="fte">FTE — every ' + UNIT + '</button><button type="button" class="on" data-role="contractor">Contractor — chosen projects</button></div></div>') +
+        '<div class="field"><span class="field-label">Role</span><div class="seg full" id="p-role"><button type="button" data-role="fte">FTE — every ' + UNIT + '</button><button type="button" data-role="client">Client — chosen ' + UNITS + '</button><button type="button" class="on" data-role="contractor">Contractor — chosen ' + UNITS + '</button></div></div>') +
       '<div class="field" id="p-projects-field"' + (role === 'fte' ? ' hidden' : '') + '><span class="field-label">Projects</span><div class="pick-grid" id="p-projects">' +
       (list.length ? list.map(function (p) {
         var shared = !!M.sharedRepo(roster, p.id);
@@ -2218,7 +2219,7 @@
     if (!u || !getToken()) return;
     var g = accessGaps(u);
     var repos = u.role === 'fte' ? (Object.keys(accessMap).length ? g.missing : workspace().fteRepos(stateNow())) : [];
-    var invite = u.role === 'contractor' ? (u.projects || []).filter(function (id) { var r = M.sharedRepo(roster, id); return r && (g.missing.indexOf(r) >= 0 || !accessMap[r]); }) : [];
+    var invite = M.isOutside(u) ? (u.projects || []).filter(function (id) { var r = M.sharedRepo(roster, id); return r && (g.missing.indexOf(r) >= 0 || !accessMap[r]); }) : [];
     var share = g.unshared;
     if (!repos.length && !invite.length && !share.length) { toast((u.name || login) + ' already has access'); return; }
     var what = u.role === 'fte' ? 'Invite ' + login + ' to ' + repos.map(repoName).join(', ') :
@@ -2677,11 +2678,12 @@
       case 'accept-invites': acceptInvitations(); break;
       case 'person-projects': personSheet(el.dataset.login); break;
       case 'person-role':
-        if (el.dataset.login === settings.login && el.dataset.role !== 'fte' && !confirm('Make yourself a contractor? You would stop seeing most ' + UNITS + '.')) break;
-        if ((roster.users[el.dataset.login] || {}).role === el.dataset.role) break;
+        var wasRole = (roster.users[el.dataset.login] || {}).role;
+        if (wasRole === el.dataset.role) break;
+        if (el.dataset.login === settings.login && wasRole === 'fte' && !confirm('Make yourself a ' + el.dataset.role + '? You would stop seeing most ' + UNITS + '.')) break;
         setPerson(el.dataset.login, { role: el.dataset.role }); renderPage();
         if (el.dataset.role === 'fte') fixAccess(el.dataset.login);
-        else if (getToken()) {
+        else if (wasRole === 'fte' && getToken()) {   // client to contractor and back only changes the label
           var internal = workspace().internalRepos();
           if (confirm('Also remove ' + el.dataset.login + ' from ' + internal.map(repoName).join(', ') + ' on GitHub?')) runAccessOps('Removing FTE access', [{ login: el.dataset.login, revokeRepos: internal }]);
         }
@@ -2691,7 +2693,7 @@
         (function (login) {
           var u = roster.users[login], repos = u.role === 'fte' ? workspace().fteRepos(stateNow()) : (u.projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
           setPerson(login, { deleted: true, projects: [] }); renderPage();
-          // A contractor's access goes with them; for an FTE, ask first.
+          // A client's or contractor's access goes with them; for an FTE, ask first.
           if (getToken() && repos.length && (u.role !== 'fte' || confirm('Also take away their GitHub access to ' + repos.map(repoName).join(', ') + '?'))) runAccessOps('Removing ' + login, [{ login: login, revokeRepos: repos }]);
         })(el.dataset.login);
         break;

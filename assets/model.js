@@ -832,7 +832,9 @@
 
   // ── People ───────────────────────────────────────────────
   // users.json in the FTE-only data repo:
-  //   users:  { login: { login, name, role: 'fte' | 'contractor', projects: [ids] } }
+  //   users:  { login: { login, name, role: 'fte' | 'client' | 'contractor', projects: [ids] } }
+  //   A client and a contractor get the same access (only the projects shared with them); the role
+  //   only says who they are. Anything that isn't an FTE counts as outside (isOutside).
   //   shared: { projectId: { id, repo: 'owner/name', name } }  projects that live in their
   //           own private repository, so contractors can be given access to just that one.
   // GitHub collaborator lists decide who can actually open what; `projects` on a contractor
@@ -851,7 +853,7 @@
   function liveUsers(roster) {
     var users = (roster && roster.users) || {};
     return Object.keys(users).map(function (k) { return users[k]; }).filter(function (u) { return !u.deleted; })
-      .sort(function (x, y) { return (x.role === y.role ? 0 : x.role === 'fte' ? -1 : 1) || (x.name || x.login).localeCompare(y.name || y.login); });
+      .sort(function (x, y) { return (roleRank(x) - roleRank(y)) || (x.name || x.login).localeCompare(y.name || y.login); });
   }
 
   // The repository a shared project lives in ('owner/name'), or '' if it's internal.
@@ -859,6 +861,12 @@
     var s = roster && roster.shared && roster.shared[projectId];
     return s && !s.deleted ? s.repo : '';
   }
+
+  // FTEs first, then clients, then contractors (and any role a newer tool wrote).
+  var ROLE_RANK = { fte: 0, client: 1, contractor: 2 };
+  function roleRank(u) { return u && ROLE_RANK.hasOwnProperty(u.role) ? ROLE_RANK[u.role] : 3; }
+  // Someone outside the team: a client or a contractor, who opens only what's shared with them.
+  function isOutside(u) { return !!u && !u.deleted && u.role !== 'fte'; }
 
   // Role from the People list, for display. The repo owner is always an FTE, and so is
   // everyone while the list is empty (so the first person setting it up isn't locked out).
@@ -944,7 +952,7 @@
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
-    emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, roleOf: roleOf, sharedRepo: sharedRepo,
+    emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, isOutside: isOutside, roleOf: roleOf, sharedRepo: sharedRepo,
     REQ_METHODS: REQ_METHODS, REQ_STATUS: REQ_STATUS, REQ_VERIFY: REQ_VERIFY, REQ_DISCIPLINES: REQ_DISCIPLINES,
     liveReqs: liveReqs, nextReqRef: nextReqRef, newReq: newReq, checkIndex: checkIndex, reqTrace: reqTrace, reqStats: reqStats,
     reqState: reqState, reqDiscipline: reqDiscipline, ownDiscipline: ownDiscipline, reqParent: reqParent, reqSummaryList: reqSummaryList,
