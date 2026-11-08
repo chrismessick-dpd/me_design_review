@@ -91,7 +91,7 @@ window.SIGNOFF_CONFIG = {
         "ref": "Snap S2",
         "notes": [
           "Knit line from the two gates meets right at the root of snap S2. Expect it to crack at assembly.",
-          "Molder suggests moving gate G2 about 15 mm (591 mil) toward the display window."
+          "Molder suggests moving gate G2 about 15 mm (0.59 in) toward the display window."
         ],
         "res": ""
       },
@@ -117,6 +117,18 @@ window.SIGNOFF_CONFIG = {
           "Increased to 6.3 mm (248 mil) and added gussets."
         ],
         "res": "fixed"
+      },
+      {
+        "id": "pd-cad-8",
+        "sev": "major",
+        "who": "Dana Kim",
+        "by": "Lee Alvarez",
+        "ref": "Back cover 2100410-012",
+        "notes": [
+          "Partcheck: the back cover's drawing calls out SABIC Cycoloy C1200HF and the BOM Covestro Bayblend T85 XF. Both are white PC/ABS (CMF-01), but the molder quotes one resin.",
+          "Cycoloy is the resin in the mold-flow and the UL file. Correcting the BOM before the package goes to the molder."
+        ],
+        "res": ""
       },
       {
         "id": "drw-tb-4",
@@ -247,7 +259,8 @@ window.SIGNOFF_CONFIG = {
           "pd-im-12",
           "drw-tb-4",
           "mat-pl-4",
-          "enc-thm-4"
+          "enc-thm-4",
+          "pd-cad-8"
         ],
         "comments": [
           "pd-im-3",
@@ -321,7 +334,7 @@ window.SIGNOFF_CONFIG = {
           "board": "2100410-020",
           "revision": "B",
           "stage": "Detailed design",
-          "description": "Rev B review of the steel wall bracket, before the first order from the sheet-metal shop. It mounts to an electrical box or drywall anchors, passes the HVAC wires through to the main PCBA's terminal block, and carries the catches the enclosure snaps onto.",
+          "description": "Rev B review of the steel wall bracket, before the first order from the sheet-metal shop. It mounts to an electrical box or drywall anchors, passes the wiring between the electrical box and the main PCBA's terminal blocks, and carries the catches the enclosure snaps onto.",
           "profile": [
             "sheet-metal",
             "high-volume"
