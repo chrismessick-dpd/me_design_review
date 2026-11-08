@@ -13,6 +13,11 @@
   // Each tool keeps its data under its own namespace (assets/config.js). The token and the
   // light/dark theme are shared by the whole suite, so they live under fixed keys.
   var DEMO = /[?&]demo\b/.test(location.search) || location.hash === '#demo';
+  // ?page=people&embed=1 inside a frame: only People & access, for the suite's People sheet
+  // (signoff/assets/people.js) opened from another tool. No sidebar, toolbar or demo.
+  var EMBED = !DEMO && /[?&]embed=1\b/.test(location.search) && window.parent !== window;
+  if (EMBED) document.documentElement.classList.add('embed');
+  var PEOPLE = window.SignoffPeople && !EMBED ? window.SignoffPeople : null;
   var NS = DEMO ? C.storage.demoNs : C.storage.ns;
   var TOKEN_KEY = 'signoff.token';
   var THEME_KEY = 'signoff.v1.settings';   // .theme; Fabcheck and the hub read it too
@@ -425,7 +430,7 @@
         });
       }
     }
-    people.classList.toggle('active', ui.page === 'people');
+    people.classList.toggle('active', !!(PEOPLE && PEOPLE.isOpen()));
   }
 
   // The suite switcher starts folded to a row of tool icons. The chevron opens the full list,
@@ -589,7 +594,7 @@
     var p = current();
     $('#toolbar-title').textContent = p ? p.meta.name : '';
     var seg = $('#view-seg'), acts = $('#toolbar-actions');
-    if (!p || ui.page === 'people') {
+    if (!p) {
       seg.innerHTML = '';
       acts.innerHTML = syncButtons();
       return;
@@ -621,7 +626,8 @@
     var p = current();
     var page = $('#page');
     var scroll = $('#main').scrollTop;
-    if (ui.page === 'people' && isFte() && !DEMO) { page.innerHTML = peoplePage(); renderToolbar(); return; }
+    drawPeople();
+    if (EMBED) { page.innerHTML = peopleOrNotice(); return; }
     ui.page = '';
     if (!p) { page.innerHTML = emptyPage(); renderToolbar(); return; }
     renderToolbar();
@@ -1978,7 +1984,7 @@
       return ws.access(r).then(function (a) { accessMap[r] = a; }, function (err) {
         accessMap[r] = { error: err.status === 403 || err.status === 404 ? 'needs an admin token' : err.message };
       });
-    })).then(function () { accessLoading = false; if (ui.page === 'people') renderPage(); });
+    })).then(function () { accessLoading = false; if (peopleShown()) renderPage(); });
   }
 
   function repoName(full) { return full.split('/')[1]; }
@@ -2024,11 +2030,37 @@
     return parts.join(' ');
   }
 
+  // People & access opens as a sheet over the page (signoff/assets/people.js), with this tool's
+  // tab drawn here and the other tools' tabs framed. Without people.js it can't open.
+  function openPeople() {
+    if (!PEOPLE) return;
+    closeInspector(); $('#app').classList.remove('nav-open');
+    PEOPLE.open();
+  }
+  function peopleShown() { return EMBED || !!(PEOPLE && PEOPLE.pane(C.repos.toolRepo)); }
+  function drawPeople() {
+    var el = PEOPLE && PEOPLE.pane(C.repos.toolRepo);
+    if (!el) return;
+    var top = el.scrollTop;
+    el.innerHTML = peopleOrNotice();
+    el.scrollTop = top;
+  }
+  // Only FTEs see People; anyone else (in a frame from another tool) is told why.
+  function peopleOrNotice() {
+    if (isFte() && !DEMO) return peoplePage();
+    var role = myRole(), here = esc(C.product);
+    var msg = role === 'signedout' ? ['Sign in to ' + here, 'Add your GitHub token in ' + here + '’s Settings to manage who can open its ' + UNITS + '.']
+      : role === 'checking' ? ['Checking access…', 'Seeing whether your token can open <b>' + esc(settings.dataRepo) + '</b>.']
+      : ['Only FTEs manage ' + here + '’s people', 'Your token can’t open <b>' + esc(settings.dataRepo) + '</b>, so this list isn’t yours to change.'];
+    return '<div class="page"><div class="empty"><h2>' + msg[0] + '</h2><p>' + msg[1] + '</p>' +
+      (role === 'checking' || !EMBED ? '' : '<p><a class="btn" href="' + esc(location.pathname) + '" target="_top">Open ' + here + '</a></p>') + '</div></div>';
+  }
+
   function peoplePage() {
     loadAccess(false);
     var people = M.liveUsers(roster);
     var byId = stateNow().projects;
-    var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(settings.owner) + '</div><h1 class="page-title">People &amp; access</h1>' +
+    var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">People &amp; access · ' + esc(settings.owner) + '</div><h1 class="page-title">' + esc(C.product) + '</h1>' +
       '<div class="page-sub"><span>FTEs can open every ' + UNIT + '. A contractor can open only the ' + UNITS + ' shared with them, each in its own private repository.</span></div></div>' +
       '<div style="display:flex;gap:8px"><button class="btn" data-act="refresh-access">Refresh</button><button class="btn btn-primary" data-act="add-person">Add person</button></div></div>';
     if (!isOwner()) {
@@ -2063,7 +2095,7 @@
     }
     html += '<p class="note" style="margin-top:14px">Internal ' + UNITS + ' live in <b>' + esc(settings.dataRepo) + '</b>, which only FTEs can open. ' +
       'Adding a contractor to a ' + UNIT + ' moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
-      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tool’s shared reviews are granted from its own People page. ' : '') +
+      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tools’ shared reviews are granted from their own tabs here. ' : '') +
       'On a personal account every collaborator can push to the repositories they’re on; an organization allows narrower roles.</p></div>';
     return html;
   }
@@ -2176,7 +2208,7 @@
     }, function (err) {
       ui2.log('Stopped: ' + err.message + (err.status === 403 || err.status === 404 ? ' — creating repositories needs the owner’s token with Administration: write on All repositories.' : ''), 'err');
     }).then(function () {
-      ui2.done(); accessMap = {}; persist(); sync(); if (ui.page === 'people') renderPage();
+      ui2.done(); accessMap = {}; persist(); sync(); if (peopleShown()) renderPage();
     });
   }
 
@@ -2274,7 +2306,7 @@
     if (!settings.user) { settingsSheet(); return; }
     noticeToken();
     syncing = true; renderSyncState('busy');
-    if (!current() && ui.page !== 'people') renderPage();   // an empty page says the sync is running
+    if (!current() || peopleShown()) renderPage();   // an empty page says the sync is running
     var startedAt = M.now();   // the cutoff for the unsynced list (unsyncedList)
     var started = Object.assign({}, dirty);
     var st0 = stateNow();
@@ -2354,7 +2386,7 @@
       .catch(function (err) {
         syncing = false; syncAgain = false; lastError = err.message;
         renderSyncState('error');
-        if (!current() && ui.page !== 'people') renderPage();
+        if (!current() || peopleShown()) renderPage();
         if (err.status === 401) {
           // GitHub doesn't recognize the token at all (not a permissions problem).
           lastError = 'GitHub didn’t accept the token saved in this browser. Paste the token again in Settings.';
@@ -2513,6 +2545,13 @@
       projects = res.projects;
       save('projects', projects);
       render();
+    } else if (key === 'roster') {
+      // Another tab, or this tool's People tab framed in the hub or PL, edited People.
+      var merged = M.mergeRosters(roster, theirs);
+      if (JSON.stringify(merged) === JSON.stringify(roster)) return;
+      roster = merged;
+      if (JSON.stringify(merged) !== JSON.stringify(theirs)) save('roster', roster);
+      renderSidebar(); if (peopleShown()) renderPage();
     } else if (key === 'dirty') {
       var added = Object.keys(theirs).filter(function (k) { return !dirty[k] || theirs[k] > dirty[k]; });
       if (!added.length) return;
@@ -2543,7 +2582,7 @@
       case 'sync-details': if (popWasOpen) closeMenu(); else syncDetails(el); break;
       case 'goto-change': gotoChange(el); break;
       case 'new-project': if (isFte()) projectSheet(null); break;
-      case 'people': ui.page = 'people'; selected = null; closeInspector(); renderSidebar(); renderPage(); $('#app').classList.remove('nav-open'); break;
+      case 'people': closeMenu(); openPeople(); break;
       case 'edit-project': projectSheet(current()); break;
       case 'open-project':
         ui.slug = el.dataset.slug; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = false; selected = null;
@@ -2688,7 +2727,7 @@
       if (inField) { document.activeElement.blur(); return; }
       if ($('#inspector').classList.contains('open')) { closeInspector(); return; }
     }
-    if (inField || e.ctrlKey || e.metaKey || e.altKey || $('#sheet')) return;
+    if (inField || e.ctrlKey || e.metaKey || e.altKey || $('#sheet') || (PEOPLE && PEOPLE.isOpen())) return;
     var ids = visibleItemIds();
     var i = ids.indexOf(selected);
     if (e.key === 'j' || e.key === 'ArrowDown') { if (ids.length) { e.preventDefault(); select(ids[Math.min(ids.length - 1, i + 1)], false); } }
@@ -2778,8 +2817,8 @@
   // A project not in this browser yet is looked for again after the first sync.
   function param(name) { var m = new RegExp('[?&]' + name + '=([^&#]+)').exec(location.search); return m ? decodeURIComponent(m[1]) : ''; }
   var wantProject = param('project'), wantItem = '', wantReq = '';
-  // ?page=people opens People & access (the other tools link here).
-  if (param('page') === 'people' && !DEMO) ui.page = 'people';
+  // ?page=people opens People & access over the page (old links from the other tools).
+  var wantPeople = param('page') === 'people' && !DEMO && !EMBED;
   function openWanted(final) {
     if (!wantProject) return;
     var slug = Object.keys(projects).filter(function (k) { return projects[k].id === wantProject; })[0];
@@ -2840,6 +2879,7 @@
       }, function () { updateBusy = false; });
   }
   (function () {
+    if (EMBED) return;   // a framed People tab never reloads under someone editing it
     var memo = updateMemo() || {};
     if (memo.from && memo.from !== (window.SIGNOFF_VERSION || {}).hash) { updateMemo({ tried: memo.tried }); setTimeout(function () { toast('Tool updated'); }, 300); }
     setTimeout(checkForUpdate, 5000);
@@ -2860,8 +2900,11 @@
     try { if (localStorage.getItem('signoff.demo.welcomed')) return true; localStorage.setItem('signoff.demo.welcomed', '1'); } catch (e) { /* storage blocked */ }
     return false;
   }
-  if (!settings.user && !demoWelcomed()) settingsSheet(true);   // first opening, the demo included: ask for a name
+  if (EMBED) { if (getToken()) sync(); }
+  else if (!settings.user && !demoWelcomed()) settingsSheet(true);   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
+  if (PEOPLE) PEOPLE.register(C.repos.toolRepo, { draw: function () { renderPage(); }, changed: function () { renderSidebar(); } });
+  if (wantPeople) openPeople();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
 
   S.app = { sync: sync, render: render };

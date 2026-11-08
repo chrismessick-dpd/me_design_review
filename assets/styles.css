@@ -493,6 +493,42 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
 
+/* ── People & access: one sheet over any Signoff page (signoff/assets/people.js), a tab per review
+   tool. It sits under person sheets, menus and toasts (z-index 60 and up) and over the sidebar. ── */
+.people-wrap {
+  position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.28);
+  display: grid; place-items: center; padding: 24px; animation: fade 0.2s; backdrop-filter: blur(2px);
+}
+.people-pop {
+  width: 100%; max-width: 1120px; height: calc(100vh - 48px); height: calc(100dvh - 48px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg); border-radius: 18px; box-shadow: var(--shadow-lg); animation: rise 0.28s var(--ease);
+}
+.people-head {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px 12px 24px;
+  border-bottom: 1px solid var(--hair); background: var(--bg-elev);
+}
+.people-head h2 { font: 600 19px var(--display); margin: 0; letter-spacing: -0.015em; white-space: nowrap; }
+.people-head .people-tabs { margin: 0 auto 0 8px; }
+.people-body { flex: 1; min-height: 0; position: relative; }
+.people-pane { position: absolute; inset: 0; overflow: auto; }
+.people-pane[hidden] { display: none; }
+.people-pane.framed { overflow: hidden; }
+.people-pane iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+.people-pane > .page { padding-top: 22px; }
+@media (max-width: 860px) {
+  .people-wrap { padding: 0; }
+  .people-pop { max-width: none; height: 100vh; height: 100dvh; border-radius: 0; }
+  .people-head { flex-wrap: wrap; padding: 12px 12px 10px 16px; gap: 8px 10px; }
+  .people-head .people-close { margin-left: auto; }
+  .people-head .people-tabs { order: 3; margin: 0; width: 100%; }
+}
+/* A tool showing only its People page inside that sheet (index.html?page=people&embed=1). */
+html.embed .sidebar, html.embed .toolbar, html.embed #demo-banner, html.embed .inspector { display: none !important; }
+html.embed .app { display: block; }
+html.embed .main { height: 100vh; height: 100dvh; overflow: auto; }
+html.embed #page > .page { padding-top: 22px; }
+
 /* ── Busy card: a wait that says what it is doing (Open in Fabcheck, Fabcheck's Send). The spinner
    is a transform animation, so it keeps turning while the page's script is busy. ── */
 .busy { max-width: 400px; padding: 22px 24px 20px; }
