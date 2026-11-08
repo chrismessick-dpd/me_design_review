@@ -1,5 +1,5 @@
-/* Shared Signoff engine (EE and ME). Edit it in ee_design_review only; me_design_review
-   vendors it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
+/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+   fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
 /* Sample projects for demo mode (index.html?demo). Built from whatever templates are
    loaded, so the demo always matches the current checklists. Nothing here is real. */
 (function (S) {

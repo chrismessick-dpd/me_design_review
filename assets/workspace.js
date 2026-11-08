@@ -1,5 +1,5 @@
-/* Shared Signoff engine (EE and ME). Edit it in ee_design_review only; me_design_review
-   vendors it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
+/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+   fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
 /* Signoff workspace: which repositories hold which projects, and who can open them.
 
    - Tool repo (settings.toolRepo): the tool and the checklists. FTEs only.

@@ -1,5 +1,5 @@
-# Shared Signoff engine (EE and ME). Edit it in ee_design_review only; me_design_review
-# vendors it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js.
+# Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+# fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js.
 """Build a Signoff tool (EE or ME): validate templates, bundle them, and stamp the version.
 
 Run this after changing anything in templates/, index.html or assets/, before committing:
@@ -68,7 +68,7 @@ def current_hash():
 
 def main(argv):
     check = "--check" in argv
-    # A tool that vendors the shared engine (Signoff ME) must have an up-to-date copy.
+    # A tool that vendors the shared engine (Signoff ME, Signoff FW) must have an up-to-date copy.
     sync = ROOT / "tools" / "sync_engine.py"
     if sync.exists() and subprocess.call([sys.executable, str(sync), "--check"]) != 0:
         return 1
