@@ -2,8 +2,10 @@
 
 Signoff ME is the mechanical design review tool. It runs the **same engine as Signoff EE**,
 copied byte for byte from `../ee_design_review`. When the suite folder is checked out, also read
-`../CLAUDE.md` and `../ee_design_review/CLAUDE.md`. This repo is public: no client data, tokens
+`../CLAUDE.md` and `../ee_design_review/CLAUDE.md`. This repo is public: no client data, tokens,
 or commit messages naming clients.
+
+**Serial comma** (Chris, 2026-11-08): use the Oxford comma in every list of three or more, in UI text, docs, demo data, checklists, and commit messages: "A, B, and C". Never change check ids or data keys to fit it.
 
 ## Rules
 

@@ -5,7 +5,7 @@
 
 Signoff EE (ee_design_review) is the source of the engine. Fix engine bugs there, then run
 this. Never edit the copies here: build.py fails while they differ, so nothing drifts.
-What is specific to this tool lives in assets/config.js, index.html, templates/, tests/ and
+What is specific to this tool lives in assets/config.js, index.html, templates/, tests/, and
 the docs, which this script never touches.
 
 When ../ee_design_review isn't next to this folder (a fresh clone on its own), --check says

@@ -1,6 +1,6 @@
-/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+/* Shared Signoff engine (EE, ME, and FW). Edit it in ee_design_review only; me_design_review and
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
-/* Signoff data model: templates, project documents, progress and merging.
+/* Signoff data model: templates, project documents, progress, and merging.
    Pure functions only (no DOM, no storage) so tests/test.html can exercise them. */
 (function (S) {
   'use strict';
@@ -232,7 +232,7 @@
         at: at, by: typeof rec.updatedBy === 'string' ? rec.updatedBy : '', deleted: !!rec.deleted });
     }
     function each(k, fn) { var m = project[k] || {}; Object.keys(m).forEach(function (id) { fn(m[id] || {}, id); }); }
-    add('meta', project.meta, project.id, '', 'Name, stage, profile or checklists', '');
+    add('meta', project.meta, project.id, '', 'Name, stage, profile, or checklists', '');
     each('items', function (r, id) {
       var st = oneOf(STATUSES, r.status, ''), res = r.resolution ? oneOf(RESOLUTIONS, r.resolution, '') : '';
       add('check', r, id, id, checkText(id), (st || 'to review') + (res ? ', ' + res : ''));
@@ -431,7 +431,7 @@
   //             requirement. Written by PL; ref and text are a snapshot for people without PL. }
   // Comments on a requirement are ordinary comments with item = the requirement's id.
   // A deprecated requirement is kept for reference (lined out) but no longer counts: it's left
-  // out of the totals, verification and failing flags.
+  // out of the totals, verification, and failing flags.
   var REQ_METHODS = ['inspection', 'analysis', 'demonstration', 'test'];
   var REQ_STATUS = ['draft', 'approved', 'changed', 'deprecated'];
   var REQ_VERIFY = ['open', 'pass', 'fail'];

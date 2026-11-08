@@ -106,7 +106,7 @@
   // ── Git blob sha ──
   eq(await Signoff.github.gitBlobSha('hello\n'), 'ce013625030ba8dba906f756967f9e9ca394464a', 'git blob sha matches git hash-object');
 
-  // ── A fake GitHub with several repositories, users and permissions ──
+  // ── A fake GitHub with several repositories, users, and permissions ──
   // Tokens: 'tok-<login>'. 'ann' owns every repository (personal account).
   function FakeHub() {
     var hub = this;
@@ -289,8 +289,8 @@
 
   // FTEs get the whole suite; a contractor only sees repos with this tool's prefix.
   var fr = annWs.fteRepos(annSt);
-  ok(['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff', sh.repo].every(function (x) { return fr.indexOf(x) >= 0; }), 'FTE repos cover this tool, the rest of the suite and shared projects');
-  eq(annWs.internalRepos(), ['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff'], 'internal repos are the tool, data and suite repos');
+  ok(['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff', sh.repo].every(function (x) { return fr.indexOf(x) >= 0; }), 'FTE repos cover this tool, the rest of the suite, and shared projects');
+  eq(annWs.internalRepos(), ['ann/tool', 'ann/data', 'ann/other_tool', 'ann/other_data', 'ann/signoff'], 'internal repos are the tool, data, and suite repos');
   hub.makeRepo('ann/review-ee-board', { 'README.md': '#' }, ['ann', 'dan']);
   hub.makeRepo('ann/review-me-housing', { 'README.md': '#' }, ['ann', 'dan']);
   eq(await wsFor('dan', { prefix: 'review-ee-' }).account.listRepos('ann', 'review-ee-'), ['review-ee-board'], 'a discipline prefix keeps the other tool’s shared repos out');

@@ -1,7 +1,7 @@
 /* Signoff ME: everything that differs between the Signoff tools (EE, ME). The shared engine
-   (model.js, github.js, workspace.js, app.js, demo.js, styles.css and tools/*.py, vendored
+   (model.js, github.js, workspace.js, app.js, demo.js, styles.css, and tools/*.py, vendored
    from ee_design_review by tools/sync_engine.py) reads this. Keep the part after "=" strict
-   JSON: tools/build.py, validate_templates.py and package.py parse it too.
+   JSON: tools/build.py, validate_templates.py, and package.py parse it too.
 
    storage.ns:     localStorage namespace for this tool. The GitHub token (signoff.token) and
                    the theme (signoff.v1.settings -> theme) are shared by every Signoff tool.
@@ -9,7 +9,7 @@
                    another tool's (contractors find their repos by name prefix).
    repos.suite:    other repositories every FTE is invited to, next to this tool's own:
                    the other discipline's tool and data repos, and the hub.
-   ids:            prefixes for new project, comment and custom-check IDs.
+   ids:            prefixes for new project, comment, and custom-check IDs.
    templatePrefixes: checklist id -> required prefix of its section and item IDs.
    words.unit(s):  what one review is called on screen (board / part). "Project" is the
                    client project several reviews belong to (meta.project). */
@@ -48,9 +48,9 @@ window.SIGNOFF_CONFIG = {
   },
   "tags": [
     { "id": "injection-molded", "label": "Injection molded", "desc": "Molded plastic, overmolds, inserts" },
-    { "id": "sheet-metal", "label": "Sheet metal", "desc": "Formed, laser-cut or punched sheet" },
+    { "id": "sheet-metal", "label": "Sheet metal", "desc": "Formed, laser-cut, or punched sheet" },
     { "id": "machined", "label": "Machined", "desc": "CNC-milled or turned parts" },
-    { "id": "cast", "label": "Cast", "desc": "Die, investment or sand castings" },
+    { "id": "cast", "label": "Cast", "desc": "Die, investment, or sand castings" },
     { "id": "additive", "label": "3D printed", "desc": "SLS, MJF, SLA, FDM, DMLS parts" },
     { "id": "extruded", "label": "Extrusions", "desc": "Aluminum or plastic extrusions" },
     { "id": "elastomer", "label": "Elastomers", "desc": "Gaskets, keypads, LSR / TPE, O-rings" },
@@ -267,7 +267,7 @@ window.SIGNOFF_CONFIG = {
           "tol-fit-5",
           "asm-cbl-3"
         ],
-        "requirements": [{"parent": {"project": "pldemo", "id": "qdemo-cosmetic", "ref": "REQ-007", "text": "The front cover shall meet the client's Class A cosmetic standard."}, "ref": "REQ-001", "text": "Every visible face of the front cover shall meet the client's Class A cosmetic standard.", "category": "Cosmetic", "source": "Acme DT-SPEC-12 §7.1", "method": "inspection", "status": "approved", "verify": "open", "links": ["rq-id-2", "pd-cos-6"], "by": "Dana Kim"}, {"parent": {"project": "pldemo", "id": "qdemo-temp", "ref": "REQ-001", "text": "The thermostat shall measure room temperature to within ±0.5 °C from 5 to 35 °C."}, "ref": "REQ-002", "text": "Venting shall keep the temperature sensor within 0.3 °C of room air while the relays switch full load.", "category": "Thermal", "source": "Acme DT-SPEC-12 §2.3", "method": "test", "status": "approved", "verify": "open", "links": ["enc-thm-4", "fea-th-13"], "by": "Lee Alvarez"}, {"parent": {"project": "pldemo", "id": "qdemo-mass", "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g."}, "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g.", "category": "Mass", "source": "Acme DT-SPEC-12 §2.1", "method": "analysis", "status": "approved", "verify": "pass", "evidence": "CAD mass report rev C: 212 g including the bracket, boards and display.", "links": ["mat-sel-11"], "by": "Dana Kim"}, {"ref": "REQ-004", "text": "The front cover should come off the bracket with a flat screwdriver and no special tools.", "kind": "should", "category": "Service", "source": "Installer workshop 2026-09-15", "method": "demonstration", "status": "draft", "verify": "open", "links": [], "by": "Lee Alvarez"}],
+        "requirements": [{"parent": {"project": "pldemo", "id": "qdemo-cosmetic", "ref": "REQ-007", "text": "The front cover shall meet the client's Class A cosmetic standard."}, "ref": "REQ-001", "text": "Every visible face of the front cover shall meet the client's Class A cosmetic standard.", "category": "Cosmetic", "source": "Acme DT-SPEC-12 §7.1", "method": "inspection", "status": "approved", "verify": "open", "links": ["rq-id-2", "pd-cos-6"], "by": "Dana Kim"}, {"parent": {"project": "pldemo", "id": "qdemo-temp", "ref": "REQ-001", "text": "The thermostat shall measure room temperature to within ±0.5 °C from 5 to 35 °C."}, "ref": "REQ-002", "text": "Venting shall keep the temperature sensor within 0.3 °C of room air while the relays switch full load.", "category": "Thermal", "source": "Acme DT-SPEC-12 §2.3", "method": "test", "status": "approved", "verify": "open", "links": ["enc-thm-4", "fea-th-13"], "by": "Lee Alvarez"}, {"parent": {"project": "pldemo", "id": "qdemo-mass", "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g."}, "ref": "REQ-003", "text": "The installed thermostat shall weigh no more than 250 g.", "category": "Mass", "source": "Acme DT-SPEC-12 §2.1", "method": "analysis", "status": "approved", "verify": "pass", "evidence": "CAD mass report rev C: 212 g including the bracket, boards, and display.", "links": ["mat-sel-11"], "by": "Dana Kim"}, {"ref": "REQ-004", "text": "The front cover should come off the bracket with a flat screwdriver and no special tools.", "kind": "should", "category": "Service", "source": "Installer workshop 2026-09-15", "method": "demonstration", "status": "draft", "verify": "open", "links": [], "by": "Lee Alvarez"}],
         "ratios": {
           "requirements": 0.95,
           "part-design": 0.7,

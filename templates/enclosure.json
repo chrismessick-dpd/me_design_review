@@ -3,7 +3,7 @@
   "title": "Enclosures, Sealing & IP",
   "short": "Enclosure",
   "version": 1,
-  "description": "Enclosure review covering architecture, ingress protection and sealing, environmental durability, drop, EMC and electronics integration, thermal, safety, battery compartments, user interface and cleanability.",
+  "description": "Enclosure review covering architecture, ingress protection and sealing, environmental durability, drop, EMC and electronics integration, thermal, safety, battery compartments, user interface, and cleanability.",
   "sections": [
     {
       "id": "enc-arch",
@@ -12,7 +12,7 @@
       "items": [
         {
           "id": "enc-arch-1",
-          "text": "Split lines between housings are placed so they do not cross sealing paths, cosmetic surfaces or user grip zones unnecessarily",
+          "text": "Split lines between housings are placed so they do not cross sealing paths, cosmetic surfaces, or user grip zones unnecessarily",
           "hint": "Review split lines on the industrial design model with sealing and cosmetics in view. A badly placed split line forces a complex gasket or a visible step.",
           "tags": [],
           "severity": "major"
@@ -20,7 +20,7 @@
         {
           "id": "enc-arch-2",
           "text": "Mating housings locate to each other with defined locating features rather than fasteners or outer edges",
-          "hint": "Use pins, bosses or perimeter tongue-and-groove features tied to the datum scheme. Locating on screws gives variable alignment.",
+          "hint": "Use pins, bosses, or perimeter tongue-and-groove features tied to the datum scheme. Locating on screws gives variable alignment.",
           "tags": [],
           "severity": "major"
         },
@@ -35,28 +35,28 @@
         },
         {
           "id": "enc-arch-4",
-          "text": "A lip, tongue or overlap at the split line hides the gap and blocks a direct line of sight into the enclosure",
-          "hint": "A straight butt joint shows every mismatch and gives a direct path for light, dust and probes.",
+          "text": "A lip, tongue, or overlap at the split line hides the gap and blocks a direct line of sight into the enclosure",
+          "hint": "A straight butt joint shows every mismatch and gives a direct path for light, dust, and probes.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "enc-arch-5",
-          "text": "Lids, doors and covers are retained so that they stay closed under drop, vibration and pressure conditions",
+          "text": "Lids, doors, and covers are retained so that they stay closed under drop, vibration, and pressure conditions",
           "hint": "Check the latch or fastener retention force against the loads. Doors that pop open in a drop expose batteries and electronics.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-arch-6",
-          "text": "Large flat walls have enough stiffness (ribs, curvature or thickness) to avoid oil-canning, rattles and seal gaps",
+          "text": "Large flat walls have enough stiffness (ribs, curvature, or thickness) to avoid oil-canning, rattles, and seal gaps",
           "hint": "Check wall deflection under the expected handling and internal loads by hand calculation or FEA. A flexible wall between fasteners opens the seal gap.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-arch-7",
-          "text": "PCBs are supported by bosses or ribs close enough together to limit board flex during assembly, connector mating and drop",
+          "text": "PCBs are supported by bosses or ribs close enough together to limit board flex during assembly, connector mating, and drop",
           "hint": "Check support spacing near heavy parts and connectors that are pushed by users. Coordinate support locations with EE keep-outs.",
           "tags": [
             "electronics"
@@ -81,7 +81,7 @@
         },
         {
           "id": "enc-arch-10",
-          "text": "Internal space claims for components, cables and air paths are reserved and checked with the latest EE and supplier CAD",
+          "text": "Internal space claims for components, cables, and air paths are reserved and checked with the latest EE and supplier CAD",
           "hint": "Import the latest PCBA STEP and component models and run interference and clearance checks. Stale EE models are a common source of late conflicts.",
           "tags": [
             "electronics"
@@ -106,7 +106,7 @@
         },
         {
           "id": "enc-ip-2",
-          "text": "Every seal path is continuous around the full perimeter with no gaps, butt joints or unsupported spans",
+          "text": "Every seal path is continuous around the full perimeter with no gaps, butt joints, or unsupported spans",
           "hint": "Trace the sealing line in CAD around each opening, including where it passes bosses and corners. Check the gasket or bead is supported along its whole length.",
           "tags": [],
           "severity": "critical"
@@ -152,7 +152,7 @@
         },
         {
           "id": "enc-ip-8",
-          "text": "O-ring glands follow the O-ring supplier's handbook for gland depth, width, squeeze and stretch",
+          "text": "O-ring glands follow the O-ring supplier's handbook for gland depth, width, squeeze, and stretch",
           "hint": "Check static or dynamic gland dimensions, squeeze and stretch percentages, and lead-in chamfer against the handbook for the chosen cross-section and material.",
           "tags": [
             "elastomer"
@@ -162,7 +162,7 @@
         {
           "id": "enc-ip-9",
           "text": "O-rings are protected from cutting during assembly by lead-in chamfers and the absence of sharp edges or cross holes they pass over",
-          "hint": "Trace the O-ring path during assembly. Threads, port edges and parting lines it crosses must be chamfered or covered.",
+          "hint": "Trace the O-ring path during assembly. Threads, port edges, and parting lines it crosses must be chamfered or covered.",
           "tags": [
             "elastomer"
           ],
@@ -171,13 +171,13 @@
         {
           "id": "enc-ip-10",
           "text": "Sealing faces have a specified surface finish compatible with the seal type",
-          "hint": "Specify the roughness on the drawing per the seal supplier. Texture, tool marks or ejector pins on a sealing face create leak paths.",
+          "hint": "Specify the roughness on the drawing per the seal supplier. Texture, tool marks, or ejector pins on a sealing face create leak paths.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-ip-11",
-          "text": "No parting line, gate, ejector mark or weld line crosses a sealing face",
+          "text": "No parting line, gate, ejector mark, or weld line crosses a sealing face",
           "hint": "Review mold flow and tooling layout against the seal path. A parting-line flash across a seal face is a classic leak and tooling-change cause.",
           "tags": [
             "injection-molded"
@@ -186,35 +186,35 @@
         },
         {
           "id": "enc-ip-12",
-          "text": "Formed-in-place or dispensed gaskets have a defined bead size, path and cure, and a dispensing supplier has confirmed the geometry",
-          "hint": "Check minimum bead start/stop overlap, corner radii and groove shape with the dispensing material supplier.",
+          "text": "Formed-in-place or dispensed gaskets have a defined bead size, path, and cure, and a dispensing supplier has confirmed the geometry",
+          "hint": "Check minimum bead start/stop overlap, corner radii, and groove shape with the dispensing material supplier.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-ip-13",
-          "text": "A membrane vent equalizes internal pressure where altitude, temperature changes or sealed volume would otherwise load the seals",
+          "text": "A membrane vent equalizes internal pressure where altitude, temperature changes, or sealed volume would otherwise load the seals",
           "hint": "Sealed enclosures pump air through the weakest seal as they heat and cool. Size the vent airflow and water entry pressure per the vent supplier.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-ip-14",
-          "text": "Membrane vents are protected from direct jets, debris and mechanical damage and can be sealed to the housing reliably",
+          "text": "Membrane vents are protected from direct jets, debris, and mechanical damage and can be sealed to the housing reliably",
           "hint": "Place vents in sheltered locations and specify the bonding surface finish and flatness required by the vent supplier.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "enc-ip-15",
-          "text": "Buttons and switches have a seal (membrane, boot, O-ring or overmold) rated for the IP target and the actuation cycle life",
+          "text": "Buttons and switches have a seal (membrane, boot, O-ring, or overmold) rated for the IP target and the actuation cycle life",
           "hint": "Check that the seal remains intact over the full actuation count and that actuation force includes the seal's stiffness.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-ip-16",
-          "text": "External connectors are sealed by a rated sealed connector, a panel gasket or a cover, with the mated and unmated states considered",
+          "text": "External connectors are sealed by a rated sealed connector, a panel gasket, or a cover, with the mated and unmated states considered",
           "hint": "Define the IP rating for each connector both mated and unmated. Connector supplier ratings apply only with the specified panel cutout and gasket.",
           "tags": [],
           "severity": "major"
@@ -228,7 +228,7 @@
         },
         {
           "id": "enc-ip-18",
-          "text": "Windows, lenses and labels bonded over openings use an adhesive seal with a continuous, defined bond width",
+          "text": "Windows, lenses, and labels bonded over openings use an adhesive seal with a continuous, defined bond width",
           "hint": "Specify the die-cut tape or adhesive bead with minimum bond width per the tape supplier, and the bonding pressure.",
           "tags": [],
           "severity": "major"
@@ -243,7 +243,7 @@
         {
           "id": "enc-ip-20",
           "text": "Potting or encapsulation, where used, has a defined volume, fill level, cure, and compatibility with components and housing",
-          "hint": "Check the potting compound's shrinkage, CTE and cure stress on components, and that air can escape during fill. Potting makes rework impossible; confirm the decision.",
+          "hint": "Check the potting compound's shrinkage, CTE, and cure stress on components, and that air can escape during fill. Potting makes rework impossible; confirm the decision.",
           "tags": [
             "electronics"
           ],
@@ -261,13 +261,13 @@
         {
           "id": "enc-env-1",
           "text": "Exposed plastics and elastomers are UV-stabilized grades rated for the expected outdoor exposure",
-          "hint": "Check UV stability data per material datasheet. Unstabilized plastics chalk, yellow and embrittle; the gasket will fail long before the housing.",
+          "hint": "Check UV stability data per material datasheet. Unstabilized plastics chalk, yellow, and embrittle; the gasket will fail long before the housing.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-env-2",
-          "text": "Condensation inside the enclosure is managed by venting, desiccant, conformal coating or drainage",
+          "text": "Condensation inside the enclosure is managed by venting, desiccant, conformal coating, or drainage",
           "hint": "Sealed enclosures that cycle through the dew point collect water. Decide the strategy with EE and document it.",
           "tags": [
             "electronics"
@@ -299,8 +299,8 @@
         },
         {
           "id": "enc-env-6",
-          "text": "Openings and surfaces exposed to dust, sand, ice or insects are protected against blockage and damage",
-          "hint": "Check vents, drain holes and moving parts for clogging. Ice formation in recesses can jam buttons and doors.",
+          "text": "Openings and surfaces exposed to dust, sand, ice, or insects are protected against blockage and damage",
+          "hint": "Check vents, drain holes, and moving parts for clogging. Ice formation in recesses can jam buttons and doors.",
           "tags": [],
           "severity": "minor"
         }
@@ -316,7 +316,7 @@
         {
           "id": "enc-drop-1",
           "text": "Housing corners and edges that hit first in a drop are reinforced or protected by bumpers",
-          "hint": "Identify likely impact points from the drop orientations. Add wall thickness, ribs or an elastomer bumper and check by drop simulation or prototype.",
+          "hint": "Identify likely impact points from the drop orientations. Add wall thickness, ribs, or an elastomer bumper and check by drop simulation or prototype.",
           "tags": [],
           "severity": "major"
         },
@@ -329,8 +329,8 @@
         },
         {
           "id": "enc-drop-3",
-          "text": "Displays, cover glass and touch panels are supported around their perimeter and isolated from housing flex",
-          "hint": "Check the support area, bonding tape and gap to the housing. Glass breaks where it bears on a hard point or edge.",
+          "text": "Displays, cover glass, and touch panels are supported around their perimeter and isolated from housing flex",
+          "hint": "Check the support area, bonding tape, and gap to the housing. Glass breaks where it bears on a hard point or edge.",
           "tags": [
             "electronics"
           ],
@@ -345,7 +345,7 @@
         },
         {
           "id": "enc-drop-5",
-          "text": "Ribs, screw tips and sharp edges near the battery keep enough clearance that a drop cannot dent or puncture the cell",
+          "text": "Ribs, screw tips, and sharp edges near the battery keep enough clearance that a drop cannot dent or puncture the cell",
           "hint": "Check the clearance at worst-case tolerance plus housing deflection from drop simulation. Cell damage is a fire and safety issue.",
           "tags": [
             "battery-pack"
@@ -384,22 +384,22 @@
         },
         {
           "id": "enc-emc-3",
-          "text": "Grounding contact points between PCB, chassis and shields are defined with spring contacts, gaskets or fasteners and a controlled contact surface",
+          "text": "Grounding contact points between PCB, chassis, and shields are defined with spring contacts, gaskets, or fasteners and a controlled contact surface",
           "hint": "Check spring contact compression range across tolerances per the contact supplier. Specify bare or plated contact areas.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "enc-emc-4",
-          "text": "Antenna areas keep the clearance from metal parts, metallic paint, fasteners and conductive coatings that EE and the antenna supplier specify",
-          "hint": "Overlay the antenna keep-out on the housing CAD, including in-mold decoration, metallic inks and fasteners.",
+          "text": "Antenna areas keep the clearance from metal parts, metallic paint, fasteners, and conductive coatings that EE and the antenna supplier specify",
+          "hint": "Overlay the antenna keep-out on the housing CAD, including in-mold decoration, metallic inks, and fasteners.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "enc-emc-5",
-          "text": "ESD discharge paths from user-accessible seams, buttons and connectors lead away from sensitive circuits",
-          "hint": "Review seams near the PCB edge, button gaps and connector shells with EE. Increase creepage paths at seams or provide a deliberate discharge path to ground.",
+          "text": "ESD discharge paths from user-accessible seams, buttons, and connectors lead away from sensitive circuits",
+          "hint": "Review seams near the PCB edge, button gaps, and connector shells with EE. Increase creepage paths at seams or provide a deliberate discharge path to ground.",
           "tags": [],
           "severity": "major"
         },
@@ -412,7 +412,7 @@
         },
         {
           "id": "enc-emc-7",
-          "text": "Display windows have a defined viewing area, black-mask border and gap to the display that avoids pressure marks",
+          "text": "Display windows have a defined viewing area, black-mask border, and gap to the display that avoids pressure marks",
           "hint": "Check that the visible area aligns with the active area across tolerance, and that the window cannot touch the display when pressed.",
           "tags": [],
           "severity": "minor"
@@ -420,7 +420,7 @@
         {
           "id": "enc-emc-8",
           "text": "Button actuators line up with their switches across tolerances and actuate them at the center",
-          "hint": "Run the actuator-to-switch stack in X, Y and Z. Off-center actuation gives a mushy feel and short switch life.",
+          "hint": "Run the actuator-to-switch stack in X, Y, and Z. Off-center actuation gives a mushy feel and short switch life.",
           "tags": [],
           "severity": "major"
         },
@@ -443,7 +443,7 @@
         {
           "id": "enc-thm-1",
           "text": "Any conflict between ventilation openings and the IP target is resolved with a documented approach",
-          "hint": "Options include sealed heat paths to the housing, membrane vents, labyrinth vents or a lower rating for part of the enclosure. Record the decision.",
+          "hint": "Options include sealed heat paths to the housing, membrane vents, labyrinth vents, or a lower rating for part of the enclosure. Record the decision.",
           "tags": [
             "sealed-ip"
           ],
@@ -458,7 +458,7 @@
         },
         {
           "id": "enc-thm-4",
-          "text": "Vent openings, fans and air paths are not blocked by the product's mounting, users' hands or nearby surfaces in intended use",
+          "text": "Vent openings, fans, and air paths are not blocked by the product's mounting, users' hands, or nearby surfaces in intended use",
           "hint": "Check vent placement against all use orientations and mounting. Cross-reference Thermal & Structural Analysis for the thermal model.",
           "tags": [],
           "severity": "major"
@@ -495,7 +495,7 @@
         },
         {
           "id": "enc-reg-3",
-          "text": "Access to hazardous voltages, moving parts or hot parts requires a tool, or is interlocked",
+          "text": "Access to hazardous voltages, moving parts, or hot parts requires a tool, or is interlocked",
           "hint": "Check every cover that exposes a hazard is tool-only or interlocked, per the applicable standard.",
           "tags": [],
           "severity": "critical"
@@ -542,7 +542,7 @@
         {
           "id": "enc-batt-3",
           "text": "Battery polarity is enforced mechanically for user-installed cells or packs",
-          "hint": "Keyed shapes, polarity-specific contacts or a reversed-insertion block. Mark polarity clearly as well.",
+          "hint": "Keyed shapes, polarity-specific contacts, or a reversed-insertion block. Mark polarity clearly as well.",
           "tags": [],
           "severity": "major"
         },
@@ -563,7 +563,7 @@
         {
           "id": "enc-batt-6",
           "text": "Battery packs are retained in all directions with features that do not bear on the cell's weak areas",
-          "hint": "Avoid loads on pouch cell seals and terminals. Use foam, brackets or a tray as the cell supplier recommends.",
+          "hint": "Avoid loads on pouch cell seals and terminals. Use foam, brackets, or a tray as the cell supplier recommends.",
           "tags": [],
           "severity": "major"
         }
@@ -577,7 +577,7 @@
         {
           "id": "enc-ui-1",
           "text": "Button travel and actuation force meet the UI specification across tolerances, including the seal and actuator contribution",
-          "hint": "Build a force-travel budget combining switch, dome, membrane and actuator stiffness. Confirm on prototypes.",
+          "hint": "Build a force-travel budget combining switch, dome, membrane, and actuator stiffness. Confirm on prototypes.",
           "tags": [],
           "severity": "major"
         },
@@ -604,7 +604,7 @@
         },
         {
           "id": "enc-ui-5",
-          "text": "Controls cannot be actuated accidentally by normal handling, carrying or placing the product on a surface",
+          "text": "Controls cannot be actuated accidentally by normal handling, carrying, or placing the product on a surface",
           "hint": "Check recess depth or guards for critical buttons. Accidental actuation is a usability and sometimes safety issue.",
           "tags": [],
           "severity": "major"
@@ -621,8 +621,8 @@
       "items": [
         {
           "id": "enc-hyg-1",
-          "text": "External surfaces can be cleaned with the specified method without crevices, deep recesses or seams that trap contamination",
-          "hint": "Review seams, button gaps and texture for areas a wipe cannot reach. Minimize exposed fasteners and gaps.",
+          "text": "External surfaces can be cleaned with the specified method without crevices, deep recesses, or seams that trap contamination",
+          "hint": "Review seams, button gaps, and texture for areas a wipe cannot reach. Minimize exposed fasteners and gaps.",
           "tags": [],
           "severity": "major"
         },
@@ -642,7 +642,7 @@
         },
         {
           "id": "enc-hyg-5",
-          "text": "Skin-contact surfaces have no sharp edges, pinch points or features that snag hair or skin",
+          "text": "Skin-contact surfaces have no sharp edges, pinch points, or features that snag hair or skin",
           "hint": "Inspect radii and gaps on all contact surfaces. Check moving parts such as straps and clasps for pinch points.",
           "tags": [],
           "severity": "major"

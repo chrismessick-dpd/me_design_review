@@ -32,7 +32,7 @@ templates pulled from the repo are used instead of the bundled copy.
 }
 ```
 
-- `id` (template, section, item): lowercase letters, digits and `-`. Unique across **all**
+- `id` (template, section, item): lowercase letters, digits, and `-`. Unique across **all**
   templates. Never reuse or renumber an ID: reviews store their state by item ID.
   If an item is removed, its ID is retired; reviews keep its state and show it as retired.
 - Each checklist owns an ID prefix, and its section and item IDs start with it:
@@ -71,7 +71,7 @@ Use only these. `tools/validate_templates.py` rejects anything else (the list li
 | `injection-molded` | has injection-molded plastic parts (including overmolds and insert molds) |
 | `sheet-metal` | has formed or laser/punched sheet-metal parts |
 | `machined` | has CNC-machined or turned parts |
-| `cast` | has die-cast, investment-cast or sand-cast parts |
+| `cast` | has die-cast, investment-cast, or sand-cast parts |
 | `additive` | uses 3D-printed parts beyond early prototypes (SLS, MJF, SLA, FDM, DMLS) |
 | `extruded` | uses aluminum or plastic extrusions |
 | `elastomer` | has elastomer parts: gaskets, keypads, LSR/TPE overmolds, O-rings |
@@ -82,7 +82,7 @@ Use only these. `tools/validate_templates.py` rejects anything else (the list li
 | `moving-parts` | has mechanisms: hinges, slides, gears, bearings, springs, latches |
 | `thermal` | dissipates significant heat or has active cooling |
 | `battery-pack` | contains a battery or battery pack |
-| `electronics` | houses PCBAs, cables, displays or antennas |
+| `electronics` | houses PCBAs, cables, displays, or antennas |
 | `handheld` | is handheld or portable: drop, grip, ergonomics |
 | `structural` | carries significant loads or has safety-critical load paths |
 | `fluidic` | handles liquids or gases: tubing, pressure, pumps, seals against fluids |
@@ -96,10 +96,10 @@ Use only these. `tools/validate_templates.py` rejects anything else (the list li
   the industry habitually quotes them.
 - Don't invent standard clause numbers or precise thresholds. Name a standard only when
   you're sure it is the right one (ISO 286, ISO 1101 / ASME Y14.5, ISO 2768, IEC 60529,
-  ISO 10993 and UL 94 are fine), and phrase numeric limits as "per material datasheet",
+  ISO 10993, and UL 94 are fine), and phrase numeric limits as "per material datasheet",
   "per supplier / molder capability", "per spec", or as a clearly labeled rule of thumb.
 - One check per item. Avoid "and also…" items that can half pass.
-- Make checks something a reviewer can actually verify in CAD, on a drawing, in a report
+- Make checks something a reviewer can actually verify in CAD, on a drawing, in a report,
   or on a part, and say how in the hint.
 - American English spelling throughout (color, aluminum, mold, behavior, labeled, modeling,
   fiber, center, gray, -ize / -ization).

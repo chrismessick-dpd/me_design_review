@@ -5,7 +5,7 @@
 **User guide:** [docs/guide.md](docs/guide.md), with a customer-shareable overview and an FTE section on architecture and use.
 
 Signoff ME is Dovetail's checklist tool for mechanical design reviews: requirements, part
-design and DFM, tolerancing, assembly, materials, analysis, enclosures, drawings and
+design and DFM, tolerancing, assembly, materials, analysis, enclosures, drawings, and
 validation. Each project is a review of one product, assembly or part. Reviewers mark checks
 Pass / Issue / N/A, discuss them in comment threads, track issues to Fixed or Waived, and print
 a review report. Reviews sync through private GitHub repositories, so everyone works on the
@@ -13,7 +13,7 @@ same copy.
 
 It runs on the same engine as [Signoff EE](https://github.com/chrismessick-dpd/ee_design_review),
 the electrical tool, and both sit under the Dovetail Signoff hub. Day-to-day use, keyboard
-shortcuts and how sync works are the same as in Signoff EE; its README covers them in full.
+shortcuts, and how sync works are the same as in Signoff EE; its README covers them in full.
 
 - **845 checks in 9 checklists:** Concept, Part Design & DFM, Tolerancing &
   GD&T, Assembly, Fastening & DFA, Materials & Finishes, Thermal & Structural Analysis,
@@ -23,7 +23,7 @@ shortcuts and how sync works are the same as in Signoff EE; its README covers th
   mechanisms, thermal, battery, electronics, handheld, structural, fluids, cosmetic,
   certification, wearable, volume production). Checks for processes and features the product
   doesn't have are set aside as N/A. You can still bring any of them back.
-- **Findings:** each issue has a severity, owner, reference and resolution. You can export
+- **Findings:** each issue has a severity, owner, reference, and resolution. You can export
   findings to CSV or print a signed-off review report (Print → Save as PDF).
 - **Demo mode:** open `index.html?demo` for a self-contained sample with no sync. Use it to
   show the tool to people outside the team.
@@ -32,7 +32,7 @@ shortcuts and how sync works are the same as in Signoff EE; its README covers th
 
 Open `index.html` in a browser, straight from a clone or served with `python -m http.server`.
 The first time, enter your name. Then open **Settings** (the gear, bottom left), enter a GitHub
-token, and **Save & sync**. The sidebar links to Signoff EE, Fabcheck and the hub, and for FTEs to
+token, and **Save & sync**. The sidebar links to Signoff EE, Fabcheck, and the hub, and for FTEs to
 Signoff PL. In demo mode the links open the other tools' demos; in a contractor zip they point
 at the hosted site.
 
@@ -55,7 +55,7 @@ Which token you need:
 
 **Requirements** is picked like a checklist in the project sheet (New review / Edit profile)
 and is on by default. Unlike the checklists, requirements are written for the project rather
-than taken from a template. Unticking it hides the tab, the overview card and the report
+than taken from a template. Unticking it hides the tab, the overview card, and the report
 section, but keeps the requirements, the same way a checklist's review state is kept.
 
 - **Each requirement has:**
@@ -63,8 +63,8 @@ section, but keeps the requirements, the same way a checklist's review state is 
   - the requirement text
   - shall or should
   - category and source (the customer spec and section)
-  - how it's verified: inspection, analysis, demonstration or test
-  - a status: draft, approved, changed or deprecated. Rewording an approved requirement marks
+  - how it's verified: inspection, analysis, demonstration, or test
+  - a status: draft, approved, changed, or deprecated. Rewording an approved requirement marks
     it *changed* so it gets approved again. A *deprecated* requirement stays in the list and
     the report, lined out for reference, but is left out of the counts and failing flags.
   - a verification result (not verified, pass, fail) with evidence
@@ -77,11 +77,11 @@ section, but keeps the requirements, the same way a checklist's review state is 
   Each check's panel shows **Traces to** for the requirements it supports.
 - **Import / export:** paste rows from Excel or import a CSV with a *Requirement* (or
   *Description*) column, plus optional ID, Name, Type or Priority, Category or Sub-System,
-  Source or Rationale, Verification and Status. A Name leads the requirement text; must-have
+  Source or Rationale, Verification, and Status. A Name leads the requirement text; must-have
   priorities are *shall* and the rest *should*; obsolete rows come in deprecated. New
   requirements carry on the imported numbering (GEN-124 after GEN-123). Rows whose ID exists
   update that requirement. **Export CSV** gives the compliance matrix, which the review report also prints.
-- Requirements live in the project document (`reqs`), so they sync, merge and discard like
+- Requirements live in the project document (`reqs`), so they sync, merge, and discard like
   everything else.
 
 ## Repositories, people and access
@@ -91,12 +91,12 @@ section, but keeps the requirements, the same way a checklist's review state is 
 | `me_design_review` (tool) | The tool and the checklists | FTEs |
 | `me_design_review_data` (data) | Internal ME reviews (`projects/<id>.json`) and People (`users.json`) | FTEs |
 | `review-me-<project>` (one per shared project) | That one review | FTEs and that project's contractors |
-| `ee_design_review`, `ee_design_review_data`, `fw_design_review`, `fw_design_review_data`, `signoff`, `pcb_dfm`, `signoff_pl`, `signoff_pl_data` | Signoff EE, Signoff FW, the hub, Fabcheck and Signoff PL | FTEs |
+| `ee_design_review`, `ee_design_review_data`, `fw_design_review`, `fw_design_review_data`, `signoff`, `pcb_dfm`, `signoff_pl`, `signoff_pl_data` | Signoff EE, Signoff FW, the hub, Fabcheck, and Signoff PL | FTEs |
 
 **People & access** (FTEs only) works as in Signoff EE:
 
 - **Adding an FTE** invites them to this tool's repo, its data repo, every ME shared repo, and
-  the rest of the suite: Signoff EE's and Signoff FW's tool and data repos, the hub repo, Fabcheck (`pcb_dfm`) and Signoff PL's tool and data repos. That list is
+  the rest of the suite: Signoff EE's and Signoff FW's tool and data repos, the hub repo, Fabcheck (`pcb_dfm`), and Signoff PL's tool and data repos. That list is
   `repos.suite` in `assets/config.js`. Each tool keeps its own People list, so add FTEs in
   Signoff EE too. Its People page grants the `review-ee-…` repos.
 - **Adding a contractor to a project** moves it out of the data repo into a new private
@@ -105,7 +105,7 @@ section, but keeps the requirements, the same way a checklist's review state is 
   project is added in Signoff EE.
 - **Contractor copies:** `python tools/package.py` makes `dist/Signoff-ME-<build>.zip`. It
   holds the tool and checklists only, with no data and no token, plus a START HERE note. Its
-  sidebar links to the hub, Signoff EE and Fabcheck point at the hosted site (`hostedBase` in config).
+  sidebar links to the hub, Signoff EE, and Fabcheck point at the hosted site (`hostedBase` in config).
 
 ## Layout
 

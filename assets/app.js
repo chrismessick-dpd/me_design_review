@@ -1,6 +1,6 @@
-/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+/* Shared Signoff engine (EE, ME, and FW). Edit it in ee_design_review only; me_design_review and
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
-/* Signoff app: state, storage, rendering and interaction. */
+/* Signoff app: state, storage, rendering, and interaction. */
 (function (S) {
   'use strict';
   var M = S.model;
@@ -14,7 +14,7 @@
   // light/dark theme are shared by the whole suite, so they live under fixed keys.
   var DEMO = /[?&]demo\b/.test(location.search) || location.hash === '#demo';
   // ?page=people&embed=1 inside a frame: only People & access, for the suite's People sheet
-  // (signoff/assets/people.js) opened from another tool. No sidebar, toolbar or demo.
+  // (signoff/assets/people.js) opened from another tool. No sidebar, toolbar, or demo.
   var EMBED = !DEMO && /[?&]embed=1\b/.test(location.search) && window.parent !== window;
   if (EMBED) document.documentElement.classList.add('embed');
   var PEOPLE = window.SignoffPeople && !EMBED ? window.SignoffPeople : null;
@@ -172,7 +172,7 @@
   // The token is shared by every Signoff tool, so it can change outside this one's Settings.
   // A different token may be a different person: who it is, and their role, are found again at
   // the next sync. Other tools read `tokenTag` and `dataAccess` to tell whether this browser's
-  // token is an FTE's (Signoff PL, Fabcheck and the hub show People & access then).
+  // token is an FTE's (Signoff PL, Fabcheck, and the hub show People & access then).
   function noticeToken() {
     var tag = getToken() ? M.tokenTag(getToken()) : '';
     if ((settings.tokenTag || '') === tag) return false;
@@ -415,7 +415,7 @@
     var people = $('#people-link');
     people.hidden = DEMO || !isFte();
     // Links to the rest of the suite (hub, the other Signoff tool, Fabcheck) show for everyone:
-    // FTEs, contractors and the demo. In the demo they point at the other tools' demos. A link
+    // FTEs, contractors, and the demo. In the demo they point at the other tools' demos. A link
     // marked data-internal is for FTEs only (Signoff PL), and for everyone in the demo, whose
     // product view is Signoff PL's demo.
     var tools = $('#side-tools');
@@ -552,7 +552,7 @@
     m.style.bottom = (window.innerHeight - r.top + 6) + 'px';
     m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, foot.getBoundingClientRect().left)) + 'px';
   }
-  // Jump to an unsynced change: the project, then the check, requirement or revision.
+  // Jump to an unsynced change: the project, then the check, requirement, or revision.
   function gotoChange(el) {
     var slug = slugOfId(el.dataset.pid), p = slug && projects[slug];
     closeMenu();
@@ -815,7 +815,7 @@
     return html + '</div>';
   }
 
-  // A reference row (findings Fabcheck waived, kept to read): no severity, status or quick buttons,
+  // A reference row (findings Fabcheck waived, kept to read): no severity, status, or quick buttons,
   // and it counts nowhere (model.row, countStatuses).
   function referenceRow(r, counts) {
     var n = counts[r.id] || 0;
@@ -890,7 +890,7 @@
     var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Findings</h1>' +
       '<div class="page-sub"><span>' + plural(f.length, 'issue') + '</span><span class="sep">·</span><span>' + open + ' open</span></div></div>' +
       '<button class="btn" data-act="export-csv">Export CSV</button></div>';
-    if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner and resolution.</p></div>' + referenceHtml(p, refs, counts) + '</div>';
+    if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner, and resolution.</p></div>' + referenceHtml(p, refs, counts) + '</div>';
     html += '<div class="card table-scroll" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
       f.map(function (x) {
         var r = x.row, res = r.resolution;
@@ -1114,7 +1114,7 @@
     if (st.state === 'none') return html + emptyCard('Sign in to see stored runs', 'Fabcheck stores each run it sends with this ' + UNIT + ', in its private repository. Add your GitHub token in Settings to list them.') + revNotesSection(p) + '</div>';
     if (st.state === 'loading') return html + '<div class="card empty"><p>Reading the runs stored with this ' + UNIT + '…</p></div>' + revNotesSection(p) + '</div>';
     if (st.state === 'error') return html + emptyCard('Couldn’t read the stored runs', esc(st.error)) + revNotesSection(p) + '</div>';
-    if (!st.runs.length) return html + emptyCard('No runs stored yet', 'Check the fab package in Fabcheck and send it to this ' + UNIT + '. Each run sent is stored here, and you can tag one as a revision: sent to fab, used for builds or withdrawn.') + revNotesSection(p) + '</div>';
+    if (!st.runs.length) return html + emptyCard('No runs stored yet', 'Check the fab package in Fabcheck and send it to this ' + UNIT + '. Each run sent is stored here, and you can tag one as a revision: sent to fab, used for builds, or withdrawn.') + revNotesSection(p) + '</div>';
     if (st.demo) html += '<p class="note" style="margin:0 0 14px">In the demo, the runs are the ones the Fabcheck issues came from. A real ' + UNIT + ' stores each run’s fab package, which you can download here.</p>';
     html += M.groupRuns(st.runs).map(function (g) {
       var head = g.runs[0], open = !!revOpen[g.key];
@@ -1281,7 +1281,7 @@
     });
   }
 
-  // A wait that says what it is doing: a card over the page with a spinner, a step line and a bar.
+  // A wait that says what it is doing: a card over the page with a spinner, a step line, and a bar.
   // Returns { step(text, fraction), stop(text, actions) , close() }; actions are [label, fn, primary].
   function busyCard(title) {
     var old = $('#busy-wrap'); if (old) old.remove();
@@ -1310,7 +1310,7 @@
   // Back from Fabcheck restores this page from the browser's cache, card and all.
   window.addEventListener('pageshow', function (ev) { if (ev.persisted) { var b = $('#busy-wrap'); if (b) b.remove(); try { localStorage.removeItem(NS + 'fabReturn'); } catch (e) { /* storage blocked */ } } });
   // Fabcheck's "Back to Signoff EE" loads this page again. Open in Fabcheck left a return point
-  // (fabReturn: the board, tab, open check and scroll), and Fabcheck sets the board and tab from
+  // (fabReturn: the board, tab, open check, and scroll), and Fabcheck sets the board and tab from
   // it (signoff.js openFindings); this puts back the check and the scroll. It's used once, and
   // only within the hour.
   function returnFromFabcheck() {
@@ -1399,7 +1399,7 @@
       '<div class="insp-body">' +
       '<div class="insp-title"' + (d.custom ? ' contenteditable="true" data-edit-custom="' + esc(selected) + '"' : '') + '>' + esc(d.def.text) + '</div>' +
       fabcheckBlock(p, d.def) +
-      (row && row.reference ? '<div class="note ref-note">Waived in Fabcheck and kept here for reference. It isn’t an issue and isn’t counted in progress, issues or the project summary.</div>' : '') +
+      (row && row.reference ? '<div class="note ref-note">Waived in Fabcheck and kept here for reference. It isn’t an issue and isn’t counted in progress, issues, or the project summary.</div>' : '') +
       (d.def.hint && !isFabcheck(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
       tracedBy(p, selected) +
       (row && row.auto ? '<div class="note" style="margin:-4px 0 12px">' + (row.auto === 'section' ? 'Counted as N/A because the section is marked N/A.' : 'Counted as N/A: outside this ' + W.thing + '’s profile (' + esc((d.def.tags || d.section.tags || []).join(', ')) + '). Set a status to review it anyway.') + '</div>' : '') +
@@ -1652,7 +1652,7 @@
     var p = current(); if (!p) return;
     var w = sheet('<div class="sheet-head"><h2>Import requirements</h2><p>Paste rows from Excel or a CSV file, or choose a file. The first row names the columns: ' +
       '<b>Requirement</b> (or <b>Description</b>, needed), and optionally <b>ID</b>, <b>Name</b>, <b>Type</b> or <b>Priority</b> (shall / should), <b>Category</b>, <b>Source</b>, ' +
-      '<b>Verification</b> (inspection, analysis, demonstration, test), <b>Discipline</b> (system, EE, ME, FW, other) and <b>Status</b> (obsolete rows come in as deprecated). A row whose ID already exists updates that requirement.</p></div>' +
+      '<b>Verification</b> (inspection, analysis, demonstration, test), <b>Discipline</b> (system, EE, ME, FW, other), and <b>Status</b> (obsolete rows come in as deprecated). A row whose ID already exists updates that requirement.</p></div>' +
       '<div class="sheet-body"><textarea class="input" id="req-paste" rows="8" placeholder="ID, Requirement, Type, Category, Source, Verification"></textarea>' +
       '<p class="note" id="req-preview"></p><input type="file" id="req-file" accept=".csv,.tsv,.txt,text/csv"></div>' +
       '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Import</button></div>', { wide: true });
@@ -1848,7 +1848,7 @@
     try { remembered = !!localStorage.getItem(TOKEN_KEY); } catch (e) { /* ignore */ }
     var welcome = DEMO && first;
     var w = sheet('<div class="sheet-head"><h2>' + (welcome ? 'Welcome to the ' + esc(C.product) + ' demo' : 'Settings') + '</h2><p>' +
-      (welcome ? 'A made-up product, a Smart Thermostat for Acme Climate, part way through its design reviews. Open a checklist, mark checks Pass, Issue or N/A, and comment on what you find. ' +
+      (welcome ? 'A made-up product, a Smart Thermostat for Acme Climate, part way through its design reviews. Open a checklist, mark checks Pass, Issue, or N/A, and comment on what you find. ' +
         'Everything stays in this browser, and <b>Reset demo</b> in the banner starts over. Your name goes on what you change.'
       : DEMO ? 'Your name goes on the comments and changes you make in this demo. Everything stays in this browser.' : 'Your name goes on comments and changes. Reviews sync through private GitHub repositories, so everyone works on the same copy.') + '</p></div>' +
       '<div class="sheet-body">' +
@@ -1927,7 +1927,7 @@
   }
 
   // Sign out of this browser: the token goes, and so does every copy the suite keeps here
-  // (Signoff EE, ME, FW and PL working copies, PL's pictures and waiting model files, Fabcheck's
+  // (Signoff EE, ME, FW, and PL working copies, PL's pictures and waiting model files, Fabcheck's
   // runs and packages). Only the theme stays.
   // Unsynced changes would be lost, so they're counted and named first.
   var SUITE_NS = ['signoff.v1.', 'signoff-me.v1.', 'signoff-fw.v1.', 'signoff-pl.v1.', 'fabcheck.v1.'];
@@ -2895,7 +2895,7 @@
   render();
   openWantedItem();
   returnFromFabcheck();
-  // In the demo the first sheet shows once per browser across EE, ME and FW, even when it's
+  // In the demo the first sheet shows once per browser across EE, ME, and FW, even when it's
   // skipped, so a visitor moving between pages isn't asked again and again.
   function demoWelcomed() {
     if (!DEMO) return false;

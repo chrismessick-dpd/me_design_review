@@ -3,7 +3,7 @@
   "title": "Tolerancing & GD&T",
   "short": "Tolerancing",
   "version": 1,
-  "description": "Tolerancing strategy, datums, GD&T, fits, stack-ups, cosmetic gap and flush, seal compression, mechanism clearances and inspection.",
+  "description": "Tolerancing strategy, datums, GD&T, fits, stack-ups, cosmetic gap and flush, seal compression, mechanism clearances, and inspection.",
   "sections": [
     {
       "id": "tol-strat",
@@ -20,7 +20,7 @@
         {
           "id": "tol-strat-2",
           "text": "Critical-to-function (CTF) dimensions are identified and listed for every part",
-          "hint": "Keep a CTF list per part that traces each dimension to the requirement or stack it serves. The list drives inspection, supplier focus and change impact review.",
+          "hint": "Keep a CTF list per part that traces each dimension to the requirement or stack it serves. The list drives inspection, supplier focus, and change impact review.",
           "tags": [],
           "severity": "major"
         },
@@ -41,7 +41,7 @@
         {
           "id": "tol-strat-5",
           "text": "Tight tolerances are applied only to features that need them",
-          "hint": "Review every tolerance tighter than the general tolerance and confirm it is on the CTF list or supports a stack. Unnecessary tight tolerances add cost, inspection time and rejected parts.",
+          "hint": "Review every tolerance tighter than the general tolerance and confirm it is on the CTF list or supports a stack. Unnecessary tight tolerances add cost, inspection time, and rejected parts.",
           "tags": [],
           "severity": "major"
         },
@@ -87,14 +87,14 @@
         {
           "id": "tol-dat-2",
           "text": "Datum features are accessible and stable for fixturing and inspection",
-          "hint": "Check that a CMM probe or fixture can contact each datum feature and that it is large enough to establish the datum repeatably. Small, flexible or draft-angled datums give unstable measurements.",
+          "hint": "Check that a CMM probe or fixture can contact each datum feature and that it is large enough to establish the datum repeatably. Small, flexible, or draft-angled datums give unstable measurements.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-dat-3",
           "text": "Each datum reference frame constrains all the degrees of freedom the controlled features need",
-          "hint": "Walk the primary, secondary and tertiary datums and confirm translation and rotation are locked as required. An under-constrained frame lets the inspector orient the part differently each time.",
+          "hint": "Walk the primary, secondary, and tertiary datums and confirm translation and rotation are locked as required. An under-constrained frame lets the inspector orient the part differently each time.",
           "tags": [],
           "severity": "major"
         },
@@ -115,14 +115,14 @@
         {
           "id": "tol-dat-6",
           "text": "Datum targets are used where a full surface datum is impractical (castings, moldings, sheet metal)",
-          "hint": "Use datum target points, lines or areas on large, warped or as-cast surfaces and match them to fixture locators. Specify the target size and location on the drawing.",
+          "hint": "Use datum target points, lines, or areas on large, warped, or as-cast surfaces and match them to fixture locators. Specify the target size and location on the drawing.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-dat-7",
-          "text": "Datum features on molded or cast parts avoid parting lines, gates, ejector marks and draft",
-          "hint": "Flash, vestige and draft make a surface a poor datum. Check gate and ejector locations against the datum features before releasing for tooling.",
+          "text": "Datum features on molded or cast parts avoid parting lines, gates, ejector marks, and draft",
+          "hint": "Flash, vestige, and draft make a surface a poor datum. Check gate and ejector locations against the datum features before releasing for tooling.",
           "tags": [],
           "severity": "major"
         },
@@ -143,14 +143,14 @@
         {
           "id": "tol-gdt-2",
           "text": "Hole and pin patterns are located with position tolerances rather than chained ± dimensions",
-          "hint": "Position to a datum frame gives a cylindrical zone, enables bonus tolerance and avoids the accumulation of chained ± dimensions. Check bolt patterns, PCB mounting bosses and dowel patterns.",
+          "hint": "Position to a datum frame gives a cylindrical zone, enables bonus tolerance, and avoids the accumulation of chained ± dimensions. Check bolt patterns, PCB mounting bosses, and dowel patterns.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-gdt-3",
-          "text": "Freeform, molded and cast surfaces are controlled with profile of a surface",
-          "hint": "Profile to a datum frame controls size, form, orientation and location of complex surfaces in one callout, referenced to the CAD model. Avoid trying to dimension splines with ± coordinates.",
+          "text": "Freeform, molded, and cast surfaces are controlled with profile of a surface",
+          "hint": "Profile to a datum frame controls size, form, orientation, and location of complex surfaces in one callout, referenced to the CAD model. Avoid trying to dimension splines with ± coordinates.",
           "tags": [],
           "severity": "major"
         },
@@ -192,7 +192,7 @@
         {
           "id": "tol-gdt-9",
           "text": "Every feature control frame is complete and syntactically valid",
-          "hint": "Check the symbol, zone shape (diameter symbol where needed), value, modifiers and datum references. Use the CAD GD&T checker if available, then read each frame manually.",
+          "hint": "Check the symbol, zone shape (diameter symbol where needed), value, modifiers, and datum references. Use the CAD GD&T checker if available, then read each frame manually.",
           "tags": [],
           "severity": "major"
         },
@@ -206,7 +206,7 @@
         {
           "id": "tol-gdt-11",
           "text": "Runout or concentricity controls on rotating parts reflect the functional axis",
-          "hint": "Use circular or total runout to the bearing or mounting axis for shafts, rotors and pulleys. Coaxial controls to the wrong datum let wobble through.",
+          "hint": "Use circular or total runout to the bearing or mounting axis for shafts, rotors, and pulleys. Coaxial controls to the wrong datum let wobble through.",
           "tags": [
             "moving-parts"
           ],
@@ -221,15 +221,15 @@
       "items": [
         {
           "id": "tol-fit-1",
-          "text": "Shafts, bores, bearing seats and dowel pins use ISO 286 fit designations matched to the function",
-          "hint": "Pick clearance, transition or interference fits from ISO 286 and the bearing or pin manufacturer's recommendations. Check both limits on the drawing, not just the fit name.",
+          "text": "Shafts, bores, bearing seats, and dowel pins use ISO 286 fit designations matched to the function",
+          "hint": "Pick clearance, transition, or interference fits from ISO 286 and the bearing or pin manufacturer's recommendations. Check both limits on the drawing, not just the fit name.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-fit-2",
           "text": "Bearing housing and shaft fits follow the bearing manufacturer's recommendations for the load case",
-          "hint": "Rotating versus stationary load on the inner or outer ring sets which ring needs interference. A wrong fit causes ring creep, fretting or lost internal clearance.",
+          "hint": "Rotating versus stationary load on the inner or outer ring sets which ring needs interference. A wrong fit causes ring creep, fretting, or lost internal clearance.",
           "tags": [
             "moving-parts"
           ],
@@ -258,8 +258,8 @@
         },
         {
           "id": "tol-fit-6",
-          "text": "Coating, plating and paint thickness is accounted for on toleranced features",
-          "hint": "State whether dimensions apply before or after finish and mask or adjust critical bores, threads and fits. Anodize and powder coat thickness can close up a clearance fit entirely.",
+          "text": "Coating, plating, and paint thickness is accounted for on toleranced features",
+          "hint": "State whether dimensions apply before or after finish and mask or adjust critical bores, threads, and fits. Anodize and powder coat thickness can close up a clearance fit entirely.",
           "tags": [],
           "severity": "major"
         },
@@ -297,22 +297,22 @@
       "items": [
         {
           "id": "tol-stk-1",
-          "text": "Every critical gap, interference, alignment and engagement in the assembly has a documented stack-up",
+          "text": "Every critical gap, interference, alignment, and engagement in the assembly has a documented stack-up",
           "hint": "Cross-check the CTF list and assembly interfaces against the stack-up register. Unstacked interfaces are where first-build surprises come from.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "tol-stk-2",
-          "text": "The stack method (worst-case, RSS or statistical) is stated and justified for each stack",
-          "hint": "Worst-case suits low volume, safety-critical or few-contributor stacks. RSS assumes centered, independent, normally distributed contributors and enough volume for the statistics to hold.",
+          "text": "The stack method (worst-case, RSS, or statistical) is stated and justified for each stack",
+          "hint": "Worst-case suits low volume, safety-critical, or few-contributor stacks. RSS assumes centered, independent, normally distributed contributors and enough volume for the statistics to hold.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-stk-3",
           "text": "Every stack-up input is traced to a dimension and tolerance on a released or current drawing",
-          "hint": "List the drawing number, revision and dimension for each contributor. Inputs typed from memory or the model drift out of date silently.",
+          "hint": "List the drawing number, revision, and dimension for each contributor. Inputs typed from memory or the model drift out of date silently.",
           "tags": [],
           "severity": "major"
         },
@@ -373,14 +373,14 @@
         },
         {
           "id": "tol-stk-11",
-          "text": "Stacks with insufficient margin have a recorded resolution (tolerance change, design change, adjustment or selective assembly)",
+          "text": "Stacks with insufficient margin have a recorded resolution (tolerance change, design change, adjustment, or selective assembly)",
           "hint": "Track the action in the review log. Do not release with a known negative stack and a note to fix it at tool trial.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-stk-12",
-          "text": "Stack-ups are re-run after any change to a contributing dimension, tolerance, material or supplier",
+          "text": "Stack-ups are re-run after any change to a contributing dimension, tolerance, material, or supplier",
           "hint": "Link stacks to the change process so an ECO touching a contributor triggers a stack review. Check the stack revision matches the current drawing revisions.",
           "tags": [],
           "severity": "major"
@@ -424,7 +424,7 @@
         },
         {
           "id": "tol-cos-4",
-          "text": "Cosmetic seam design hides expected variation (reveal, offset or step-in) where flush cannot be held",
+          "text": "Cosmetic seam design hides expected variation (reveal, offset, or step-in) where flush cannot be held",
           "hint": "A deliberate reveal or a small designed step tolerates variation that a zero-gap, zero-flush seam shows immediately. Review with industrial design.",
           "tags": [],
           "severity": "minor"
@@ -462,7 +462,7 @@
         {
           "id": "tol-seal-3",
           "text": "O-ring groove dimensions and tolerances follow the O-ring supplier's design guide",
-          "hint": "Check groove depth, width, fill ratio and surface finish against the supplier guide for static or dynamic use. Include thermal swell and chemical swell where relevant.",
+          "hint": "Check groove depth, width, fill ratio, and surface finish against the supplier guide for static or dynamic use. Include thermal swell and chemical swell where relevant.",
           "tags": [
             "elastomer"
           ],
@@ -508,14 +508,14 @@
         {
           "id": "tol-mech-2",
           "text": "Maximum play or backlash at worst-case tolerances meets the functional and feel requirements",
-          "hint": "Stack the loose end as well as the tight end. Excess play produces rattle, wobble and poor perceived quality.",
+          "hint": "Stack the loose end as well as the tight end. Excess play produces rattle, wobble, and poor perceived quality.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "tol-mech-3",
           "text": "Gear center distance and backlash tolerances follow the gear supplier's recommendations",
-          "hint": "Include bore position, bearing clearance and housing thermal growth in the center distance stack. Too little backlash binds hot, too much is noisy.",
+          "hint": "Include bore position, bearing clearance, and housing thermal growth in the center distance stack. Too little backlash binds hot, too much is noisy.",
           "tags": [],
           "severity": "major"
         },
@@ -612,7 +612,7 @@
         {
           "id": "tol-insp-8",
           "text": "Cosmetic and visual criteria that cannot be measured dimensionally have a defined inspection method",
-          "hint": "Specify viewing distance, lighting, time and limit samples. These belong in a cosmetic spec referenced from the drawing.",
+          "hint": "Specify viewing distance, lighting, time, and limit samples. These belong in a cosmetic spec referenced from the drawing.",
           "tags": [
             "cosmetic"
           ],
@@ -621,7 +621,7 @@
         {
           "id": "tol-insp-9",
           "text": "Inspection data from first articles is reviewed against every CTF dimension before production release",
-          "hint": "Check the full dimensional report, not a summary. Out-of-tolerance CTF features need a disposition (rework, deviation or drawing change) before release.",
+          "hint": "Check the full dimensional report, not a summary. Out-of-tolerance CTF features need a disposition (rework, deviation, or drawing change) before release.",
           "tags": [],
           "severity": "major"
         }

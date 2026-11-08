@@ -3,7 +3,7 @@
   "title": "Materials & Finishes",
   "short": "Materials",
   "version": 2,
-  "description": "Material selection, plastics, metals, elastomers, finishes and coatings, compliance, contact materials, sustainability and outdoor durability.",
+  "description": "Material selection, plastics, metals, elastomers, finishes and coatings, compliance, contact materials, sustainability, and outdoor durability.",
   "sections": [
     {
       "id": "mat-sel",
@@ -12,29 +12,29 @@
       "items": [
         {
           "id": "mat-sel-1",
-          "text": "Every part has its material chosen against written requirements for strength, stiffness and operating temperature range",
-          "hint": "Trace each part's material back to the requirements list and load cases. A material picked by habit is the usual root cause of creep, cracking or softening found late in validation.",
+          "text": "Every part has its material chosen against written requirements for strength, stiffness, and operating temperature range",
+          "hint": "Trace each part's material back to the requirements list and load cases. A material picked by habit is the usual root cause of creep, cracking, or softening found late in validation.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "mat-sel-2",
           "text": "Every part specifies a specific grade (manufacturer and grade name), not a generic family like \"ABS\" or \"aluminum\"",
-          "hint": "Check the drawing, BOM and CAD material field. Properties within one family vary widely, and a generic callout lets the supplier substitute whatever is cheapest.",
+          "hint": "Check the drawing, BOM, and CAD material field. Properties within one family vary widely, and a generic callout lets the supplier substitute whatever is cheapest.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "mat-sel-3",
           "text": "Properties used for design are taken from the datasheet at the maximum operating temperature, not at 23 °C",
-          "hint": "Look for modulus, yield and HDT versus temperature curves (e.g. on Campus or the supplier's data). Plastics can lose a large share of their stiffness well below their HDT.",
+          "hint": "Look for modulus, yield, and HDT versus temperature curves (e.g. on Campus or the supplier's data). Plastics can lose a large share of their stiffness well below their HDT.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "mat-sel-4",
           "text": "Parts under sustained load have a material with documented creep or stress-relaxation behavior at the operating temperature",
-          "hint": "Ask for creep modulus or isochronous stress-strain data from the supplier. Bosses, press fits and clips under constant load are the usual victims.",
+          "hint": "Ask for creep modulus or isochronous stress-strain data from the supplier. Bosses, press fits, and clips under constant load are the usual victims.",
           "tags": [],
           "severity": "major"
         },
@@ -58,14 +58,14 @@
         {
           "id": "mat-sel-7",
           "text": "UV and light exposure is considered for every exposed part, including indoor exposure near windows or lighting",
-          "hint": "Unstabilized polymers yellow, chalk and embrittle. Check the datasheet for UV stabilization or plan a weathering test.",
+          "hint": "Unstabilized polymers yellow, chalk, and embrittle. Check the datasheet for UV stabilization or plan a weathering test.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "mat-sel-8",
           "text": "Every specified material is available from stock or with a confirmed lead time in the production region",
-          "hint": "Confirm with the molder, machine shop or distributor before release. Specialty grades and colors can carry long minimum order quantities and lead times.",
+          "hint": "Confirm with the molder, machine shop, or distributor before release. Specialty grades and colors can carry long minimum order quantities and lead times.",
           "tags": [
             "high-volume"
           ],
@@ -83,7 +83,7 @@
         {
           "id": "mat-sel-10",
           "text": "Material cost per part is estimated and fits the cost target",
-          "hint": "Use part volume or mass, scrap or runner allowance and current price per kg from the supplier. Flame-retardant, glass-filled and high-performance grades can change the part cost significantly.",
+          "hint": "Use part volume or mass, scrap or runner allowance, and current price per kg from the supplier. Flame-retardant, glass-filled, and high-performance grades can change the part cost significantly.",
           "tags": [],
           "severity": "minor"
         },
@@ -96,7 +96,7 @@
         },
         {
           "id": "mat-sel-12",
-          "text": "Material choices are recorded in a materials list with grade, supplier, color, finish and the reason for selection",
+          "text": "Material choices are recorded in a materials list with grade, supplier, color, finish, and the reason for selection",
           "hint": "One table per product, kept with the design record. It speeds up compliance declarations and later substitutions.",
           "tags": [],
           "severity": "minor"
@@ -120,7 +120,7 @@
         },
         {
           "id": "mat-pl-2",
-          "text": "Effects of glass or mineral fill on anisotropy, warpage and weld line strength are accounted for in the design",
+          "text": "Effects of glass or mineral fill on anisotropy, warpage, and weld line strength are accounted for in the design",
           "hint": "Filled grades have much lower strength across the flow direction and at weld lines. Review the gate location and mold flow fiber orientation results for loaded features.",
           "tags": [
             "injection-molded"
@@ -137,14 +137,14 @@
         {
           "id": "mat-pl-4",
           "text": "Parts that see chemicals while under molded-in or assembly stress are checked for environmental stress cracking",
-          "hint": "Amorphous resins (PC, ABS, PC/ABS, acrylic) crack with cleaners, alcohols, oils and adhesives under strain. Use a strain jig or bent-strip test with the actual chemicals and the expected strain.",
+          "hint": "Amorphous resins (PC, ABS, PC/ABS, acrylic) crack with cleaners, alcohols, oils, and adhesives under strain. Use a strain jig or bent-strip test with the actual chemicals and the expected strain.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "mat-pl-5",
           "text": "Regrind policy (allowed or not, maximum percentage) is stated on the drawing or in the supply agreement",
-          "hint": "Regrind lowers impact and flame performance. Medical, flame-rated and highly loaded parts usually forbid it or cap it per the material supplier's guidance.",
+          "hint": "Regrind lowers impact and flame performance. Medical, flame-rated, and highly loaded parts usually forbid it or cap it per the material supplier's guidance.",
           "tags": [
             "injection-molded"
           ],
@@ -152,7 +152,7 @@
         },
         {
           "id": "mat-pl-6",
-          "text": "Colorant or masterbatch is confirmed not to degrade the required mechanical, flame or regulatory properties",
+          "text": "Colorant or masterbatch is confirmed not to degrade the required mechanical, flame, or regulatory properties",
           "hint": "Some pigments and carriers reduce impact strength or void a UL listing. Use a precolored compound listed by the supplier, or get the colorant approved in writing.",
           "tags": [
             "injection-molded"
@@ -171,7 +171,7 @@
         {
           "id": "mat-pl-8",
           "text": "Drying requirements of the resin are passed to the molder in the material specification",
-          "hint": "Undried PC, PBT, PET and nylon hydrolyze during molding and become brittle with no visible defect. Reference the supplier's drying temperature and time.",
+          "hint": "Undried PC, PBT, PET, and nylon hydrolyze during molding and become brittle with no visible defect. Reference the supplier's drying temperature and time.",
           "tags": [
             "injection-molded"
           ],
@@ -179,14 +179,14 @@
         },
         {
           "id": "mat-pl-9",
-          "text": "Temperature limits use the right property (HDT, RTI or Vicat) for the kind of exposure",
+          "text": "Temperature limits use the right property (HDT, RTI, or Vicat) for the kind of exposure",
           "hint": "HDT is a short-term deflection value, not a continuous use limit. For long-term elevated temperature use the relative thermal index or supplier aging data.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "mat-pl-10",
-          "text": "Material for living hinges, snap fits and press fits has enough elongation at yield for the design strain",
+          "text": "Material for living hinges, snap fits, and press fits has enough elongation at yield for the design strain",
           "hint": "Check allowable strain from the datasheet or supplier guidance for the specific grade. Glass-filled and amorphous brittle grades often cannot survive repeated deflection.",
           "tags": [
             "moving-parts"
@@ -205,8 +205,8 @@
         },
         {
           "id": "mat-pl-12",
-          "text": "Additive parts specify process, material, build orientation and post-processing",
-          "hint": "SLS, MJF, SLA and FDM parts are anisotropic and orientation sensitive. Put the orientation and post-cure or annealing on the drawing or build sheet.",
+          "text": "Additive parts specify process, material, build orientation, and post-processing",
+          "hint": "SLS, MJF, SLA, and FDM parts are anisotropic and orientation sensitive. Put the orientation and post-cure or annealing on the drawing or build sheet.",
           "tags": [
             "additive"
           ],
@@ -223,7 +223,7 @@
         },
         {
           "id": "mat-pl-14",
-          "text": "Transparent or light-pipe parts use an optical grade with defined transmission, haze and color stability",
+          "text": "Transparent or light-pipe parts use an optical grade with defined transmission, haze, and color stability",
           "hint": "Check the light transmission and yellowing index data in the datasheet. General-purpose grades of PC or acrylic can yellow and cloud over time.",
           "tags": [
             "electronics"
@@ -245,7 +245,7 @@
         {
           "id": "mat-met-1",
           "text": "Every metal part specifies alloy and temper or condition (e.g. 6061-T6, 304 annealed, 1/4 hard)",
-          "hint": "Temper drives yield strength, formability and machinability. A missing temper on the drawing lets the supplier ship the softest condition.",
+          "hint": "Temper drives yield strength, formability, and machinability. A missing temper on the drawing lets the supplier ship the softest condition.",
           "tags": [],
           "severity": "critical"
         },
@@ -261,7 +261,7 @@
         {
           "id": "mat-met-3",
           "text": "Every pair of dissimilar metals in contact is checked for galvanic corrosion in the expected environment",
-          "hint": "Use a galvanic series chart for the electrolyte (moisture, salt). Isolate with coatings, washers or sealant, or keep the anode area large relative to the cathode.",
+          "hint": "Use a galvanic series chart for the electrolyte (moisture, salt). Isolate with coatings, washers, or sealant, or keep the anode area large relative to the cathode.",
           "tags": [],
           "severity": "major"
         },
@@ -275,13 +275,13 @@
         {
           "id": "mat-met-6",
           "text": "Carbon and alloy steel parts have a defined corrosion protection",
-          "hint": "Bare steel rusts in storage and transport. Check the drawing for plating, coating or oil, and that it suits the environment.",
+          "hint": "Bare steel rusts in storage and transport. Check the drawing for plating, coating, or oil, and that it suits the environment.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "mat-met-7",
-          "text": "Magnetic properties are checked where parts are near magnets, sensors, compasses or MRI",
+          "text": "Magnetic properties are checked where parts are near magnets, sensors, compasses, or MRI",
           "hint": "Austenitic stainless becomes partly magnetic after cold work or forming. Specify a low-permeability grade or annealing if it matters.",
           "tags": [
             "electronics",
@@ -291,8 +291,8 @@
         },
         {
           "id": "mat-met-8",
-          "text": "Die-cast alloy is chosen for the required ductility, corrosion resistance and finish",
-          "hint": "Common die-cast aluminum alloys trade ductility for castability, and porosity can affect plating, anodizing and pressure tightness. Confirm with the caster.",
+          "text": "Die-cast alloy is chosen for the required ductility, corrosion resistance, and finish",
+          "hint": "Common die-cast aluminum alloys trade ductility for castability, and porosity can affect plating, anodizing, and pressure tightness. Confirm with the caster.",
           "tags": [
             "cast"
           ],
@@ -336,7 +336,7 @@
       "items": [
         {
           "id": "mat-elas-1",
-          "text": "Elastomer compound is selected for compatibility with every fluid, lubricant and cleaner it contacts",
+          "text": "Elastomer compound is selected for compatibility with every fluid, lubricant, and cleaner it contacts",
           "hint": "Check the compound's chemical compatibility chart (EPDM swells in oils, NBR degrades with ozone and UV). Lubricants used during assembly count too.",
           "tags": [],
           "severity": "critical"
@@ -373,7 +373,7 @@
         },
         {
           "id": "mat-elas-6",
-          "text": "Keypad, grip and skin-contact elastomers are checked for tackiness, plasticizer migration and staining",
+          "text": "Keypad, grip, and skin-contact elastomers are checked for tackiness, plasticizer migration, and staining",
           "hint": "Some TPEs bleed oils that mark adjacent plastics or feel sticky after heat aging. Ask for heat-aging data or run a contact stain test.",
           "tags": [
             "cosmetic",
@@ -384,7 +384,7 @@
         {
           "id": "mat-elas-7",
           "text": "Elastomer is confirmed suitable for its ozone and UV exposure",
-          "hint": "Diene rubbers (NR, NBR, SBR) crack under ozone and UV. Silicone, EPDM and fluoroelastomers resist it better.",
+          "hint": "Diene rubbers (NR, NBR, SBR) crack under ozone and UV. Silicone, EPDM, and fluoroelastomers resist it better.",
           "tags": [
             "outdoor"
           ],
@@ -411,14 +411,14 @@
         },
         {
           "id": "mat-fin-2",
-          "text": "Dimensional growth of anodize, plating or coating is included in fits and tolerances",
+          "text": "Dimensional growth of anodize, plating, or coating is included in fits and tolerances",
           "hint": "Anodize grows partly outward per surface, and hard anodize much more. State whether dimensions apply before or after finishing on the drawing.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "mat-fin-3",
-          "text": "Masking areas are defined on the drawing for threads, bores, grounding points and mating faces that must stay bare",
+          "text": "Masking areas are defined on the drawing for threads, bores, grounding points, and mating faces that must stay bare",
           "hint": "Show masking with a hatch or callout in a drawing view. Unmasked threads and fits are a common rework item after first finishing.",
           "tags": [],
           "severity": "major"
@@ -436,7 +436,7 @@
         },
         {
           "id": "mat-fin-5",
-          "text": "Powder coat or paint thickness is accounted for at fits, holes and threaded features",
+          "text": "Powder coat or paint thickness is accounted for at fits, holes, and threaded features",
           "hint": "Powder coat is thick and builds up at edges. Mask or oversize mating features and check stack-ups with the coating thickness per the coater's capability.",
           "tags": [
             "sheet-metal",
@@ -467,7 +467,7 @@
         {
           "id": "mat-fin-8",
           "text": "Grounding and bonding points have a conductive finish or a defined bare area",
-          "hint": "Anodize, powder coat and paint are insulators. Use conductive chromate conversion, mask the contact area, or use a star washer, and verify resistance on the prototype.",
+          "hint": "Anodize, powder coat, and paint are insulators. Use conductive chromate conversion, mask the contact area, or use a star washer, and verify resistance on the prototype.",
           "tags": [
             "electronics"
           ],
@@ -484,7 +484,7 @@
         },
         {
           "id": "mat-fin-10",
-          "text": "PVD or other decorative hard coatings are specified with color, thickness and substrate preparation",
+          "text": "PVD or other decorative hard coatings are specified with color, thickness, and substrate preparation",
           "hint": "PVD replicates the substrate finish exactly, so polishing or blasting must be specified first. Confirm the wear and adhesion test with the supplier.",
           "tags": [
             "cosmetic"
@@ -503,15 +503,15 @@
         },
         {
           "id": "mat-fin-12",
-          "text": "Pad printing, screen printing and laser marking are specified with the durability test they must pass",
-          "hint": "Define abrasion, chemical rub (e.g. alcohol or cleaners) and adhesion tests in the artwork specification. Laser marking needs a laser-markable grade or additive.",
+          "text": "Pad printing, screen printing, and laser marking are specified with the durability test they must pass",
+          "hint": "Define abrasion, chemical rub (e.g. alcohol or cleaners), and adhesion tests in the artwork specification. Laser marking needs a laser-markable grade or additive.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "mat-fin-13",
           "text": "Colors are specified against a named standard (Pantone, RAL, NCS) or a physical color master with tolerance",
-          "hint": "Specify the measurement method, light source and allowed delta E. On-screen color is not a specification.",
+          "hint": "Specify the measurement method, light source, and allowed delta E. On-screen color is not a specification.",
           "tags": [
             "cosmetic"
           ],
@@ -520,7 +520,7 @@
         {
           "id": "mat-fin-14",
           "text": "Approved color and finish samples (boundary samples) exist and are held by both Dovetail and the supplier",
-          "hint": "Keep signed master and limit samples for color, gloss and texture. Without them cosmetic disputes at production start have no reference.",
+          "hint": "Keep signed master and limit samples for color, gloss, and texture. Without them cosmetic disputes at production start have no reference.",
           "tags": [
             "cosmetic"
           ],
@@ -538,7 +538,7 @@
         {
           "id": "mat-fin-16",
           "text": "Finish process is compatible with the base material temperature limits and part geometry",
-          "hint": "Powder curing, PVD and some plating processes run hot or need racking points. Confirm with the finisher that the part will not distort or soften.",
+          "hint": "Powder curing, PVD, and some plating processes run hot or need racking points. Confirm with the finisher that the part will not distort or soften.",
           "tags": [],
           "severity": "major"
         }
@@ -554,7 +554,7 @@
         {
           "id": "mat-comp-1",
           "text": "Every material and finish is confirmed RoHS compliant with a supplier declaration on file",
-          "hint": "Collect declarations for each part number, including coatings, inks and adhesives. Hexavalent chromate conversion coatings and leaded brass are common misses.",
+          "hint": "Collect declarations for each part number, including coatings, inks, and adhesives. Hexavalent chromate conversion coatings and leaded brass are common misses.",
           "tags": [],
           "severity": "critical"
         },
@@ -568,7 +568,7 @@
         {
           "id": "mat-comp-3",
           "text": "California Proposition 65 exposure is assessed where the product is sold in California",
-          "hint": "Common triggers include certain plasticizers, flame retardants and lead in brass. Decide on warning labels or substitution early.",
+          "hint": "Common triggers include certain plasticizers, flame retardants, and lead in brass. Decide on warning labels or substitution early.",
           "tags": [],
           "severity": "major"
         },
@@ -629,14 +629,14 @@
         {
           "id": "mat-bio-2",
           "text": "Biocompatibility evidence per ISO 10993 exists or is planned for every contact material in its final processed form",
-          "hint": "Supplier data on the raw resin is not enough by itself: colorants, processing, coatings and sterilization change the result. Use supplier master files and a biological evaluation plan.",
+          "hint": "Supplier data on the raw resin is not enough by itself: colorants, processing, coatings, and sterilization change the result. Use supplier master files and a biological evaluation plan.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "mat-bio-3",
           "text": "Nickel release from metal parts in prolonged skin contact is assessed against the market requirement",
-          "hint": "Stainless, plated and nickel-containing alloys can cause allergic reactions. Check the alloy and plating, and test release if needed.",
+          "hint": "Stainless, plated, and nickel-containing alloys can cause allergic reactions. Check the alloy and plating, and test release if needed.",
           "tags": [
             "wearable"
           ],
@@ -645,7 +645,7 @@
         {
           "id": "mat-bio-4",
           "text": "Materials are compatible with the specified sterilization or disinfection method",
-          "hint": "Gamma, EtO, autoclave and hydrogen peroxide each affect polymers differently (yellowing, embrittlement, crazing). Check supplier data and test after repeated cycles.",
+          "hint": "Gamma, EtO, autoclave, and hydrogen peroxide each affect polymers differently (yellowing, embrittlement, crazing). Check supplier data and test after repeated cycles.",
           "tags": [
             "medical"
           ],
@@ -654,7 +654,7 @@
         {
           "id": "mat-bio-5",
           "text": "Material change control is agreed with suppliers for every contact material",
-          "hint": "Require advance notification of any formula, site or process change in the supply agreement. Unannounced changes can invalidate biocompatibility.",
+          "hint": "Require advance notification of any formula, site, or process change in the supply agreement. Unannounced changes can invalidate biocompatibility.",
           "tags": [],
           "severity": "major"
         }
@@ -670,7 +670,7 @@
         {
           "id": "mat-flu-1",
           "text": "Every wetted material is checked for compatibility with every medium, including cleaning and flushing fluids",
-          "hint": "Build a wetted-materials matrix (tubing, seals, adhesives, housings, fittings) against media and temperature. Check swelling, extraction and stress cracking.",
+          "hint": "Build a wetted-materials matrix (tubing, seals, adhesives, housings, fittings) against media and temperature. Check swelling, extraction, and stress cracking.",
           "tags": [],
           "severity": "critical"
         },
@@ -684,7 +684,7 @@
         {
           "id": "mat-flu-3",
           "text": "Leachables and extractables risk is assessed where fluid purity or taste matters",
-          "hint": "Plasticizers, lubricants and mold release agents can contaminate the fluid. Ask suppliers for extractables data or plan a test.",
+          "hint": "Plasticizers, lubricants, and mold release agents can contaminate the fluid. Ask suppliers for extractables data or plan a test.",
           "tags": [
             "medical"
           ],
@@ -693,7 +693,7 @@
         {
           "id": "mat-flu-4",
           "text": "Permeation of gases or vapors through tubing and housings is acceptable for the application",
-          "hint": "Silicone and some TPEs are highly permeable. Check permeation data if the fluid can dry out, degas or absorb oxygen.",
+          "hint": "Silicone and some TPEs are highly permeable. Check permeation data if the fluid can dry out, degas, or absorb oxygen.",
           "tags": [],
           "severity": "minor"
         },
@@ -763,7 +763,7 @@
         {
           "id": "mat-out-2",
           "text": "Accelerated weathering test (xenon arc or UV fluorescent) is planned for exposed materials and finishes",
-          "hint": "Define the method, duration and acceptance (color change, gloss retention, property retention). Coordinate with the validation plan.",
+          "hint": "Define the method, duration, and acceptance (color change, gloss retention, property retention). Coordinate with the validation plan.",
           "tags": [],
           "severity": "major"
         },

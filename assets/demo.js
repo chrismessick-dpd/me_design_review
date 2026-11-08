@@ -1,4 +1,4 @@
-/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+/* Shared Signoff engine (EE, ME, and FW). Edit it in ee_design_review only; me_design_review and
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
 /* Sample projects for demo mode (index.html?demo). Built from whatever templates are
    loaded, so the demo always matches the current checklists. Nothing here is real. */
@@ -8,7 +8,7 @@
   // Deterministic pseudo-random numbers, so every visitor sees the same demo.
   function rng(seed) { return function () { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; }; }
 
-  // The sample projects, findings and comments are in assets/config.js (demo). Findings and
+  // The sample projects, findings, and comments are in assets/config.js (demo). Findings and
   // comments are pinned to specific checks. A project's `findings` / `comments` lists (ids)
   // say which ones it gets; without a list it gets every one whose check it has. Any whose
   // check isn't in a project's checklists, or is outside its profile, is skipped.
@@ -121,7 +121,7 @@
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 10
+    VERSION: 11
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

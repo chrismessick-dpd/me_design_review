@@ -1,4 +1,4 @@
-/* Shared Signoff engine (EE, ME and FW). Edit it in ee_design_review only; me_design_review and
+/* Shared Signoff engine (EE, ME, and FW). Edit it in ee_design_review only; me_design_review and
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
 /* GitHub storage for Signoff.
 
@@ -7,7 +7,7 @@
    commit. Review data is committed straight to the branch (no pull requests): every record
    merges key by key (see model.mergeProjects), so two reviewers syncing the same project
    don't overwrite each other. The ref update uses force:false, so if someone else pushed
-   in between, GitHub refuses it (422) and we pull, merge and try again.
+   in between, GitHub refuses it (422) and we pull, merge, and try again.
 
    assets/workspace.js decides which repositories to sync; this file talks to one.
    The fetch function is injected so tests/test.html can run this against a fake GitHub. */

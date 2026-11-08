@@ -3,7 +3,7 @@
   "title": "Prototype, Test & Validation",
   "short": "Validation",
   "version": 1,
-  "description": "Review of prototype planning, first article inspection, fit and assembly trials, design verification planning, mechanical, environmental, ingress, thermal and battery testing, regulatory pre-compliance, pilot builds and test reporting.",
+  "description": "Review of prototype planning, first article inspection, fit and assembly trials, design verification planning, mechanical, environmental, ingress, thermal, and battery testing, regulatory pre-compliance, pilot builds, and test reporting.",
   "sections": [
     {
       "id": "val-plan",
@@ -26,8 +26,8 @@
         },
         {
           "id": "val-plan-3",
-          "text": "EVT, DVT and PVT entry and exit criteria are defined",
-          "hint": "E.g. DVT requires production-intent design and tooled parts; PVT requires production tooling, process and line. Record which criteria were waived.",
+          "text": "EVT, DVT, and PVT entry and exit criteria are defined",
+          "hint": "E.g. DVT requires production-intent design and tooled parts; PVT requires production tooling, process, and line. Record which criteria were waived.",
           "tags": [],
           "severity": "major"
         },
@@ -41,7 +41,7 @@
         {
           "id": "val-plan-5",
           "text": "Additive prototypes use process and orientation appropriate to the question being answered",
-          "hint": "Build orientation drives strength in FDM, SLS and MJF parts; record orientation and material on the build sheet.",
+          "hint": "Build orientation drives strength in FDM, SLS, and MJF parts; record orientation and material on the build sheet.",
           "tags": [
             "additive"
           ],
@@ -56,7 +56,7 @@
         },
         {
           "id": "val-plan-7",
-          "text": "Prototype builds are tracked with part revision, material and supplier per unit",
+          "text": "Prototype builds are tracked with part revision, material, and supplier per unit",
           "hint": "Serialize units and keep a build record so test results can be tied to the exact design revision.",
           "tags": [],
           "severity": "minor"
@@ -99,21 +99,21 @@
         {
           "id": "val-fai-4",
           "text": "Material certifications are received and match the drawing callout",
-          "hint": "Check grade, temper, resin grade and color code on the cert. Substituted materials are a common source of failure.",
+          "hint": "Check grade, temper, resin grade, and color code on the cert. Substituted materials are a common source of failure.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "val-fai-5",
-          "text": "Finish, plating and coating verification is recorded (thickness, adhesion, color)",
-          "hint": "Coating thickness gauge, tape adhesion test and color comparison against the approved standard.",
+          "text": "Finish, plating, and coating verification is recorded (thickness, adhesion, color)",
+          "hint": "Coating thickness gauge, tape adhesion test, and color comparison against the approved standard.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "val-fai-6",
           "text": "Out-of-spec features are dispositioned with a documented decision",
-          "hint": "Use-as-is, rework or reject, with engineering rationale. Undocumented deviations become the de facto specification.",
+          "hint": "Use-as-is, rework, or reject, with engineering rationale. Undocumented deviations become the de facto specification.",
           "tags": [],
           "severity": "major"
         },
@@ -144,7 +144,7 @@
       "items": [
         {
           "id": "val-fit-1",
-          "text": "Every part assembles to its mating parts without forcing, trimming or rework",
+          "text": "Every part assembles to its mating parts without forcing, trimming, or rework",
           "hint": "Record any part that needed modification during the build; each is a design or tolerance issue to close.",
           "tags": [],
           "severity": "critical"
@@ -158,14 +158,14 @@
         },
         {
           "id": "val-fit-3",
-          "text": "Fasteners reach specified torque without stripping, cracking bosses or thread jumping",
+          "text": "Fasteners reach specified torque without stripping, cracking bosses, or thread jumping",
           "hint": "Torque-to-strip and drive torque checks on production-material bosses; check margin between drive and strip torque.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "val-fit-4",
-          "text": "Gaps, flushness and alignment between visible parts are measured against targets",
+          "text": "Gaps, flushness, and alignment between visible parts are measured against targets",
           "hint": "Use feeler gauges or a gap/flush gauge at defined points; record on a map of the product.",
           "tags": [
             "cosmetic"
@@ -174,7 +174,7 @@
         },
         {
           "id": "val-fit-5",
-          "text": "Cables and flex circuits route without pinching, stretching or interference",
+          "text": "Cables and flex circuits route without pinching, stretching, or interference",
           "hint": "Inspect each unit opened after assembly and after test; look for witness marks on cables.",
           "tags": [
             "electronics"
@@ -215,7 +215,7 @@
       "items": [
         {
           "id": "val-dvp-1",
-          "text": "Every requirement has at least one verification test, analysis or inspection in the plan",
+          "text": "Every requirement has at least one verification test, analysis, or inspection in the plan",
           "hint": "Cross-check the requirements matrix against the test plan; list any requirement verified by analysis only and why.",
           "tags": [],
           "severity": "critical"
@@ -236,7 +236,7 @@
         },
         {
           "id": "val-dvp-4",
-          "text": "Test units are production-intent in design, material and process, or the deviation is documented",
+          "text": "Test units are production-intent in design, material, and process, or the deviation is documented",
           "hint": "Record each difference and justify why it doesn't affect the result.",
           "tags": [],
           "severity": "major"
@@ -250,7 +250,7 @@
         },
         {
           "id": "val-dvp-6",
-          "text": "Test procedures specify fixtures, equipment, settings and measurement methods",
+          "text": "Test procedures specify fixtures, equipment, settings, and measurement methods",
           "hint": "Someone else should be able to repeat the test from the procedure alone.",
           "tags": [],
           "severity": "minor"
@@ -280,8 +280,8 @@
       "items": [
         {
           "id": "val-mech-1",
-          "text": "Drop testing is performed per the specified height, surface, orientations and count",
-          "hint": "Inspect for cracks, displaced parts and loss of function after each drop; a high-speed camera helps diagnose failures.",
+          "text": "Drop testing is performed per the specified height, surface, orientations, and count",
+          "hint": "Inspect for cracks, displaced parts, and loss of function after each drop; a high-speed camera helps diagnose failures.",
           "tags": [
             "handheld"
           ],
@@ -297,20 +297,20 @@
         {
           "id": "val-mech-3",
           "text": "Vibration testing is run to the specified profile, with resonance search where needed",
-          "hint": "Check for loosened fasteners, fretting, connector unseating and cracked brackets afterward.",
+          "hint": "Check for loosened fasteners, fretting, connector unseating, and cracked brackets afterward.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "val-mech-4",
           "text": "Mechanical shock testing is run to the specified pulse and axes",
-          "hint": "Inspect mounts, heavy components and latches after test.",
+          "hint": "Inspect mounts, heavy components, and latches after test.",
           "tags": [],
           "severity": "minor"
         },
         {
           "id": "val-mech-5",
-          "text": "Impact testing is performed on exposed surfaces, windows and displays",
+          "text": "Impact testing is performed on exposed surfaces, windows, and displays",
           "hint": "Apply the specified impact energy at the weakest location identified by analysis or inspection.",
           "tags": [],
           "severity": "minor"
@@ -318,7 +318,7 @@
         {
           "id": "val-mech-6",
           "text": "Mechanisms are life-tested to the duty-cycle count with margin",
-          "hint": "Run hinges, slides, latches and gears to rated cycles plus a margin; measure force, play and wear at intervals.",
+          "hint": "Run hinges, slides, latches, and gears to rated cycles plus a margin; measure force, play, and wear at intervals.",
           "tags": [
             "moving-parts"
           ],
@@ -327,7 +327,7 @@
         {
           "id": "val-mech-7",
           "text": "Button and switch actuation is cycle-tested with force and travel measured before and after",
-          "hint": "Use a cycle tester at the specified actuation force; check for feel change, sticking and cosmetic wear.",
+          "hint": "Use a cycle tester at the specified actuation force; check for feel change, sticking, and cosmetic wear.",
           "tags": [],
           "severity": "minor"
         },
@@ -400,7 +400,7 @@
         {
           "id": "val-envt-1",
           "text": "Thermal cycling is performed over the specified range and number of cycles",
-          "hint": "Check for cracking, warping, loosening, seal failure and adhesive bond failure after cycling.",
+          "hint": "Check for cracking, warping, loosening, seal failure, and adhesive bond failure after cycling.",
           "tags": [],
           "severity": "major"
         },
@@ -413,14 +413,14 @@
         },
         {
           "id": "val-envt-3",
-          "text": "Low-temperature tests confirm mechanisms, snaps and seals still function",
+          "text": "Low-temperature tests confirm mechanisms, snaps, and seals still function",
           "hint": "Many plastics and elastomers become brittle or stiff at low temperature; repeat functional tests cold.",
           "tags": [],
           "severity": "major"
         },
         {
           "id": "val-envt-4",
-          "text": "Humidity or damp heat exposure shows no corrosion, delamination or dimensional problems",
+          "text": "Humidity or damp heat exposure shows no corrosion, delamination, or dimensional problems",
           "hint": "Nylons absorb moisture and change dimension; check fits after exposure.",
           "tags": [],
           "severity": "minor"
@@ -437,7 +437,7 @@
         {
           "id": "val-envt-6",
           "text": "Salt fog or corrosion testing confirms coating and fastener performance",
-          "hint": "Inspect plated parts, fasteners and dissimilar-metal joints for corrosion after test.",
+          "hint": "Inspect plated parts, fasteners, and dissimilar-metal joints for corrosion after test.",
           "tags": [
             "outdoor"
           ],
@@ -454,7 +454,7 @@
         },
         {
           "id": "val-envt-8",
-          "text": "Chemical exposure testing covers sweat, sunscreen, oils or other substances in the requirements",
+          "text": "Chemical exposure testing covers sweat, sunscreen, oils, or other substances in the requirements",
           "hint": "Test with the substances listed in the requirements; stressed plastics can crack under exposure.",
           "tags": [],
           "severity": "minor"
@@ -478,7 +478,7 @@
         {
           "id": "val-ip-2",
           "text": "Ingress tests are repeated after environmental and mechanical stress",
-          "hint": "Seals often pass when new and fail after thermal cycling, drop or vibration.",
+          "hint": "Seals often pass when new and fail after thermal cycling, drop, or vibration.",
           "tags": [],
           "severity": "major"
         },
@@ -568,14 +568,14 @@
         {
           "id": "val-bat-1",
           "text": "Battery abuse and safety test plan is agreed with the cell supplier and test lab",
-          "hint": "Coordinate crush, impact, short circuit and overcharge testing responsibility; do not run abuse tests without suitable facilities.",
+          "hint": "Coordinate crush, impact, short circuit, and overcharge testing responsibility; do not run abuse tests without suitable facilities.",
           "tags": [],
           "severity": "critical"
         },
         {
           "id": "val-bat-2",
           "text": "Battery compartment is inspected for cell damage after drop and vibration testing",
-          "hint": "Check for cell dents, swelling, displaced cells or tab damage.",
+          "hint": "Check for cell dents, swelling, displaced cells, or tab damage.",
           "tags": [],
           "severity": "critical"
         },
@@ -610,7 +610,7 @@
         {
           "id": "val-reg-1",
           "text": "Pre-compliance testing is done for the mechanical requirements of the safety standard",
-          "hint": "Run enclosure strength, impact, stability and accessibility checks in-house before formal testing.",
+          "hint": "Run enclosure strength, impact, stability, and accessibility checks in-house before formal testing.",
           "tags": [
             "regulatory"
           ],
@@ -619,7 +619,7 @@
         {
           "id": "val-reg-2",
           "text": "Certification test lab is booked and sample requirements are confirmed",
-          "hint": "Labs specify sample quantity, configuration and documentation; book early.",
+          "hint": "Labs specify sample quantity, configuration, and documentation; book early.",
           "tags": [
             "regulatory"
           ],
@@ -637,7 +637,7 @@
         {
           "id": "val-reg-4",
           "text": "Biocompatibility evaluation per ISO 10993 is planned with an accredited lab",
-          "hint": "Use final materials, colorants and processing; test samples must be representative of production.",
+          "hint": "Use final materials, colorants, and processing; test samples must be representative of production.",
           "tags": [
             "medical",
             "wearable"
@@ -682,7 +682,7 @@
         {
           "id": "val-pvt-1",
           "text": "T1 tool samples are reviewed against drawings and a tool correction list is issued",
-          "hint": "Review dimensions, cosmetics, sink, flash and warp; record every change request with owner.",
+          "hint": "Review dimensions, cosmetics, sink, flash, and warp; record every change request with owner.",
           "tags": [
             "injection-molded"
           ],
@@ -763,7 +763,7 @@
       "items": [
         {
           "id": "val-rep-1",
-          "text": "Every test has a signed report with unit IDs, configuration, procedure revision and results",
+          "text": "Every test has a signed report with unit IDs, configuration, procedure revision, and results",
           "hint": "Reports without unit and revision traceability can't be reused.",
           "tags": [],
           "severity": "major"
@@ -771,7 +771,7 @@
         {
           "id": "val-rep-2",
           "text": "Every failure is logged with a root cause analysis",
-          "hint": "Use 5 Whys, fishbone or failure analysis; \"tested again and passed\" is not root cause.",
+          "hint": "Use 5 Whys, fishbone, or failure analysis; \"tested again and passed\" is not root cause.",
           "tags": [],
           "severity": "critical"
         },
