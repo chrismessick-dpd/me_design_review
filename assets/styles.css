@@ -20,8 +20,16 @@
   --pass-soft: rgba(52, 199, 89, 0.14);
   --issue: #d70015;
   --issue-soft: rgba(255, 59, 48, 0.12);
-  --warn: #c93400;
-  --warn-soft: rgba(255, 149, 0, 0.14);
+  --warn: #946f00;
+  --warn-soft: rgba(255, 214, 10, 0.22);
+  --on-warn: #fff;
+  /* Severities tell apart without hue (Chris is colorblind): errors are striped, warnings dotted.
+     The *-hatch tokens overlay a soft tint, the *-fill-hatch tokens a solid fill, e.g.
+     background: var(--warn-hatch), var(--warn-soft). */
+  --issue-hatch: repeating-linear-gradient(-45deg, rgba(215, 0, 21, 0.22) 0 1.5px, transparent 1.5px 6px);
+  --warn-hatch: radial-gradient(circle, rgba(148, 111, 0, 0.42) 0 0.8px, transparent 1.3px) 0 0 / 5px 5px;
+  --issue-fill-hatch: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.45) 0 1px, transparent 1px 4px);
+  --warn-fill-hatch: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0 0.7px, transparent 1.1px) 0 0 / 3px 3px;
   --na: #8e8e93;
   --na-soft: rgba(142, 142, 147, 0.14);
   --sev-critical: #d70015;
@@ -58,8 +66,13 @@
     --pass-soft: rgba(48, 209, 88, 0.16);
     --issue: #ff453a;
     --issue-soft: rgba(255, 69, 58, 0.16);
-    --warn: #ff9f0a;
-    --warn-soft: rgba(255, 159, 10, 0.16);
+    --warn: #ffd60a;
+    --warn-soft: rgba(255, 214, 10, 0.14);
+    --on-warn: #1c1c1e;
+    --issue-hatch: repeating-linear-gradient(-45deg, rgba(255, 69, 58, 0.26) 0 1.5px, transparent 1.5px 6px);
+    --warn-hatch: radial-gradient(circle, rgba(255, 214, 10, 0.4) 0 0.8px, transparent 1.3px) 0 0 / 5px 5px;
+    --issue-fill-hatch: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.45) 0 1px, transparent 1px 4px);
+    --warn-fill-hatch: radial-gradient(circle, rgba(0, 0, 0, 0.4) 0 0.7px, transparent 1.1px) 0 0 / 3px 3px;
     --na-soft: rgba(142, 142, 147, 0.2);
     --sev-minor: #636366;
     --shadow-sm: none;
@@ -86,8 +99,13 @@
   --pass-soft: rgba(48, 209, 88, 0.16);
   --issue: #ff453a;
   --issue-soft: rgba(255, 69, 58, 0.16);
-  --warn: #ff9f0a;
-  --warn-soft: rgba(255, 159, 10, 0.16);
+  --warn: #ffd60a;
+  --warn-soft: rgba(255, 214, 10, 0.14);
+  --on-warn: #1c1c1e;
+  --issue-hatch: repeating-linear-gradient(-45deg, rgba(255, 69, 58, 0.26) 0 1.5px, transparent 1.5px 6px);
+  --warn-hatch: radial-gradient(circle, rgba(255, 214, 10, 0.4) 0 0.8px, transparent 1.3px) 0 0 / 5px 5px;
+  --issue-fill-hatch: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.45) 0 1px, transparent 1px 4px);
+  --warn-fill-hatch: radial-gradient(circle, rgba(0, 0, 0, 0.4) 0 0.7px, transparent 1.1px) 0 0 / 3px 3px;
   --na-soft: rgba(142, 142, 147, 0.2);
   --sev-minor: #636366;
   --shadow-sm: none;
@@ -210,7 +228,7 @@ body.has-banner .app { flex: 1; min-height: 0; height: auto; }
 }
 .icon-btn:hover { background: var(--hair); color: var(--text); }
 .icon-btn svg { width: 17px; height: 17px; }
-.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--warn); color: #fff; font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; }
+.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--warn); color: var(--on-warn); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; }
 
 /* ── Toolbar ── */
 .toolbar {
@@ -296,7 +314,7 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .bar { height: 6px; border-radius: 3px; background: var(--bg-sunk); overflow: hidden; display: flex; }
 .bar i { display: block; height: 100%; transition: width 0.4s var(--ease); }
 .bar .b-pass { background: var(--pass); }
-.bar .b-issue { background: var(--issue); }
+.bar .b-issue { background: var(--issue-fill-hatch), var(--issue); }
 .bar .b-na { background: var(--na); opacity: 0.45; }
 
 /* Progress ring */
@@ -355,7 +373,7 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .res { padding: 1px 7px; border-radius: 5px; font-weight: 500; }
 .res.fixed { background: var(--pass-soft); color: var(--pass); }
 .res.waived { background: var(--na-soft); color: var(--text-2); }
-.res.open { background: var(--issue-soft); color: var(--issue); }
+.res.open { background: var(--issue-hatch), var(--issue-soft); color: var(--issue); }
 .item-right { display: flex; align-items: center; gap: 8px; padding-top: 1px; }
 .cmt-count { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .cmt-count svg { width: 13px; height: 13px; }
@@ -414,7 +432,7 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .seg.full button { flex: 1; justify-content: center; padding: 6px 8px; }
 .seg button.on.s-pass { color: var(--pass); }
 .seg button.on.s-issue { color: var(--issue); }
-.issue-box { border-radius: 12px; background: var(--issue-soft); padding: 12px; margin-bottom: 16px; }
+.issue-box { border-radius: 12px; background: var(--issue-hatch), var(--issue-soft); padding: 12px; margin-bottom: 16px; }
 .issue-box .field:last-child { margin-bottom: 0; }
 .issue-box .seg { background: rgba(255, 255, 255, 0.55); }
 :root[data-theme="dark"] .issue-box .seg { background: rgba(0, 0, 0, 0.35); }
