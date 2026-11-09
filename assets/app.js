@@ -1728,7 +1728,17 @@
   // are linked, standard, flagged (@req), or untraced; a section is edited as text in place.
   var SPEC = C.spec ? (typeof C.spec === 'object' ? C.spec : {}) : null;
   var SPEC_LABEL = (SPEC && SPEC.label) || 'Description';
-  var SPEC_ROWS = [['product', 'Product'], ['task', 'Tasks'], ['module', 'Modules'], ['driver', 'Drivers'], ['hardware', 'Hardware']];
+  // Kinds and link words are the tool's (config.spec.kinds, .links; model.specKinds): FW's layers and
+  // Uses by default, EE's subcircuit kinds with Connects and Supplies.
+  function kindLabel(k) { var i = M.specKindInfo(k); return k ? i.label || k.charAt(0).toUpperCase() + k.slice(1) : 'None'; }
+  function kindPlural(k) { var i = M.specKindInfo(k); return i.plural || kindLabel(k) + 's'; }
+  // The diagram's layers (layers layout), top to bottom; interfaces draw as lines, not a layer.
+  function specRows() { return M.specKinds().filter(function (k) { return k !== 'interface'; }).map(function (k) { return [k, kindPlural(k)]; }); }
+  var SPEC_FLOW = !!(SPEC && SPEC.layout === 'flow');
+  // How a link reads from the other end, and as a verb.
+  function linkFrom(word) { return { uses: 'Used by', connects: 'Connected from', supplies: 'Supplied by' }[String(word).toLowerCase()] || word + ' from'; }
+  function linkVerb(word) { return { uses: 'uses', connects: 'connects to', supplies: 'supplies' }[String(word).toLowerCase()] || String(word).toLowerCase(); }
+  function linkItemText(it) { return it.name + (it.label ? ' · ' + it.label : ''); }
   var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Untraced' };
   var specEditing = null, specDraft = '', specPhrase = '';
   function specOn(p) { return !!SPEC && !!p && M.specEnabled(p); }
@@ -1777,10 +1787,12 @@
       else if (b.type === 'gist') html += '<p class="spec-gist">' + esc(b.text) + '</p>';
       else if (b.type === 'code') html += '<pre class="spec-code">' + esc(b.text) + '</pre>';
       else if (b.type === 'uses') {
-        html += '<div class="spec-uses"><span>Uses</span>' + b.names.map(function (n) {
-          var id = a.ctx.titles[n.toLowerCase()];
-          return id ? '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(n) + '</button>' : '<span class="chip spec-chip-missing" title="No section has this title">' + esc(n) + '</span>';
+        html += '<div class="spec-uses"><span>' + esc(b.word || 'Uses') + '</span>' + b.items.map(function (it) {
+          var id = a.ctx.titles[it.name.toLowerCase()];
+          return id ? '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(linkItemText(it)) + '</button>' : '<span class="chip spec-chip-missing" title="No section has this title">' + esc(linkItemText(it)) + '</span>';
         }).join('') + '</div>';
+      } else if (b.type === 'parts') {
+        html += '<div class="spec-uses spec-parts"><span>Parts</span>' + b.items.map(function (n) { return '<span class="chip spec-part">' + esc(n) + '</span>'; }).join('') + '</div>';
       } else if (b.type === 'table' && b.rows.length) {
         html += '<div class="table-scroll spec-table-wrap"><table class="table spec-table"><thead><tr>' + b.rows[0].map(function (c) { return '<th>' + esc(M.specPlain(c)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
           b.rows.slice(1).map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(M.specPlain(c)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
@@ -1793,15 +1805,21 @@
   function specGapTitle(x) {
     return [x.counts.untraced ? plural(x.counts.untraced, 'untraced sentence') : '', x.counts.tag ? x.counts.tag + ' flagged for a requirement' : ''].filter(Boolean).join(', ');
   }
-  var KIND_LABEL = { product: 'Product', task: 'Task', module: 'Module', driver: 'Driver', hardware: 'Hardware', interface: 'Interface' };
   // The bar over the editor: the kinds left to right, as the diagram's layers run top to bottom. The
   // one lit is the kind of the heading the cursor is under; a click sets it. Add to Uses… adds a
   // section to that heading's Uses line.
   function specKindBarHtml() {
+    if (!M.specKinds().length) {
+      return '<div class="spec-kindbar" role="toolbar" aria-label="Links of the heading at the cursor"><span class="spec-kindbar-label">Headings under a heading make a section</span><span class="spacer"></span>' + M.specLinkWords().map(function (w) {
+        return '<button type="button" class="btn btn-sm" data-act="spec-uses-add" data-word="' + esc(w) + '" title="Add a block to the ' + esc(w) + ' line of the heading at the cursor">Add to ' + esc(w) + '…</button>';
+      }).join('') + '</div>';
+    }
     return '<div class="spec-kindbar" role="toolbar" aria-label="Kind of the heading at the cursor"><span class="spec-kindbar-label">Heading kind</span>' +
-      M.SPEC_KINDS.map(function (k) { return '<button type="button" data-act="spec-kind-set" data-kind="' + k + '" title="Make the heading at the cursor a ' + k + '">' + KIND_LABEL[k] + '<span class="count"></span></button>'; }).join('<span class="spec-kindbar-arrow" aria-hidden="true">›</span>') +
+      M.specKinds().map(function (k) { return '<button type="button" data-act="spec-kind-set" data-kind="' + k + '" title="Make the heading at the cursor a ' + k + '">' + kindLabel(k) + '<span class="count"></span></button>'; }).join('<span class="spec-kindbar-arrow" aria-hidden="true">›</span>') +
       '<button type="button" data-act="spec-kind-set" data-kind="" title="No kind: in the outline only, not the diagram">None</button>' +
-      '<span class="spacer"></span><button type="button" class="btn btn-sm" data-act="spec-uses-add" title="Add a section to the Uses line of the heading at the cursor">Add to Uses…</button></div>';
+      '<span class="spacer"></span>' + M.specLinkWords().map(function (w) {
+        return '<button type="button" class="btn btn-sm" data-act="spec-uses-add" data-word="' + esc(w) + '" title="Add a section to the ' + esc(w) + ' line of the heading at the cursor">Add to ' + esc(w) + '…</button>';
+      }).join('') + '</div>';
   }
   // The heading the cursor is under: { lines, at (its line), head (specHeading), cursorLine }.
   function specCursorHeading(ta) {
@@ -1822,7 +1840,7 @@
       b.disabled = !h.head;
       if (c) c.textContent = counts[k] ? ' ' + counts[k] : '';
     });
-    bar.querySelector('[data-act="spec-uses-add"]').disabled = !h.head;
+    bar.querySelectorAll('[data-act="spec-uses-add"]').forEach(function (b) { b.disabled = !h.head; });
   }
   // Rewrite the editor's text, keeping the cursor where it was relative to the text around it.
   function specEditorReplace(ta, lines, cursor) {
@@ -1841,7 +1859,8 @@
     var delta = h.lines[h.at].length - old.length;
     specEditorReplace(ta, h.lines, pos > before + old.length ? pos + delta : Math.min(pos, before + h.lines[h.at].length));
   }
-  function specUsesAdd(anchor) {
+  function specUsesAdd(anchor, word) {
+    word = M.specLinkWord(word) || M.specLinkWords()[0];
     var ta = $('#spec-editor'); if (!ta) return;
     var h = specCursorHeading(ta);
     if (!h.head) { toast('Put the cursor under a heading first'); return; }
@@ -1855,19 +1874,19 @@
       var t2 = $('#spec-editor'); if (!t2) return;
       var hh = specCursorHeading(t2), end = hh.lines.length;
       for (var i = hh.at + 1; i < hh.lines.length; i++) if (M.specHeading(hh.lines[i])) { end = i; break; }
-      var body = hh.lines.slice(hh.at + 1, end).join('\n'), names = M.specUsesNames(body);
-      if (names.some(function (n) { return n.toLowerCase() === title.toLowerCase(); })) { toast(title + ' is already in Uses'); return; }
-      var nb = M.specSetLine(body, 'uses', names.concat([title]).join(', ')).split('\n');
+      var body = hh.lines.slice(hh.at + 1, end).join('\n'), items = M.specUsesItems(body, word);
+      if (items.some(function (n) { return n.name.toLowerCase() === title.toLowerCase(); })) { toast(title + ' is already in ' + word); return; }
+      var nb = M.specSetLine(body, word, M.specLinkText(items.concat([{ name: title, label: '' }]))).split('\n');
       var tail = hh.lines.slice(end), lines = hh.lines.slice(0, hh.at + 1).concat(nb, end < hh.lines.length ? [''] : [], tail);
       specEditorReplace(t2, lines, lines.slice(0, hh.at + 1 + nb.length).join('\n').length);
-      toast('Added ' + title + ' to Uses');
+      toast('Added ' + title + ' to ' + word);
     });
   }
   function specEditorHtml(id, all) {
     var lines = specDraft.split('\n').length;
     return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() +
       '<textarea class="input" id="spec-editor" data-sec="' + esc(id || '') + '" rows="' + (all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) + '" spellcheck="true">' + esc(specDraft) + '</textarea>' +
-      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.SPEC_KINDS.join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · <code>Uses: Title, Title</code> · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section</div>' +
+      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section</div>' +
       '<div class="spec-editor-foot"><button class="btn" data-act="spec-guide" title="How to write headings, links, lists, and tables">Writing guide</button>' +
       (id ? '<button class="btn btn-danger" data-act="spec-delete" data-id="' + esc(id) + '">Delete section</button>' : '') +
       '<span class="spacer"></span><button class="btn" data-act="spec-cancel">Cancel</button><button class="btn btn-primary" data-act="spec-save">Save <span class="kbd">Ctrl+Enter</span></button></div></div>';
@@ -1881,7 +1900,7 @@
         return '<tr><td><code>' + esc(r[0]).replace(/\n/g, '<br>') + '</code></td><td>' + r[1] + '</td></tr>';
       }).join('') + '</tbody></table>';
     }
-    var kinds = M.SPEC_KINDS.map(function (k) { return '<code>' + k + '</code>'; }).join(', ');
+    var kinds = M.specKinds().map(function (k) { return '<code>' + k + '</code>'; }).join(', ');
     var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>The ' + esc(SPEC_LABEL.toLowerCase()) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
       '<div class="sheet-body spec-guide">' +
       '<h3>Headings make the outline</h3>' + rows([
@@ -1889,13 +1908,16 @@
         ['## Control loop', 'A section inside the one above. Up to four levels: <b>#</b>, <b>##</b>, <b>###</b>, and <b>####</b>.'],
         ['## Control loop * task', 'Adds a kind, which puts the section in the Diagram. Type a space, an asterisk (*), a space, and the kind: ' + kinds + '. Brackets work too: <code>## Control loop (task)</code>.'],
         ['> Reads the room once a second.', 'The section’s gist: one line shown at the Gists depth and in Signoff PL. Without one, the first sentence is used.'],
-        ['Uses: Sensor driver, Relay driver', 'What the section uses, by heading title. Draws the Diagram’s lines.']
-      ]) +
+      ].concat(M.specLinkWords().length > 1 ? M.specLinkWords().map(function (w) {
+        var low = w.toLowerCase();
+        return low === 'supplies' ? [w + ': MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. A power block’s Supplies show as power flags on the blocks it feeds.']
+          : [w + ': Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one ' + esc(linkVerb(w)) + ', with the signal or bus in brackets. Write it in the direction signals go; it draws the Diagram’s labeled lines.'];
+      }) : [['Uses: Sensor driver, Relay driver', 'What the section uses, by heading title. Draws the Diagram’s lines.']]).concat(SPEC && SPEC.parts ? [['Parts: U7, L1, C1–C3', 'The reference designators the section covers, with ranges. Shown as chips; not traced.']] : [])) +
       '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, or untraced. Untraced sentences get a dotted underline until you do one of these.</p>' + rows([
         ['[the relays go off]{REQ-003}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
         ['[off on reset]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
         ['[It runs on FreeRTOS.]{std}', 'Standard text: background or explanation that needs no requirement.'],
-        ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under To requirementify.'],
+        ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
         ['the [status frame]{#Status frame}', 'Points at another section by its heading. Pointing at an interface section counts as linked.']
       ]) +
       '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you.</p>' +
@@ -1965,7 +1987,9 @@
       var changes = t.sectionReqs.filter(function (id) { return t.reqs.indexOf(id) < 0; }).slice(0, 3).map(function (id) {
         return '<button class="btn btn-sm" data-act="spec-change"' + d + ' data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
       }).join('');
-      return '<div class="spec-need"><button class="spec-need-text" data-act="spec-unit"' + d + '><span>' + esc(t.text) + '</span><span class="muted">' + esc(secTitle(t.sec)) + '</span></button>' +
+      var tsec = a.ctx.secs[t.sec] || {};
+      var from = 'Tagged @req in the ' + SPEC_LABEL.toLowerCase() + ', in ' + secTitle(t.sec) + (tsec.updatedBy ? ', by ' + tsec.updatedBy : '') + (tsec.updatedAt ? ', ' + relTime(tsec.updatedAt) : '');
+      return '<div class="spec-need"><button class="spec-need-text" data-act="spec-jump"' + d + ' title="Show it in the text"><span>' + esc(t.text) + '</span><span class="muted">' + esc(from) + '</span></button>' +
         '<div class="spec-need-acts"><button class="btn btn-sm btn-primary" data-act="spec-make"' + d + '>New requirement</button>' + changes +
         '<button class="btn btn-sm" data-act="spec-untag"' + d + ' title="Remove the @req flag">Remove flag</button></div></div>';
     }).join('');
@@ -1973,7 +1997,7 @@
     tags += ctags.map(function (c) {
       var q = reqOf(p, c.item), d = itemDef(p, c.item), on = q ? q.ref + ' ' + (q.text || '') : c.item ? d.def.text : 'the whole ' + UNIT;
       return '<div class="spec-need"><button class="spec-need-text" data-act="spec-ctag-open" data-id="' + esc(c.id) + '"><span>' + esc(c.text) + '</span>' +
-        '<span class="muted">' + esc('Comment by ' + c.author + ', ' + relTime(c.at) + ', on ' + cutText(on, 90)) + '</span></button>' +
+        '<span class="muted">' + esc('Tagged @req in a comment from ' + (c.author || 'someone') + ' on ' + cutText(on, 90) + ', ' + relTime(c.at)) + '</span></button>' +
         '<div class="spec-need-acts">' + (q ? '<button class="btn btn-sm btn-primary" data-act="spec-ctag-change" data-id="' + esc(c.id) + '">Change ' + esc(q.ref) + '</button>' : '') +
         '<button class="btn btn-sm' + (q ? '' : ' btn-primary') + '" data-act="spec-ctag-make" data-id="' + esc(c.id) + '">New requirement</button>' +
         '<button class="btn btn-sm" data-act="spec-ctag-untag" data-id="' + esc(c.id) + '" title="Remove the @req flag from the comment">Remove flag</button></div></div>';
@@ -1995,19 +2019,20 @@
     return '<div class="spec-needs">' +
       (copies.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Edited in two places <span class="count">' + copies.length + '</span></div>' +
         '<p class="note" style="margin:0 0 6px">Two people changed the same section at once. The newer edit won; the other is kept as a copy. Move what you need from the copy into the section, then delete the copy.</p>' + conflicts + '</div>' : '') +
-      (nTags ? '<div class="card spec-needs-card"><div class="spec-needs-title">To requirementify <span class="count">' + nTags + '</span></div>' + tags + '</div>' : '') +
+      (nTags ? '<div class="card spec-needs-card"><div class="spec-needs-title">Write as requirements <span class="count">' + nTags + '</span></div>' + tags + '</div>' : '') +
       (a.undescribed.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Not described <span class="count">' + a.undescribed.length + '</span></div>' + missing + '</div>' : '') + '</div>';
   }
 
   // The layered diagram, drawn from the outline: one block per section with a kind, lines from
   // Uses (or to the nearest section above it in the outline), interfaces as labeled dashed lines.
   function specMapHtml(p, a) {
+    if (SPEC_FLOW) return specFlowHtml(p, a);
     var byId = {}, rows = [], MW = 1000, LBL = 124, GAP = 16, BH = 54, RH = 112, TOP = 24;
     a.sections.forEach(function (x) { byId[x.sec.id] = x; });
     var ifaces = a.sections.filter(function (x) { return x.sec.kind === 'interface'; });
     var looseIf = ifaces.filter(function (x) { return x.uses.filter(function (id) { return byId[id] && byId[id].sec.kind && byId[id].sec.kind !== 'interface'; }).length < 2; });
     // Every layer is drawn, empty ones too, so a design can be built here from nothing.
-    SPEC_ROWS.concat([['interface', 'Interfaces']]).forEach(function (r) {
+    specRows().concat(M.specKinds().indexOf('interface') >= 0 ? [['interface', 'Interfaces']] : []).forEach(function (r) {
       var xs = r[0] === 'interface' ? looseIf : a.sections.filter(function (x) { return x.sec.kind === r[0]; });
       rows.push({ kind: r[0], label: r[1], xs: xs });
     });
@@ -2052,7 +2077,7 @@
     rows.forEach(function (r, ri) {
       var y = TOP + ri * RH;
       svg += '<text class="spec-row-label" x="8" y="' + (y + BH / 2 + 4) + '">' + esc(r.label) + '</text>' +
-        '<g class="spec-row-add" data-act="spec-add-block" data-kind="' + r.kind + '"><title>Add a ' + esc(KIND_LABEL[r.kind].toLowerCase()) + '</title>' +
+        '<g class="spec-row-add" data-act="spec-add-block" data-kind="' + r.kind + '"><title>Add a ' + esc(kindLabel(r.kind).toLowerCase()) + '</title>' +
         '<circle cx="' + (LBL - 10) + '" cy="' + (y + BH / 2) + '" r="10"/><path d="M' + (LBL - 14) + ' ' + (y + BH / 2) + 'h8M' + (LBL - 10) + ' ' + (y + BH / 2 - 4) + 'v8"/></g>' +
         (r.xs.length ? '' : '<text class="spec-row-empty" x="' + (LBL + 14) + '" y="' + (y + BH / 2 + 4) + '">No ' + esc(r.label.toLowerCase()) + ' yet</text>');
       if (ri) svg += '<line class="spec-row-line" x1="8" x2="' + MW + '" y1="' + (y - (RH - BH) / 2) + '" y2="' + (y - (RH - BH) / 2) + '"/>';
@@ -2061,7 +2086,7 @@
       if (!e.a || !e.b || !pos[e.a] || !pos[e.b]) return;
       var pth = path(e);
       svg += '<path class="spec-edge ' + e.cls + '" d="' + pth.d + '"/>';
-      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + pth.d + '"><title>' + esc(byId[e.a].sec.title + ' uses ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
+      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(M.specLinkWords()[0]) + '" d="' + pth.d + '"><title>' + esc(byId[e.a].sec.title + ' ' + linkVerb(M.specLinkWords()[0]) + ' ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
       if (e.label) {
         var lw = Math.min(180, 12 + e.label.length * 6.4);
         svg += '<g class="spec-edge-label" data-act="spec-block" data-id="' + esc(e.link) + '"><title>' + esc(e.label) + '</title><rect x="' + (pth.mx - lw / 2) + '" y="' + (pth.my - 10) + '" width="' + lw + '" height="20" rx="10"/>' +
@@ -2082,6 +2107,354 @@
     svg += '</svg>';
     return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line to remove it. Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines are interfaces. Dotted blocks have untraced or flagged sentences.</p>';
   }
+  // The flow diagram (config.spec.layout 'flow', EE): a block diagram of the board. The outline is the
+  // hierarchy (model.specNest): a heading with headings under it is a section, drawn as a box around
+  // its blocks, and sections nest; the board's own level-1 heading isn't drawn. Laid out
+  // automatically (sections as rows of their blocks, left to right in signal order) until someone
+  // drags something; then every block's position is kept (pos) and boxes fit their blocks. Connects
+  // lines carry their signals; Supplies show as a power flag on each block fed, or an arrow between
+  // neighbors in one section.
+  var SPEC_BW = 156, SPEC_BH = 54, SPEC_PAD = 14, SPEC_HEAD = 24, SPEC_GAP = 44, SPEC_ROWGAP = 60;
+  function specFlowTree(a) {
+    var kids = {}, hidden = {}, byId = {};
+    a.sections.forEach(function (x) { byId[x.sec.id] = x; var pid = x.parent || ''; (kids[pid] = kids[pid] || []).push(x); });
+    a.sections.forEach(function (x) { if (x.sec.level === 1 && (kids[x.sec.id] || []).length) hidden[x.sec.id] = 1; });
+    function dparent(x) { var pid = x.parent || ''; return pid && !hidden[pid] ? pid : ''; }
+    var items = a.sections.filter(function (x) { return !hidden[x.sec.id]; }), ch = {};
+    items.forEach(function (x) { var d = dparent(x); (ch[d] = ch[d] || []).push(x); });
+    function isSec(x) { return (ch[x.sec.id] || []).length > 0; }
+    function anc(x) { var out = []; for (var d = dparent(x); d; d = dparent(byId[d])) out.push(d); return out; }
+    return { byId: byId, items: items, ch: ch, dparent: dparent, isSec: isSec, anc: anc };
+  }
+  function bez(p0, p1, p2, p3, t) { var u = 1 - t; return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3; }
+  // A line from one block to another, out of the side facing it, with a point for its label.
+  function specRoute(A, B) {
+    var x1, y1, x2, y2, c1x, c1y, c2x, c2y;
+    if (B.x >= A.x + A.w + 12) { x1 = A.x + A.w; y1 = A.y + A.h / 2; x2 = B.x - 4; y2 = B.y + B.h / 2; c1x = c2x = (x1 + x2) / 2; c1y = y1; c2y = y2; }
+    else if (A.x >= B.x + B.w + 12) { x1 = A.x; y1 = A.y + A.h / 2; x2 = B.x + B.w + 4; y2 = B.y + B.h / 2; c1x = c2x = (x1 + x2) / 2; c1y = y1; c2y = y2; }
+    else if (B.y > A.y + A.h) { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y - 4; c1y = c2y = (y1 + y2) / 2; c1x = x1; c2x = x2; }
+    else if (B.y + B.h < A.y) { x1 = A.x + A.w / 2; y1 = A.y; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = (y1 + y2) / 2; c1x = x1; c2x = x2; }
+    else { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = Math.max(y1, y2) + 28; c1x = x1; c2x = x2; }
+    return { d: 'M' + x1 + ' ' + y1 + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + x2 + ' ' + y2,
+      mx: bez(x1, c1x, c2x, x2, 0.7), my: bez(y1, c1y, c2y, y2, 0.7) };
+  }
+  function specFlowHtml(p, a) {
+    var T = specFlowTree(a), sel = specBlockSel(), show = ui.specBoxes !== false, head = show ? SPEC_HEAD : 0, pad = show ? SPEC_PAD : 0;
+    var supWord = (M.specLinkWord('supplies') || '').toLowerCase();
+    var blocks = T.items.filter(function (x) { return !T.isSec(x); }), isBlock = {};
+    blocks.forEach(function (x) { isBlock[x.sec.id] = 1; });
+    var frozen = blocks.some(function (x) { return x.sec.pos; });
+    var bar = '<div class="spec-flow-add"><button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
+      (frozen ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
+      '<span class="spec-flow-hint">Drag on empty space to draw a section around blocks</span>' +
+      '<label class="spec-boxes" title="Show section boxes"><input type="checkbox" data-act="spec-boxes"' + (show ? ' checked' : '') + '> Sections</label></div>';
+    if (!blocks.length) {
+      return bar + '<div class="card empty"><h2>Nothing to draw yet</h2><p>Every heading is a block, and a heading with headings under it is a section around them. Add a block above, or write headings in the Document view.</p></div>';
+    }
+    var conn = [], sup = [];
+    blocks.forEach(function (x) {
+      x.edges.forEach(function (e) { if (!isBlock[e.id]) return; (supWord && e.word.toLowerCase() === supWord ? sup : conn).push({ a: x.sec.id, b: e.id, label: e.label, word: e.word }); });
+    });
+    function under(x) { return T.isSec(x) ? T.ch[x.sec.id].reduce(function (acc, c) { return acc.concat(under(c)); }, []) : [x.sec.id]; }
+    // Siblings in signal order: one goes right of another when a link runs from it into it.
+    function orderRow(list) {
+      var u = list.map(under), rank = list.map(function () { return 0; }), edges = conn.concat(sup);
+      function link(i, j) { return edges.some(function (e) { return u[i].indexOf(e.a) >= 0 && u[j].indexOf(e.b) >= 0; }); }
+      for (var it = 0; it < list.length; it++) {
+        var mv = false;
+        for (var i = 0; i < list.length; i++) for (var j = 0; j < list.length; j++) if (i !== j && link(i, j) && rank[j] < rank[i] + 1 && rank[i] + 1 < list.length) { rank[j] = rank[i] + 1; mv = true; }
+        if (!mv) break;
+      }
+      return list.map(function (x, i) { return { x: x, r: rank[i], i: i }; }).sort(function (A, B) { return A.r - B.r || A.i - B.i; }).map(function (o) { return o.x; });
+    }
+    var size = {}, ord = {}, auto = {};
+    function measure(x) {
+      if (!T.isSec(x)) return (size[x.sec.id] = { w: SPEC_BW, h: SPEC_BH });
+      var c = ord[x.sec.id] = orderRow(T.ch[x.sec.id]), w = 0, h = 0;
+      c.forEach(function (k, i) { var sz = measure(k); w += sz.w + (i ? SPEC_GAP : 0); h = Math.max(h, sz.h); });
+      return (size[x.sec.id] = { w: w + 2 * pad, h: h + 2 * pad + head });
+    }
+    function place(x, X, Y) {
+      if (!T.isSec(x)) { auto[x.sec.id] = { x: X, y: Y }; return; }
+      var cx = X + pad;
+      ord[x.sec.id].forEach(function (k) { place(k, cx, Y + pad + head); cx += size[k.sec.id].w + SPEC_GAP; });
+    }
+    // The top level: each section is a row; blocks outside sections share rows between them.
+    var rows = [], cur = null, Y = 40;
+    (T.ch[''] || []).forEach(function (x) { if (T.isSec(x)) { rows.push([x]); cur = null; } else { if (!cur) { cur = []; rows.push(cur); } cur.push(x); } });
+    rows.forEach(function (r) {
+      var X = 20, h = 0;
+      orderRow(r).forEach(function (x) { var sz = measure(x); place(x, X, Y); X += sz.w + SPEC_GAP; h = Math.max(h, sz.h); });
+      Y += h + SPEC_ROWGAP;
+    });
+    var R = {};
+    blocks.forEach(function (x) { var q = x.sec.pos || auto[x.sec.id] || { x: 20, y: Y }; R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: SPEC_BH }; });
+    function boxOf(x) {
+      if (!T.isSec(x)) return R[x.sec.id];
+      var bs = T.ch[x.sec.id].map(boxOf).filter(Boolean);
+      if (!bs.length) return null;
+      var x0 = Math.min.apply(null, bs.map(function (b) { return b.x; })), y0 = Math.min.apply(null, bs.map(function (b) { return b.y; }));
+      var x1 = Math.max.apply(null, bs.map(function (b) { return b.x + b.w; })), y1 = Math.max.apply(null, bs.map(function (b) { return b.y + b.h; }));
+      var bp = Math.max(pad, 12), bh = Math.max(head, 20);
+      return (R[x.sec.id] = { x: x0 - bp, y: y0 - bp - bh, w: x1 - x0 + 2 * bp, h: y1 - y0 + 2 * bp + bh });
+    }
+    (T.ch[''] || []).forEach(boxOf);
+    var rects = Object.keys(R).map(function (k) { return R[k]; });
+    var minX = Math.min.apply(null, rects.map(function (r) { return r.x; })) - 24, minY = Math.min.apply(null, rects.map(function (r) { return r.y; })) - 30;
+    var maxX = Math.max.apply(null, rects.map(function (r) { return r.x + r.w; })) + 24, maxY = Math.max.apply(null, rects.map(function (r) { return r.y + r.h; })) + 40;
+    var VW = Math.max(980, maxX - minX), VH = maxY - minY;
+    if (maxX - minX < VW) minX -= (VW - (maxX - minX)) / 2;
+    var svg = '<svg class="spec-map spec-flow" viewBox="' + minX + ' ' + minY + ' ' + VW + ' ' + VH + '" role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
+      '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern>' +
+      '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker></defs>' +
+      '<rect class="spec-flow-bg" x="' + minX + '" y="' + minY + '" width="' + VW + '" height="' + VH + '"/>';
+    // Section boxes, outer ones first.
+    if (show) {
+      T.items.filter(function (x) { return T.isSec(x) && R[x.sec.id]; }).sort(function (x, y) { return T.anc(x).length - T.anc(y).length; }).forEach(function (x) {
+        var b = R[x.sec.id];
+        svg += '<g class="spec-group-g' + (sel === x.sec.id ? ' sel' : '') + (x.gaps ? ' gap' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-box="' + [b.x, b.y, b.w, b.h].join(' ') + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
+          '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.links.length ? '\n' + plural(x.links.length, 'requirement') + ' tied to the section itself' : '') + '\nDrag to move it with its blocks; click for its panel') + '</title>' +
+          '<rect class="spec-group" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="12"/>' +
+          '<text class="spec-group-label" x="' + (b.x + 12) + '" y="' + (b.y + 16) + '">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 24) / 7) - (x.links.length || x.gaps ? 8 : 0))) + '</text>' +
+          (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') + '</g>';
+      });
+    }
+    function pill(x, y, text) {
+      var w = Math.min(150, 14 + text.length * 6.6);
+      return '<g class="spec-edge-label"><rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g>';
+    }
+    function hit(e, d) {
+      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(T.byId[e.a].sec.title + ' ' + linkVerb(e.word) + ' ' + T.byId[e.b].sec.title + (e.label ? ' (' + e.label + ')' : '') + ', click to remove') + '</title></path>';
+    }
+    // Supplies between neighbors in one section draw as arrows; every other supply is a power flag.
+    var flagged = [];
+    sup.forEach(function (e) {
+      var A = R[e.a], B = R[e.b];
+      if (T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) {
+        var rt = specRoute(A, B);
+        svg += '<path class="spec-edge supply" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+        if (e.label) svg += pill((A.x + A.w + B.x) / 2, Math.min(A.y, B.y) + SPEC_BH / 2 - 14, e.label);
+      } else flagged.push(e);
+    });
+    conn.forEach(function (e) {
+      var rt = specRoute(R[e.a], R[e.b]);
+      svg += '<path class="spec-edge uses" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+      if (e.label) svg += pill(rt.mx, rt.my, e.label);
+    });
+    blocks.forEach(function (x) {
+      var b = R[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
+      var sub = x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.parts.length ? x.parts.slice(0, 4).join(' · ') + (x.parts.length > 4 ? ' …' : '') : '';
+      svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (sel === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
+        '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '') + '\nDrag to move it; drop it in a section to put it there') + '</title>' +
+        '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
+        (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' : '') +
+        '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + (sub ? 23 : 31)) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', chars)) + '</text>' +
+        (sub ? '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 40) + '" text-anchor="middle">' + esc(cutText(sub, chars + 4)) + '</text>' : '') +
+        '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w) + '" cy="' + (b.y + b.h / 2) + '" r="7"><title>Drag to a block this one connects to</title></circle></g>';
+      var right = b.x + b.w - 6;
+      flagged.filter(function (e) { return e.b === x.sec.id; }).forEach(function (e) {
+        var name = e.label || T.byId[e.a].sec.title, fw = Math.min(110, 22 + name.length * 6.2), fx = right - fw, fy = b.y - 15;
+        right = fx - 6;
+        svg += '<g class="spec-flag" data-act="spec-block" data-id="' + esc(e.a) + '" data-for="' + esc(x.sec.id) + '"><title>' + esc('Supplied by ' + T.byId[e.a].sec.title + (e.label ? ' (' + e.label + ')' : '')) + '</title>' +
+          '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 7) + '"/><path class="spec-flag-head" d="M' + (fx + 3) + ' ' + (fy + 7) + ' L' + (fx + 13) + ' ' + (fy + 7) + ' L' + (fx + 8) + ' ' + (fy + 1) + 'z"/>' +
+          '<text x="' + (fx + 17) + '" y="' + (fy + 9) + '">' + esc(cutText(name, Math.floor((fw - 20) / 6.2))) + '</text></g>';
+      });
+    });
+    svg += '</svg>';
+    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line to remove it.</p>' +
+      specTreeHtml(p, a, T);
+  }
+
+  // ── The hierarchy under the block diagram, after Signoff PL's Map ──
+  // The board is the trunk, sections branch off it (nested sections branch again), and each
+  // section's blocks are tiles on its branch. Drag a tile or a section onto a branch to move it into
+  // that section, or onto a tile to put it just before; + on a branch adds a block inside. It is the
+  // outline: every move is a heading moved in the text (model.specNest).
+  var ICON_SECTION = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M2.5 7.5h15"/></svg>';
+  function specTreeHtml(p, a, T) {
+    var root = a.sections.filter(function (x) { return x.sec.level === 1 && (a.sections.some(function (y) { return y.parent === x.sec.id; })); })[0];
+    var sel = specBlockSel();
+    function counts(x) {
+      return [x.links.length ? plural(x.links.length, 'requirement') : '', x.gaps ? '△ ' + plural(x.gaps, 'gap') : ''].filter(Boolean).join(' · ');
+    }
+    function tile(x) {
+      return '<button class="st-tile' + (sel === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" draggable="true" data-sdrag="' + esc(x.sec.id) + '" data-sbefore="' + esc(x.sec.id) + '">' +
+        '<span class="st-name">' + esc(x.sec.title || 'Untitled') + '</span><span class="st-sub">' + esc(counts(x) || (x.parts.length ? x.parts.slice(0, 3).join(' · ') : 'Block')) + '</span></button>';
+    }
+    function kids(list) {
+      var items = [], run = [];
+      function flush() { if (run.length) items.push('<div class="st-item st-leaves">' + run.map(tile).join('') + '</div>'); run = []; }
+      list.forEach(function (x) { if (!T.isSec(x)) { run.push(x); return; } flush(); items.push('<div class="st-item">' + branch(x) + '</div>'); });
+      flush();
+      return '<div class="st-kids">' + items.join('') + '</div>';
+    }
+    function branch(x) {
+      var list = T.ch[x.sec.id] || [], closed = (ui.specClosed || {})[x.sec.id], n = list.filter(function (y) { return !T.isSec(y); }).length;
+      return '<div class="st-sec" data-sdrop="' + esc(x.sec.id) + '"><div class="st-head">' +
+        '<button class="st-node' + (sel === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" draggable="true" data-sdrag="' + esc(x.sec.id) + '">' +
+        '<span class="st-glyph">' + ICON_SECTION + '</span><span class="st-name">' + esc(x.sec.title || 'Untitled') + '</span>' +
+        '<span class="st-sub">' + esc([plural(n, 'block'), counts(x)].filter(Boolean).join(' · ')) + '</span></button>' +
+        '<button class="icon-btn st-fold' + (closed ? ' closed' : '') + '" data-act="spec-tree-fold" data-id="' + esc(x.sec.id) + '" title="' + (closed ? 'Expand' : 'Collapse') + '" aria-expanded="' + !closed + '">' + ICON.chev + '</button>' +
+        '<button class="icon-btn" data-act="spec-add-block" data-kind="" data-section="' + esc(x.sec.id) + '" title="Add a block inside" aria-label="Add a block inside ' + esc(x.sec.title) + '">+</button></div>' +
+        (closed ? '' : kids(list)) + '</div>';
+    }
+    var top = T.ch[''] || [];
+    return '<div class="card spec-tree" aria-label="Hierarchy"><div class="st-title"><b>Hierarchy</b><span>Drag a block or section onto a section to move it in, onto a block to put it just before, or onto the board to take it out of its section. The text follows.</span>' +
+      '<span class="spacer"></span><button class="btn btn-sm" data-act="spec-new-section">+ Section</button><button class="btn btn-sm btn-primary" data-act="spec-add-block" data-kind="">+ Block</button></div>' +
+      '<div class="st"><div class="st-trunk" data-sdrop=""><div class="st-head st-top-head"><span class="st-top"><span class="st-eyebrow">Board</span><span class="st-top-name">' + esc(root ? root.sec.title : p.meta.name) + '</span>' +
+      (root && root.links.length ? '<span class="st-sub">' + esc(plural(root.links.length, 'requirement') + ' on the board itself') + '</span>' : '') + '</span></div>' +
+      (top.length ? kids(top) : '<div class="st-kids"><div class="st-item st-leaves"><div class="map-empty">Nothing yet: add a block.</div></div></div>') + '</div></div></div>';
+  }
+  // A new section from the hierarchy: a name and the blocks to put in it.
+  function specNewSectionSheet() {
+    var p = current(); if (!p) return;
+    var T = specFlowTree(M.specAnalysis(p)), blocks = T.items.filter(function (x) { return !T.isSec(x); });
+    var w = sheet('<div class="sheet-head"><h2>New section</h2><p>A section groups blocks, and is a heading in the text with them under it. Give it text of its own for what belongs to the whole section, like a power budget, and link that to its requirement.</p></div>' +
+      '<div class="sheet-body"><div class="field"><label for="spec-sec-title">Name</label><input class="input" id="spec-sec-title" placeholder="Power"></div>' +
+      '<div class="field"><span class="field-label">Blocks to put in it</span><div class="pick-grid" id="spec-sec-picks">' + blocks.map(function (x) {
+        var par = T.dparent(x);
+        return '<button type="button" class="pick" data-pick="' + esc(x.sec.id) + '"><b>' + esc(x.sec.title) + '</b><span>' + esc(par ? 'In ' + T.byId[par].sec.title : 'Not in a section') + '</span></button>';
+      }).join('') + '</div></div></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Make section</button></div>', { wide: true });
+    w.addEventListener('click', function (e) {
+      var pk = e.target.closest('.pick'); if (pk) { pk.classList.toggle('on'); return; }
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      var title = w.querySelector('#spec-sec-title').value.trim();
+      var ids = Array.prototype.map.call(w.querySelectorAll('#spec-sec-picks .pick.on'), function (x) { return x.dataset.pick; });
+      if (!title) { toast('Give it a name'); return; }
+      if (!ids.length) { toast('Pick at least one block to put in it'); return; }
+      if (M.liveSpec(p).some(function (s2) { return s2.title.toLowerCase() === title.toLowerCase(); })) { toast('Another section is already called ' + title); return; }
+      closeSheet();
+      specPutAll(p, M.specGroup(p, ids, title, me()));
+      toast('Made the section ' + title);
+    });
+  }
+  // Dragging in the hierarchy (HTML drag and drop, as Signoff PL's Map).
+  var stDrag = '';
+  document.addEventListener('dragstart', function (e) {
+    var d = e.target.closest && e.target.closest('[data-sdrag]'); if (!d) return;
+    stDrag = d.dataset.sdrag; e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', stDrag); } catch (err) { /* some browsers refuse */ }
+    document.body.classList.add('st-dragging');
+  });
+  function stDone() { stDrag = ''; document.body.classList.remove('st-dragging'); document.querySelectorAll('.st-drop-on, .st-before').forEach(function (x) { x.classList.remove('st-drop-on'); x.classList.remove('st-before'); }); }
+  document.addEventListener('dragend', stDone);
+  function stTarget(e) {
+    if (!stDrag) return null;
+    var before = e.target.closest && e.target.closest('[data-sbefore]');
+    if (before && before.dataset.sbefore !== stDrag) return { el: before, before: before.dataset.sbefore };
+    var z = e.target.closest && e.target.closest('[data-sdrop]');
+    return z ? { el: z, parent: z.dataset.sdrop } : null;
+  }
+  document.addEventListener('dragover', function (e) {
+    var t = stTarget(e);
+    document.querySelectorAll('.st-drop-on, .st-before').forEach(function (x) { if (!t || x !== t.el) { x.classList.remove('st-drop-on'); x.classList.remove('st-before'); } });
+    if (!t) return;
+    e.preventDefault(); t.el.classList.add(t.before ? 'st-before' : 'st-drop-on');
+  });
+  document.addEventListener('drop', function (e) {
+    var t = stTarget(e), id = stDrag, p = current();
+    if (!t || !p || !id) return;
+    e.preventDefault(); stDone();
+    var T = specFlowTree(M.specAnalysis(p)), parent, before = '';
+    if (t.before) { var bx = T.byId[t.before]; if (!bx) return; parent = T.dparent(bx); before = t.before; }
+    else parent = t.parent;
+    var x = T.byId[id]; if (!x) return;
+    if (parent === id || (parent && T.anc(T.byId[parent]).indexOf(id) >= 0)) { toast('A section can’t go inside itself'); return; }
+    if (!before && T.dparent(x) === parent) return;
+    var recs = M.specNest(p, [id], parent || null, me(), before || undefined);
+    if (recs.length) { specPutAll(p, recs); toast(x.sec.title + (parent ? ' is in ' + T.byId[parent].sec.title : ' is under the board') + '. The text follows.'); }
+  });
+
+  // ── Dragging in the flow diagram: blocks, sections, and drawing a new section ──
+  var flowDrag = null;
+  function flowDown(e) {
+    var svg = e.target.closest && e.target.closest('svg.spec-flow');
+    if (!svg || e.button !== 0 || e.target.closest('.spec-handle, .spec-edge-hit, .spec-flag')) return;
+    var node = e.target.closest('.spec-node'), box = e.target.closest('.spec-group-g');
+    var m = svg.getScreenCTM().inverse(), pt = svg.createSVGPoint();
+    function local(ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); }
+    flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
+      type: node ? 'block' : box ? 'section' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '' };
+    if (flowDrag.type === 'draw') e.preventDefault();
+  }
+  // The deepest section box under a point, leaving out `skip` and everything inside it.
+  function flowBoxAt(svg, q, skip) {
+    var best = null, area = Infinity;
+    Array.prototype.forEach.call(svg.querySelectorAll('.spec-group-g'), function (g) {
+      if (skip && (g.dataset.id === skip || (' ' + g.dataset.anc + ' ').indexOf(' ' + skip + ' ') >= 0)) return;
+      var b = g.dataset.box.split(' ').map(Number);
+      if (q.x >= b[0] && q.x <= b[0] + b[2] && q.y >= b[1] && q.y <= b[1] + b[3] && b[2] * b[3] < area) { best = g; area = b[2] * b[3]; }
+    });
+    return best;
+  }
+  function flowMove(e) {
+    var d = flowDrag; if (!d) return;
+    if (!d.on) {
+      if (Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 6) return;
+      d.on = true; d.svg.classList.add('moving');
+      if (d.type === 'draw') { d.rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.rect.setAttribute('class', 'spec-draw'); d.svg.appendChild(d.rect); }
+      else d.els = d.type === 'block' ? [d.svg.querySelector('.spec-node[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(d.id) + '"]')))
+        : [d.svg.querySelector('.spec-group-g[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('[data-anc~="' + CSS.escape(d.id) + '"]')));
+    }
+    e.preventDefault();
+    var q = d.local(e), dx = q.x - d.start.x, dy = q.y - d.start.y;
+    if (d.type === 'draw') {
+      d.rect.setAttribute('x', Math.min(q.x, d.start.x)); d.rect.setAttribute('y', Math.min(q.y, d.start.y));
+      d.rect.setAttribute('width', Math.abs(dx)); d.rect.setAttribute('height', Math.abs(dy));
+      return;
+    }
+    d.els.forEach(function (el) { if (el) el.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); });
+  }
+  function flowUp(e) {
+    var d = flowDrag; flowDrag = null;
+    if (!d || !d.on) return;
+    d.svg.classList.remove('moving');
+    specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0);
+    var p = current(); if (!p) return;
+    var q = d.local(e);
+    if (d.type === 'draw') {
+      var x0 = Math.min(q.x, d.start.x), y0 = Math.min(q.y, d.start.y), x1 = Math.max(q.x, d.start.x), y1 = Math.max(q.y, d.start.y);
+      d.rect.remove();
+      var ids = Array.prototype.filter.call(d.svg.querySelectorAll('.spec-node'), function (g) {
+        var cx = +g.dataset.x + SPEC_BW / 2, cy = +g.dataset.y + SPEC_BH / 2;
+        return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
+      }).map(function (g) { return g.dataset.id; });
+      if (!ids.length) { if (x1 - x0 > 20) toast('Draw the box around one or more blocks'); return; }
+      var name = prompt('Name the new section around ' + plural(ids.length, 'block'), 'New section');
+      if (!name || !name.trim()) return;
+      if (M.liveSpec(p).some(function (s) { return s.title.toLowerCase() === name.trim().toLowerCase(); })) { toast('Another section is already called ' + name.trim()); return; }
+      var gr = M.specGroup(p, ids, name, me());
+      if (gr.length) { specPutAll(p, gr); toast('Made the section ' + name.trim() + '. It’s a heading in the text, with its blocks under it.'); }
+      return;
+    }
+    // Dragging only arranges (Chris: membership moved invisibly); which section a block is in is
+    // changed in the hierarchy under the diagram.
+    var snap = function (v) { return Math.round(v / 10) * 10; };
+    var dx = snap(q.x - d.start.x), dy = snap(q.y - d.start.y);
+    // Every block's place is kept from now on (the arrangement freezes), and the dragged ones move.
+    var stored = {}; M.liveSpec(p).forEach(function (s) { stored[s.id] = s.pos; });
+    var moving = {};
+    if (d.type === 'block') moving[d.id] = 1;
+    else Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
+    var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) }), upd = {};
+    Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
+      var id = g.dataset.id, x = +g.dataset.x + (moving[id] ? dx : 0), y = +g.dataset.y + (moving[id] ? dy : 0), was = stored[id];
+      if (was && was.x === x && was.y === y) return;
+      upd[id] = Object.assign({}, p.spec[id], { pos: { x: x, y: y } }); view.spec[id] = upd[id];
+    });
+    Object.keys(upd).forEach(function (id) { upd[id] = M.specStamp(upd[id], me()); });
+    var recs = Object.keys(upd).map(function (k) { return upd[k]; });
+    if (!recs.length) { renderPage(); return; }
+    specPutAll(p, recs);
+  }
+  function T_title(p, id) { var s = M.liveSpec(p).filter(function (x) { return x.id === id; })[0]; return s ? s.title : 'It'; }
+  function specAutoLayout() {
+    var p = current(); if (!p) return;
+    var recs = M.liveSpec(p).filter(function (s) { return s.pos; }).map(function (s) { return M.specStamp(Object.assign({}, p.spec[s.id], { pos: null }), me()); });
+    if (recs.length) { specPutAll(p, recs); toast('Laid out again'); }
+  }
   function cutText(t, n) { t = String(t || ''); return n > 1 && t.length > n ? t.slice(0, n - 1) + '…' : t; }
 
   // ── Blocks (the diagram's sections) ──
@@ -2100,28 +2473,61 @@
   function renderSpecBlockInspector(p) {
     var el = $('#inspector'), id = specBlockSel(), a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0];
     if (!x) { closeInspector(); return; }
-    var s = x.sec, usedBy = a.sections.filter(function (y) { return y.uses.indexOf(id) >= 0; });
-    var names = M.specUsesNames(s.body), byTitle = a.ctx.titles;
-    var opts = a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && names.map(function (n) { return n.toLowerCase(); }).indexOf(y.sec.title.toLowerCase()) < 0; });
-    var kinds = [''].concat(M.SPEC_KINDS);
-    var lower = { product: 'task', task: 'module', module: 'driver', driver: 'hardware' }[s.kind] || '';
+    var FT = SPEC_FLOW ? specFlowTree(a) : null;
+    if (FT && FT.isSec(x)) {
+      // A section: its name, gist, what's in it, and grouping.
+      el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › ' + esc(x.sec.title || 'Untitled') + ' (section)</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+        '<div class="insp-body">' +
+        '<div class="field"><label for="spec-block-title">Name</label><input class="input" id="spec-block-title" value="' + esc(x.sec.title) + '"></div>' +
+        '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what this section does') + '"></div>' +
+        '<div class="field"><span class="field-label">In this section</span><div class="chips">' + FT.ch[x.sec.id].map(function (c) {
+          return '<button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(c.sec.id) + '">' + esc(c.sec.title + (FT.isSec(c) ? ' (section)' : '')) + '</button>';
+        }).join('') + '</div><p class="note">Move blocks in or out in the hierarchy under the diagram. The section is a heading in the text, and its blocks are the headings under it.</p></div>' +
+        '<div class="field"><span class="field-label">Requirements on the whole section</span>' + (x.links.length ? x.links.map(function (qid) {
+          var q = a.ctx.reqs[qid];
+          return '<div class="req-link"><button class="req-link-main" data-act="open-req" data-id="' + esc(qid) + '"><span><span class="req-link-text"><b>' + esc(q.ref) + '</b> ' + esc(q.text || 'No text yet') + '</span></span></button></div>';
+        }).join('') : '<p class="note" style="margin:0">None yet. Write text for the whole section, such as its power budget, and link it to the requirement it meets.</p>') + '</div>' +
+        '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-add-block" data-kind="" data-section="' + esc(id) + '">Add a block here</button><button class="btn" data-act="spec-edit" data-id="' + esc(id) + '">Write its text</button>' +
+        '<button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Read it</button><button class="btn" data-act="spec-ungroup" data-id="' + esc(id) + '">Ungroup</button></div>' +
+        '<p class="note">Last changed ' + (x.sec.updatedBy ? 'by ' + esc(x.sec.updatedBy) + ', ' : '') + relTime(x.sec.updatedAt) + '.</p></div>';
+      el.dataset.item = selected;
+      return;
+    }
+    var s = x.sec, byTitle = a.ctx.titles, words = M.specLinkWords();
+    var kinds = [''].concat(M.specKinds());
+    var lower = SPEC_FLOW ? '' : { product: 'task', task: 'module', module: 'driver', driver: 'hardware' }[s.kind] || '';
+    var groups = specRows().concat(M.specKinds().indexOf('interface') >= 0 ? [['interface', 'Interfaces']] : [], [['', 'Other sections']]);
+    // One field per link word: its names (with signal or rail), remove, rename the signal, add more.
+    var linkFields = words.map(function (w) {
+      var items = M.specUsesItems(s.body, w), have = items.map(function (n) { return n.name.toLowerCase(); });
+      var opts = a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && have.indexOf(y.sec.title.toLowerCase()) < 0; });
+      return '<div class="field"><span class="field-label">' + esc(w) + '</span><div class="chips">' + (items.length ? items.map(function (it) {
+        var tid = byTitle[it.name.toLowerCase()];
+        return '<span class="chip spec-use-chip' + (tid ? '' : ' spec-chip-missing') + '">' + (tid ? '<button data-act="spec-block" data-id="' + esc(tid) + '">' + esc(it.name) + '</button>' : esc(it.name)) +
+          (words.length > 1 ? '<button class="spec-use-label" data-act="spec-block-label" data-word="' + esc(w) + '" data-name="' + esc(it.name) + '" title="Name the signal or rail">' + (it.label ? esc(it.label) : '+ name') + '</button>' : '') +
+          '<button class="spec-use-x" data-act="spec-block-unuse" data-word="' + esc(w) + '" data-name="' + esc(it.name) + '" aria-label="Remove ' + esc(it.name) + '">×</button></span>';
+      }).join('') : '<span class="note" style="margin:0">Nothing yet</span>') + '</div>' +
+      (opts.length ? '<select class="input spec-block-use" data-word="' + esc(w) + '" style="margin-top:8px"><option value="">Add a block it ' + esc(linkVerb(w)) + '…</option>' + groups.map(function (r) {
+        var o = opts.filter(function (y) { return y.sec.kind === r[0]; });
+        return o.length ? '<optgroup label="' + esc(r[1]) + '">' + o.map(function (y) { return '<option value="' + esc(y.sec.title) + '">' + esc(y.sec.title) + '</option>'; }).join('') + '</optgroup>' : '';
+      }).join('') + '</select>' : '') + '</div>';
+    }).join('');
+    var fromFields = words.map(function (w) {
+      var from = a.sections.filter(function (y) { return y.edges.some(function (e) { return e.id === id && e.word.toLowerCase() === w.toLowerCase(); }); });
+      return from.length ? '<div class="field"><span class="field-label">' + esc(linkFrom(w)) + '</span><div class="chips">' + from.map(function (y) {
+        var e = y.edges.filter(function (e2) { return e2.id === id && e2.word.toLowerCase() === w.toLowerCase(); })[0];
+        return '<button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(y.sec.id) + '">' + esc(y.sec.title + (e && e.label ? ' · ' + e.label : '')) + '</button>';
+      }).join('') + '</div></div>' : '';
+    }).join('');
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › ' + esc(s.title || 'Untitled') + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<div class="field"><label for="spec-block-title">Name</label><input class="input" id="spec-block-title" value="' + esc(s.title) + '"></div>' +
-      '<div class="field"><span class="field-label">Kind</span><div class="seg full spec-kind-seg">' + kinds.map(function (k) {
-        return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? KIND_LABEL[k] : 'None') + '</button>';
-      }).join('') + '</div></div>' +
+      (kinds.length > 1 ? '<div class="field"><span class="field-label">Kind</span><div class="seg full spec-kind-seg">' + kinds.map(function (k) {
+        return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? kindLabel(k) : 'None') + '</button>';
+      }).join('') + '</div></div>' : '') +
       '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
-      '<div class="field"><span class="field-label">Uses</span><div class="chips">' + (names.length ? names.map(function (n) {
-        var tid = byTitle[n.toLowerCase()];
-        return '<span class="chip spec-use-chip' + (tid ? '' : ' spec-chip-missing') + '">' + (tid ? '<button data-act="spec-block" data-id="' + esc(tid) + '">' + esc(n) + '</button>' : esc(n)) +
-          '<button class="spec-use-x" data-act="spec-block-unuse" data-name="' + esc(n) + '" aria-label="Stop using ' + esc(n) + '">×</button></span>';
-      }).join('') : '<span class="note" style="margin:0">Nothing yet</span>') + '</div>' +
-      (opts.length ? '<select class="input" id="spec-block-use" style="margin-top:8px"><option value="">Add a block it uses…</option>' + SPEC_ROWS.concat([['interface', 'Interfaces'], ['', 'Other sections']]).map(function (r) {
-        var o = opts.filter(function (y) { return y.sec.kind === r[0]; });
-        return o.length ? '<optgroup label="' + esc(r[1]) + '">' + o.map(function (y) { return '<option value="' + esc(y.sec.title) + '">' + esc(y.sec.title) + '</option>'; }).join('') + '</optgroup>' : '';
-      }).join('') + '</select>' : '') + '</div>' +
-      (usedBy.length ? '<div class="field"><span class="field-label">Used by</span><div class="chips">' + usedBy.map(function (y) { return '<button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(y.sec.id) + '">' + esc(y.sec.title) + '</button>'; }).join('') + '</div></div>' : '') +
+      linkFields + fromFields +
+      (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Write its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Read it</button>' +
       (lower ? '<button class="btn" data-act="spec-add-block" data-kind="' + lower + '" data-parent="' + esc(id) + '">Add a ' + lower + ' it uses</button>' : '') +
@@ -2129,7 +2535,7 @@
       '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
     el.dataset.item = selected;
   }
-  function specBlockField(key, value) {
+  function specBlockField(key, value, word) {
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur) return;
     if (key === 'title') {
       value = String(value || '').trim();
@@ -2139,25 +2545,39 @@
       return specPutAll(p, M.specRename(p, id, value, me()));
     }
     var f = {};
-    if (key === 'kind') f.kind = M.oneOf(M.SPEC_KINDS, value, '');
+    if (key === 'kind') f.kind = M.oneOf(M.specKinds(), value, '');
     if (key === 'gist') f.body = M.specSetLine(cur.body, 'gist', value);
-    if (key === 'uses') f.body = M.specSetLine(cur.body, 'uses', value);
+    if (key === 'link') f.body = M.specSetLine(cur.body, word, value);
+    if (key === 'parts') f.body = M.specSetLine(cur.body, 'parts', value);
     specPutAll(p, [M.specStamp(Object.assign({}, cur, f), me())]);
   }
-  // Drag-to-connect: `from` uses `to` (its Uses line gains to's title).
+  // Drag-to-connect: `from` gains a link to `to`, with the link its kind makes (Uses in FW; Connects in
+  // EE, Supplies from a power block).
   function specConnect(from, to) {
     var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to];
     if (!a || !b || from === to) return;
-    var names = M.specUsesNames(a.body), t = M.liveSpec(p).filter(function (s) { return s.id === to; })[0].title;
-    if (names.some(function (n) { return n.toLowerCase() === t.toLowerCase(); })) { toast((a.title || 'It') + ' already uses ' + t); return; }
-    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, 'uses', names.concat([t]).join(', ')) }), me())]);
-    toast((a.title || 'It') + ' uses ' + t);
+    var word = M.specKindLink(M.oneOf(M.specKinds(), a.kind, ''));
+    if (!M.specKinds().length && M.specLinkWord('supplies') && M.specUsesItems(a.body, 'supplies').length) word = M.specLinkWord('supplies');
+    var items = M.specUsesItems(a.body, word), t = M.liveSpec(p).filter(function (s) { return s.id === to; })[0].title;
+    if (items.some(function (n) { return n.name.toLowerCase() === t.toLowerCase(); })) { toast((a.title || 'It') + ' already ' + linkVerb(word) + ' ' + t); return; }
+    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, word, M.specLinkText(items.concat([{ name: t, label: '' }]))) }), me())]);
+    toast((a.title || 'It') + ' ' + linkVerb(word) + ' ' + t + (M.specLinkWords().length > 1 ? '. Name the signal in its panel.' : ''));
   }
-  function specDisconnect(from, to) {
+  function specDisconnect(from, to, word) {
     var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to]; if (!a || !b) return;
+    word = M.specLinkWord(word) || M.specLinkWords()[0];
     var t = String(b.title || '').toLowerCase();
-    if (!confirm('Stop ' + (a.title || 'this block') + ' using ' + (b.title || 'that block') + '?')) return;
-    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, 'uses', M.specUsesNames(a.body).filter(function (n) { return n.toLowerCase() !== t; }).join(', ')) }), me())]);
+    if (!confirm('Remove “' + (a.title || 'this block') + ' ' + linkVerb(word) + ' ' + (b.title || 'that block') + '”?')) return;
+    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, word, M.specLinkText(M.specUsesItems(a.body, word).filter(function (n) { return n.name.toLowerCase() !== t; }))) }), me())]);
+  }
+  // A link's signal or rail name, from the block panel.
+  function specLinkLabel(word, name) {
+    var p = current(), cur = p && (p.spec || {})[specBlockSel()]; if (!cur) return;
+    var items = M.specUsesItems(cur.body, word), it = items.filter(function (n) { return n.name === name; })[0]; if (!it) return;
+    var v = prompt('Signal, bus, or rail for ' + name + ' (blank for none)', it.label);
+    if (v === null) return;
+    it.label = v.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim();
+    specBlockField('link', M.specLinkText(items), word);
   }
   var specDrag = null;
   function specDragStart(e, handle) {
@@ -2197,7 +2617,7 @@
   var specMove = null;
   function specMoveDown(e, node) {
     if (e.button !== 0) return;
-    var svg = node.ownerSVGElement; if (!svg || svg.querySelector('.spec-node.dragging')) return;
+    var svg = node.ownerSVGElement; if (!svg || !svg.dataset.rows || svg.querySelector('.spec-node.dragging')) return;
     specMove = { node: node, svg: svg, x: e.clientX, y: e.clientY, on: false };
   }
   function specMoveMove(e) {
@@ -2238,29 +2658,54 @@
     var p = current(), id = d.node.dataset.id, recs = p ? M.specMoveBlock(p, id, { kind: d.kind, before: d.before, after: d.after }, me()) : [];
     if (!recs.length) return;
     specPutAll(p, recs);
-    toast('Moved ' + ((p.spec[id] || {}).title || 'the block') + (d.kind !== d.node.dataset.row ? ' to ' + (KIND_LABEL[d.kind] || d.kind).toLowerCase() + 's' : ''));
+    toast('Moved ' + ((p.spec[id] || {}).title || 'the block') + (d.kind !== d.node.dataset.row ? ' to ' + kindPlural(d.kind).toLowerCase() : ''));
   }
 
-  function specAddBlockSheet(kind, parent) {
+  function specAddBlockSheet(kind, parent, section) {
     var p = current(); if (!p) return;
-    var secs = M.liveSpec(p), label = KIND_LABEL[kind] ? KIND_LABEL[kind].toLowerCase() : 'block';
+    var secs = M.liveSpec(p), label = kind ? kindLabel(kind).toLowerCase() : 'block';
+    var FT = SPEC_FLOW ? specFlowTree(M.specAnalysis(p)) : null, groups = FT ? FT.items.filter(function (x) { return FT.isSec(x); }) : [];
     var w = sheet('<div class="sheet-head"><h2>Add a ' + esc(label) + '</h2><p>It becomes a section in the text, ready to write. You can fill it out there later.</p></div>' +
       '<div class="sheet-body"><div class="field"><label for="spec-new-title">Name</label><input class="input" id="spec-new-title" placeholder="' + esc({ product: 'Thermostat firmware', task: 'Control loop', module: 'Scheduler', driver: 'Relay driver', hardware: 'Relays', interface: 'Status frame' }[kind] || 'Name') + '"></div>' +
       '<div class="field"><label for="spec-new-gist">Gist (optional)</label><input class="input" id="spec-new-gist" placeholder="One line: what it does"></div>' +
-      '<div class="field"><label for="spec-new-parent">Used by</label><select class="input" id="spec-new-parent"><option value="">Nothing yet</option>' + secs.map(function (s) {
+      (FT ? '<div class="field"><label for="spec-new-section">In section</label><select class="input" id="spec-new-section"><option value="">None</option>' + groups.map(function (g) {
+        return '<option value="' + esc(g.sec.id) + '"' + (g.sec.id === section ? ' selected' : '') + '>' + esc(g.sec.title || 'Untitled') + '</option>';
+      }).join('') + '</select></div>' : '') +
+      '<div class="field"><label for="spec-new-parent">' + esc(M.specLinkWords().length > 1 ? 'Connected from, or supplied by' : linkFrom(M.specLinkWords()[0])) + '</label><select class="input" id="spec-new-parent"><option value="">Nothing yet</option>' + secs.map(function (s) {
         return '<option value="' + esc(s.id) + '"' + (s.id === parent ? ' selected' : '') + '>' + esc(s.title || 'Untitled') + (s.kind ? ' (' + esc(s.kind) + ')' : '') + '</option>';
-      }).join('') + '</select></div></div>' +
+      }).join('') + '</select></div>' + (M.specLinkWords().length > 1 ? '<div class="field"><label for="spec-new-label">Signal or rail (optional)</label><input class="input" id="spec-new-label" placeholder="UART, I2C, 3V3…"></div>' : '') + '</div>' +
       '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add</button></div>');
     function ok() {
       var title = w.querySelector('#spec-new-title').value.trim();
       if (!title) { toast('Give it a name'); return; }
       if (M.liveSpec(p).some(function (s) { return s.title.toLowerCase() === title.toLowerCase(); })) { toast('Another section is already called ' + title); return; }
-      var recs = M.specAddBlock(p, { title: title, kind: kind, gist: w.querySelector('#spec-new-gist').value, parent: w.querySelector('#spec-new-parent').value }, me());
+      var lab = w.querySelector('#spec-new-label');
+      var recs = M.specAddBlock(p, { title: title, kind: kind, gist: w.querySelector('#spec-new-gist').value, parent: w.querySelector('#spec-new-parent').value, label: lab ? lab.value.replace(/[(),]/g, ' ').trim() : '' }, me());
+      var secSel = w.querySelector('#spec-new-section'), into = secSel ? secSel.value : '';
+      if (recs.length && FT) {
+        // Into its section, and, once the layout is kept, a place beside what's there (else laid out).
+        var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) });
+        recs.forEach(function (r) { view.spec[r.id] = r; });
+        var all = {}; recs.forEach(function (r) { all[r.id] = r; });
+        if (into) M.specNest(view, [recs[0].id], into, me()).forEach(function (r) { all[r.id] = r; });
+        var svgEl = document.querySelector('svg.spec-flow');
+        if (svgEl && M.liveSpec(p).some(function (s2) { return s2.pos; })) {
+          var box = into && svgEl.querySelector('.spec-group-g[data-id="' + CSS.escape(into) + '"]'), at;
+          if (box) { var bb = box.dataset.box.split(' ').map(Number); at = { x: bb[0] + bb[2] + 6, y: bb[1] + 20 + 12 }; }
+          else { var ys = Array.prototype.map.call(svgEl.querySelectorAll('.spec-node'), function (g) { return +g.dataset.y; }); at = { x: 20, y: (ys.length ? Math.max.apply(null, ys) : 0) + SPEC_BH + 60 }; }
+          all[recs[0].id] = Object.assign({}, all[recs[0].id], { pos: { x: Math.round(at.x / 10) * 10, y: Math.round(at.y / 10) * 10 } });
+        }
+        recs = [all[recs[0].id]].concat(Object.keys(all).filter(function (k) { return k !== recs[0].id; }).map(function (k) { return all[k]; }));
+      }
       closeSheet();
       ui.view = 'spec'; ui.specView = 'map'; saveUi();
-      selected = 'specblock|' + recs[0].id; $('#inspector').classList.add('open');
+      // Stay on the diagram (Chris: the panel hid where the block landed): select it, bring it into
+      // view, and flash it. Clicking it opens its panel.
+      selected = 'specblock|' + recs[0].id; closeInspector();
       specPutAll(p, recs);
-      toast('Added ' + title + ' to the text');
+      var nn = document.querySelector('.spec-node[data-id="' + CSS.escape(recs[0].id) + '"]');
+      if (nn) { nn.scrollIntoView({ block: 'center', behavior: 'smooth' }); nn.classList.add('flash'); }
+      toast('Added ' + title + '. Click it to name its links or write its text.');
     }
     w.addEventListener('click', function (e) { var b = e.target.closest('[data-sheet]'); if (!b) return; if (b.dataset.sheet === 'cancel') closeSheet(); else ok(); });
     w.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); ok(); } });
@@ -2388,6 +2833,15 @@
         projects[slug] = fresh; delete dirty[fresh.id]; persist(); render();
       }
     };
+  }
+
+  // From the Write as requirements list: show the sentence in the document, highlighted, without
+  // opening its panel (Chris: the text is where to write it up).
+  function specJumpUnit(sec, start) {
+    ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
+    selected = null; closeInspector(); renderPage();
+    var el = document.querySelector('.su[data-sec="' + CSS.escape(sec) + '"][data-u="' + start + '"]');
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   }
 
   function specGoto(id) {
@@ -3508,6 +3962,7 @@
       case 'spec-view': ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
       case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; saveUi(); renderPage(); break;
       case 'spec-goto': specGoto(id); break;
+      case 'spec-jump': specJumpUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-unit': case 'spec-open':
         if (window.getSelection && String(window.getSelection()) && act === 'spec-unit') break;   // selecting text to copy
         specOpenUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
@@ -3524,9 +3979,19 @@
       case 'spec-guide': specGuideSheet(); break;
       case 'spec-guide-start': closeSheet(); if (window.SignoffSpecGuide) window.SignoffSpecGuide.start(); break;
       case 'spec-kind-set': specKindSet(el.dataset.kind); break;
-      case 'spec-uses-add': specUsesAdd(el); break;
+      case 'spec-uses-add': specUsesAdd(el, el.dataset.word); break;
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
-      case 'spec-edge': specDisconnect(el.dataset.a, el.dataset.b); break;
+      case 'spec-edge': specDisconnect(el.dataset.a, el.dataset.b, el.dataset.word); break;
+      case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
+      case 'spec-auto-layout': specAutoLayout(); break;
+      case 'spec-new-section': specNewSectionSheet(); break;
+      case 'spec-tree-fold': { var fc = Object.assign({}, ui.specClosed || {}); if (fc[id]) delete fc[id]; else fc[id] = true; ui.specClosed = fc; saveUi(); renderPage(); break; }
+      case 'spec-ungroup': {
+        var gp = current(); if (!gp) break;
+        if (confirm('Ungroup ' + T_title(gp, id) + '? Its blocks stay, one level up in the outline.')) { selected = null; closeInspector(); specPutAll(gp, M.specUngroup(gp, id, me())); }
+        break;
+      }
+      case 'spec-block-label': specLinkLabel(el.dataset.word, el.dataset.name); break;
       case 'spec-ctag-open': {
         var op2 = current(), oc = op2 && op2.comments[id];
         if (!oc) break;
@@ -3549,11 +4014,11 @@
         if (cc && confirm('Delete this conflict copy? Its text is gone once you do.')) specPutAll(cp, [M.specStamp(Object.assign({}, cc, { deleted: true }), me())]);
         break;
       }
-      case 'spec-add-block': specAddBlockSheet(el.dataset.kind, el.dataset.parent || specBlockSel()); break;
+      case 'spec-add-block': specAddBlockSheet(el.dataset.kind, el.dataset.parent || (SPEC_FLOW ? '' : specBlockSel()), el.dataset.section || ''); break;
       case 'spec-block-kind': specBlockField('kind', el.dataset.kind); break;
       case 'spec-block-unuse': {
         var bp = current(), bc = bp && (bp.spec || {})[specBlockSel()];
-        if (bc) specBlockField('uses', M.specUsesNames(bc.body).filter(function (n) { return n !== el.dataset.name; }).join(', '));
+        if (bc) specBlockField('link', M.specLinkText(M.specUsesItems(bc.body, el.dataset.word).filter(function (n) { return n.name !== el.dataset.name; })), el.dataset.word);
         break;
       }
       case 'spec-block-delete': {
@@ -3740,10 +4205,11 @@
     if (e.target.id === 'import-file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
     if (e.target.id === 'spec-block-title') specBlockField('title', e.target.value);
     if (e.target.id === 'spec-block-gist') specBlockField('gist', e.target.value);
-    if (e.target.id === 'spec-block-use' && e.target.value) {
-      var up = current(), uc = up && (up.spec || {})[specBlockSel()];
-      if (uc) specBlockField('uses', M.specUsesNames(uc.body).concat([e.target.value]).join(', '));
+    if (e.target.classList && e.target.classList.contains('spec-block-use') && e.target.value) {
+      var up = current(), uc = up && (up.spec || {})[specBlockSel()], uw = e.target.dataset.word;
+      if (uc) specBlockField('link', M.specLinkText(M.specUsesItems(uc.body, uw).concat([{ name: e.target.value, label: '' }])), uw);
     }
+    if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
   });
   document.addEventListener('keydown', function (e) {
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {
@@ -3783,11 +4249,12 @@
   document.addEventListener('pointerdown', function (e) {
     var h = e.target.closest && e.target.closest('.spec-handle');
     if (h) { specDragStart(e, h); return; }
+    if (e.target.closest && e.target.closest('svg.spec-flow')) { if (e.pointerType !== 'touch' || !e.target.closest('svg.spec-flow') || e.target.closest('.spec-node, .spec-group-g')) flowDown(e); return; }
     var n = e.target.closest && e.target.closest('.spec-map .spec-node');
     if (n && e.pointerType !== 'touch') specMoveDown(e, n);
   });
-  document.addEventListener('pointermove', function (e) { if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); });
-  document.addEventListener('pointerup', function () { if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); });
+  document.addEventListener('pointermove', function (e) { if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); else if (flowDrag) flowMove(e); });
+  document.addEventListener('pointerup', function (e) { if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); else if (flowDrag) flowUp(e); });
   document.addEventListener('pointercancel', function () { if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });

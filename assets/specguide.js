@@ -2,7 +2,8 @@
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
 /* The Description guide: a walk through the Description tab (a written description tied to the
    requirements, and its diagram) on the demo review named by config.spec.guide, for anyone new to it.
-   Signoff FW sets it (the thermostat firmware); a tool without it shows no Guide button.
+   Signoff FW sets it (the thermostat firmware) and Signoff EE (the Main PCBA, as a block diagram,
+   with its own steps); a tool without it shows no Guide button.
 
    Modeled on Loom's guide (loom/assets/guide.js): a card carries each step (what the feature is and a
    Try it), steps are grouped in chapters, Contents jumps anywhere, and the card drags by its top line.
@@ -37,7 +38,10 @@
   function mine() { var a = A(), s = a && a.newest(); return s ? s.title : ''; }
   function mineOr(fallback) { return mine() || fallback; }
 
-  var CHAPTERS = [
+  // Two sets of steps: FW's (the layers layout: tasks, modules, drivers, Uses) and EE's (the flow
+  // layout: a schematic block diagram of subcircuits with Connects, Supplies, and Parts).
+  var FLOW = !!(window.SIGNOFF_CONFIG && window.SIGNOFF_CONFIG.spec && window.SIGNOFF_CONFIG.spec.layout === 'flow');
+  var FW_CHAPTERS = [
     { title: 'Welcome', steps: [
       { title: 'The Description tab',
         text: 'A requirements list says what must be true; it rarely reads as what the firmware does. This tab is the other half: a written description of the firmware, from the product down to the drivers, tied sentence by sentence to the requirements. The same text draws a diagram, and the diagram can build the text.',
@@ -66,11 +70,11 @@
         do: 'In Sensor driver, select the words “counts as a sensor fault”. In the panel, search REQ-003 and pick it: a sensor fault has to turn the relays off.',
         setup: function () { A().open('doc', 3); A().unit('sensor fault', false); },
         spot: function () { return ['#inspector .spec-phrase', sentence('sensor fault')]; } },
-      { title: 'To requirementify',
+      { title: 'Write as requirements',
         text: 'New behavior often turns up in a meeting first. Type it where it belongs and add @req: it waits here until it becomes a requirement. {New requirement} makes a draft from it. When its section already links a requirement, {Change REQ-…} links that one instead and marks it Changed, which is what most meeting notes are.',
         do: 'Click {New requirement} on the LED note. The bootloader note offers {Change REQ-001}. If the list is empty, open any sentence and click {Flag @req} to put one here.',
         setup: function () { A().open('doc', 3); var m = $('#main'); if (m) m.scrollTop = 0; },
-        spot: function () { return [needs('To requirementify'), '.spec-needs', '#page .page-sub']; } },
+        spot: function () { return [needs('Write as requirements'), '.spec-needs', '#page .page-sub']; } },
       { title: 'Not described',
         text: 'The other direction: requirements no sentence describes. {Describe in…} adds the requirement’s text to a section you pick, as a linked sentence, ready to rewrite in your own words.',
         do: 'Click {Describe in…} beside REQ-005 and pick Cloud link. If nothing is listed, every requirement is already described somewhere.',
@@ -145,7 +149,7 @@
     ] },
     { title: 'Sharing', steps: [
       { title: '@req in comments',
-        text: 'A comment anywhere in the review that ends in @req joins To requirementify too, with who wrote it and what it’s on. {New requirement} traces the draft to the check the comment was on. The comment’s words are left as written.',
+        text: 'A comment anywhere in the review that ends in @req joins Write as requirements too, with who wrote it and what it’s on. {New requirement} traces the draft to the check the comment was on. The comment’s words are left as written.',
         do: 'Open any check in a checklist tab, comment “Log every relay change @req”, post it, and come back to {Description}.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
@@ -166,6 +170,135 @@
         last: true }
     ] }
   ];
+  // EE: the thermostat's Main PCBA (pdemo7) as a block diagram.
+  var EE_CHAPTERS = [
+    { title: 'Welcome', steps: [
+      { title: 'The Description tab',
+        text: 'A board’s block diagram, written down. Each heading is a subcircuit; its text says what the subcircuit does and how, and its sentences link to the requirements it meets. The same text draws the block diagram, and building in the diagram writes the text.',
+        do: 'This guide uses the demo Main PCBA, so nothing real changes. Each step sets the page up and rings what it’s about. Use {Next} and {Back}, or {Contents} to jump around.',
+        setup: function () { A().open('doc', 3); },
+        spot: function () { return ['#view-seg [data-view="spec"]']; } },
+      { title: 'Reading at any depth',
+        text: 'Headings make the outline. The outline at the left jumps to any subcircuit. {Headings} shows just the structure, {Gists} adds each subcircuit’s one-line summary, and {Full text} shows everything.',
+        do: 'Click {Gists}, then {Headings}, then {Full text}. Click {MCU} in the outline to jump to it.',
+        setup: function () { A().open('doc', 3); },
+        spot: function () { return [['[data-act="spec-depth"][data-depth="1"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
+    ] },
+    { title: 'Tied to requirements', steps: [
+      { title: 'Four kinds of sentence',
+        text: 'Every sentence is one of four kinds, told apart by line style, not color. Linked words have a thin outline and point at requirements. Standard text is greyed: how the circuit works, which needs no requirement of its own. Flagged sentences have a dashed outline and an @req tag. Untraced ones have a dotted underline until you link, flag, or mark them.',
+        do: 'Hover over the outlined words “It runs from 100–240 V AC, 50/60 Hz mains” to see the requirement.',
+        setup: function () { A().open('doc', 3); var m = $('#main'); if (m) m.scrollTop = 0; },
+        spot: function () { return [sentence('100–240 V AC, 50/60 Hz'), '.spec-doc']; } },
+      { title: 'The sentence panel',
+        text: 'Click any sentence to open its panel: its kind, the requirements it links to, a search to link more, and buttons to {Make requirement}, {Mark standard}, or {Flag @req}. Select a few words first to link just those.',
+        do: 'The fuse sentence in Mains input is open; it’s untraced. Click {Make requirement}: it becomes a draft requirement, and the sentence now links to it.',
+        setup: function () { A().open('doc', 3); A().unit('fuse clears') || A().unit('Main PCBA turns'); },
+        spot: function () { return ['#inspector [data-act="spec-make"]', '#inspector .insp-body']; } },
+      { title: 'Write as requirements',
+        text: 'New requirements often turn up in a design review first. Type the note where it belongs and add @req: it waits here until it becomes a requirement. {New requirement} makes a draft from it; when its subcircuit already links a requirement, {Change REQ-…} updates that one instead.',
+        do: 'Click {New requirement} on the 3V3 ripple note. If the list is empty, open any sentence and click {Flag @req}.',
+        setup: function () { A().open('doc', 3); var m = $('#main'); if (m) m.scrollTop = 0; },
+        spot: function () { return [needs('Write as requirements'), '.spec-needs', '#page .page-sub']; } },
+      { title: 'Not described',
+        text: 'The other direction: requirements no sentence describes. They’re listed under {Not described}, with {Describe in…} to add one to a subcircuit as a linked sentence. Every requirement on this board is described, so the list is hidden; add a requirement in the Requirements tab and it appears here.',
+        setup: function () { A().open('doc', 3); var m = $('#main'); if (m) m.scrollTop = 0; },
+        spot: function () { return [needs('Not described'), '#page .page-sub']; } },
+      { title: 'From the requirement’s side',
+        text: 'A requirement’s panel in the Requirements tab has {Described in}: every sentence that links to it, with its subcircuit. Reinforced insulation lives in the isolated supply.',
+        do: 'This is REQ-002. Click the row under {Described in} to jump back to it.',
+        setup: function () { A().open('doc', 3); A().req('REQ-002') || A().req('REQ-001'); },
+        spot: function () { return [field('Described in'), '#inspector']; } }
+    ] },
+    { title: 'Writing', steps: [
+      { title: 'Editing a subcircuit',
+        text: 'The pencil beside a heading edits that subcircuit as text. Links show as requirement numbers, {[words]{REQ-003}}, and are stored by id, so renumbering a requirement never breaks them. Headings under a heading make it a section: {### 3V3 buck} sits under {## Power}.',
+        do: 'Add a sentence about the buck’s switching frequency, then press {k:Ctrl+Enter} to save. {k:Esc} cancels; {Writing guide} lists every mark.',
+        setup: function () { A().open('doc', 3); var s = A().section('3V3 buck') || A().section('MCU'); if (s) A().edit(s.id); },
+        spot: function () { return ['#spec-editor']; } },
+      { title: 'Connects, Supplies, and signals',
+        text: '{Connects:} names the blocks a subcircuit sends signals to, with the bus or signal in brackets: {Connects: Wi-Fi module (UART)}. {Supplies:} names the blocks a power subcircuit feeds, with the rail: {Supplies: MCU (3V3)}. They draw the diagram’s lines and power flags. Rename a heading and every link line follows.',
+        do: 'In the MCU’s {Connects:} line, change {(GPIO)} after Status LEDs to {(LED_PWR/LED_FLT)} and press {k:Ctrl+Enter}. {Add to Connects…} picks another block to add. (A two-way bus can go either way; write it in the direction signals mostly go.)',
+        setup: function () { A().open('doc', 3); var s = A().section('MCU'); if (s) A().edit(s.id); },
+        spot: function () { return ['.spec-kindbar [data-act="spec-uses-add"]', '#spec-editor']; } },
+      { title: 'Parts',
+        text: 'A {Parts:} line lists the reference designators a subcircuit covers, with ranges ({C1–C3}). They show as chips under the subcircuit and on its block. Later they can tie the block to Fabcheck’s BOM.',
+        do: 'Add TP2, the 3V3 test point, to the buck’s Parts line and save.',
+        setup: function () { A().open('doc', 3); var s = A().section('3V3 buck'); if (s) A().edit(s.id); },
+        spot: function () { return ['#spec-editor']; } },
+      { title: 'Edit all',
+        text: '{Edit all} opens the whole description as one text, with its outline read live beside it. Saving keeps each subcircuit’s identity, so renaming, moving, or adding headings never breaks a link to them, and every Connects and Supplies line follows a rename.',
+        do: 'Rename {## MCU * processor} to {## Controller * processor} and save. The links into it follow.',
+        setup: function () { A().open('doc', 3); A().editAll(); },
+        spot: function () { return ['#spec-live-outline', '#spec-editor']; } }
+    ] },
+    { title: 'The block diagram', steps: [
+      { title: 'The block diagram',
+        text: 'Every heading is a block, and a heading with headings under it is a section, a box around its blocks: Power, Control, and Outputs here. Inside a section, blocks run left to right in signal order. Lines carry their signal names, a block a supply feeds wears a power flag with the rail’s name, and dotted blocks have untraced or flagged sentences. Drag blocks and sections to arrange them; {Auto layout} puts them back, and {Sections} hides the boxes.',
+        do: 'Click a 3V3 flag: it opens the buck that supplies it.',
+        setup: function () { A().open('map'); },
+        spot: function () { return ['.spec-map-card']; } },
+      { title: 'Add a block',
+        text: '{+ Add block} adds a subcircuit, a new heading in the text. {In section} puts it in a section, and {Connected from, or supplied by} links it from a block in one step, with its signal or rail. It lands on the diagram, flashing; click it to open its panel.',
+        do: 'Click {+ Add block}. Name it USB ESD protection, pick Control under {In section}, pick USB-C service port under {Connected from, or supplied by}, type USB as the signal, and click {Add}.',
+        setup: function () { A().open('map'); },
+        spot: function () { return ['#sheet .sheet', '.spec-flow-add [data-act="spec-add-block"]']; } },
+      { title: 'Sections and the hierarchy',
+        text: 'Sections organize the board, and they are the outline: a section is a heading, and its blocks are the headings under it. The hierarchy under the diagram shows them as a tree, like Signoff PL’s Map. Drag a block onto a section to move it in, onto another block to put it just before, or onto the board to take it out. {+ Section} groups blocks; {+} on a section adds a block inside. In the diagram, dragging only arranges.',
+        do: 'In the hierarchy, drag Status LEDs onto Control, then back onto Outputs. Then drag a block around in the diagram: its section’s box follows it.',
+        setup: function () { A().open('map'); var t = $('.spec-tree'); if (t) t.scrollIntoView({ block: 'center' }); },
+        spot: function () { return ['.spec-tree']; } },
+      { title: 'A requirement for a whole section',
+        text: 'A section has text of its own, for what belongs to the whole section rather than one block: here, the board’s power budget sits on Power, flagged to become a requirement. Its box and its branch show the requirements tied to it.',
+        do: 'Click the Power box to open its panel, then {Write its text} and link the budget sentence to a requirement (or use {New requirement} on it in Write as requirements).',
+        setup: function () { var a = A(); a.open('map'); var s2 = a.section('Power'); if (s2) a.block(s2.id); },
+        spot: function () { return [field('Requirements on the whole section'), '#inspector']; } },
+      { title: 'Write it up, and give it its requirement',
+        text: 'A block is a subcircuit to describe. The USB-C port’s ESD requirement really belongs to its protection, so this is where the requirement moves.',
+        do: 'Click {Write its text}, add “A TVS array on D+ and D− clamps ESD at the connector.”, and press {k:Ctrl+Enter}. Click that sentence, search REQ-003 in its panel, and pick it. (No new block? Use USB-C service port.)',
+        setup: function () { var a = A(); a.open('map'); var s = a.section(mineOr('USB-C service port')); if (s) a.block(s.id); },
+        spot: function () { return ['#spec-editor', '#spec-link-search', '#inspector [data-act="spec-edit"]']; } },
+      { title: 'Connect blocks',
+        text: 'Each block has a dot on its right edge. Drag from it to another block: a signal block now connects to it, and a power block now supplies it. Click a line to remove it.',
+        do: 'Drag from your protection block’s dot to MCU. Then click the old line from USB-C service port to MCU and remove it, so USB runs through the protection.',
+        phone: 'On a touch screen the dots always show; drag from one to another block.',
+        setup: function () { A().open('map'); },
+        spot: function () { return [handle(mineOr('USB-C service port')), node(mineOr('USB-C service port'))]; } },
+      { title: 'The block panel',
+        text: 'Click a block for its panel: its name (a rename follows into every link line), kind, gist, what it connects to and supplies (each with its signal or rail; click the name to change it), what connects into it or supplies it, and its parts.',
+        do: 'MCU is open. Under {Connects}, click the signal name beside Relay outputs and call it HEAT/COOL.',
+        setup: function () { var a = A(); a.open('map'); var s = a.section('MCU') || a.section('Controller'); if (s) a.block(s.id); },
+        spot: function () { return [field('Connects'), '#inspector']; } },
+      { title: 'Power flags',
+        text: 'A power block’s {Supplies} line puts a flag on every block it feeds, named for the rail. A block fed by two rails, like the relays (5 V coils, and the switched AC line), wears two. Click a flag to open the supply.',
+        do: 'Click the 5V flag on Relay outputs, then add your protection block to the buck’s {Supplies} from its panel.',
+        setup: function () { A().open('map'); },
+        spot: function () { var f = Array.prototype.filter.call(document.querySelectorAll('.spec-flag'), function (g) { return /5V/.test(g.textContent); })[0]; return [f, '.spec-flag']; } }
+    ] },
+    { title: 'Sharing', steps: [
+      { title: '@req in comments',
+        text: 'A comment anywhere in the review that ends in @req joins Write as requirements too, with who wrote it and what it’s on. {New requirement} traces the draft to the check the comment was on.',
+        do: 'Open any check in a checklist tab, comment “Add a reverse-polarity diode on the 5 V input @req”, post it, and come back to {Description}.',
+        setup: function () { A().open('doc', 3); },
+        spot: function () { return ['#view-seg [data-view="spec"]']; } },
+      { title: 'Export and print',
+        text: '{Export} writes the description as Markdown (requirement links become “words [REQ-001]”, link and Parts lines are kept, and a table shows where each requirement is described) or opens it on paper to print or save as a PDF.',
+        do: 'Click {Export}, then {Print or save as PDF}. {Close} returns here.',
+        setup: function () { A().open('doc', 3); },
+        spot: function () { return ['[data-act="spec-export"]']; } },
+      { title: 'Working together',
+        text: 'Signed in, the description syncs with the review. Subcircuits merge one by one; when two people edit the same one at once, the newer edit wins and the other is kept as a conflict copy under {Edited in two places}. Signoff PL shows the top-level gists as {What it does} on the board’s Part.',
+        setup: function () { A().open('doc', 1); } }
+    ] },
+    { title: 'Done', steps: [
+      { title: 'You’re set',
+        text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} and {Add to Supplies…} add links, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box around blocks to make a section, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
+        do: 'Open this guide again from {Guide} in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
+        setup: function () { A().open('doc', 3); },
+        last: true }
+    ] }
+  ];
+  var CHAPTERS = FLOW ? EE_CHAPTERS : FW_CHAPTERS;
   var STEPS = [];
   CHAPTERS.forEach(function (c, ci) { c.steps.forEach(function (s) { s.chapter = ci; STEPS.push(s); }); });
   // {Edit all} names something on screen (a chip) and {k:Esc} a key, so a button's name doesn't read

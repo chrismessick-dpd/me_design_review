@@ -116,6 +116,9 @@
       recs.forEach(function (r, i) {
         var when = at(0.3 + 0.6 * i / recs.length);
         r.id = rename[r.id]; r.createdAt = r.updatedAt = when; r.updatedBy = users[i % users.length];
+        // Built, not edited: no history, so an older demo's copy (from a tab still open) merges newer-wins
+        // instead of looking like two people's edits (mergeSpec would keep a conflict copy).
+        delete r.hist;
         r.body = r.body.replace(/\bs:([\w-]+)/g, function (all, id) { return rename[id] ? 's:' + rename[id] : all; });
         p.spec[r.id] = r;
       });
@@ -134,7 +137,7 @@
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 12
+    VERSION: 17
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

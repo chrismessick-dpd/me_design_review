@@ -1020,3 +1020,80 @@ button.req-link-main:hover { background: var(--hair-2); }
 @keyframes sg-guide-spot { 50% { box-shadow: 0 0 0 9px var(--accent-soft); } }
 @media (prefers-reduced-motion: reduce) { .sg-guide-spot { animation: none; } }
 @media (max-width: 860px), (max-height: 500px) { .sg-guide { max-height: 40vh; padding: 10px 14px 12px; font-size: 12.5px; } .sg-guide h3 { font-size: 14px; } }
+
+/* The flow diagram (config.spec.layout 'flow', EE): a block diagram with a power band and power flags. */
+.spec-flow-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 12px; color: var(--text-3); }
+.spec-flow-add > span:first-child { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; margin-right: 4px; }
+.spec-flow-add .chip { border: none; cursor: pointer; }
+.spec-flow-add .chip:hover { background: var(--accent-soft); color: var(--accent-ink); }
+.spec-band { fill: var(--bg-sunk); stroke: none; }
+.spec-node.power rect:first-of-type { stroke: var(--text-2); stroke-width: 1.4; stroke-dasharray: none; }
+.spec-edge.supply { stroke: var(--text-2); stroke-width: 1.6; }
+.spec-arrow { fill: var(--text-3); }
+.spec-flag { cursor: pointer; }
+.spec-flag path { stroke: var(--text-2); stroke-width: 1.4; fill: none; }
+.spec-flag .spec-flag-head { fill: var(--text-2); stroke: none; }
+.spec-flag text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
+.spec-flag:hover path, .spec-flag:hover text { stroke: var(--accent); fill: var(--accent); }
+.spec-flag:hover path:first-child { fill: none; }
+.spec-use-label { margin-left: 4px; padding: 0 5px !important; border-radius: 6px; background: var(--bg-elev) !important; font-size: 11px !important; color: var(--text-2); }
+.spec-use-label:hover { color: var(--accent-ink); }
+.spec-part { font-family: var(--mono); font-size: 11px; }
+.spec-group { fill: var(--bg-sunk); fill-opacity: 0.55; stroke: var(--hair-2); stroke-width: 1; }
+.spec-boxes { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-2); cursor: pointer; }
+.spec-node.flash rect:first-of-type { animation: spec-node-flash 1.6s ease-in-out 2; }
+@keyframes spec-node-flash { 50% { stroke: var(--accent); stroke-width: 4; fill: var(--accent-soft); } }
+@media (prefers-reduced-motion: reduce) { .spec-node.flash rect:first-of-type { animation: none; stroke: var(--accent); stroke-width: 3; } }
+/* Sections in the flow diagram: boxes from the outline, dragged and drawn. */
+.spec-flow-bg { fill: transparent; cursor: crosshair; }
+.spec-group-g { cursor: move; }
+.spec-group-g .spec-group { fill: var(--bg-sunk); fill-opacity: 0.6; stroke: var(--hair-2); stroke-width: 1.2; }
+.spec-group-g:hover .spec-group { stroke: var(--text-3); }
+.spec-group-g.sel .spec-group { stroke: var(--accent); stroke-width: 2; }
+.spec-group-g.drop .spec-group, .spec-group-g.drop:hover .spec-group { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 6 4; fill: var(--accent-soft); fill-opacity: 1; }
+.spec-group-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; fill: var(--text-2); pointer-events: none; }
+.spec-flow .spec-node { cursor: grab; }
+.spec-flow.moving, .spec-flow.moving * { cursor: grabbing !important; user-select: none; }
+.spec-flow.moving .spec-edge, .spec-flow.moving .spec-edge-label, .spec-flow.moving .spec-flag { opacity: 0.25; }
+.spec-draw { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; pointer-events: none; }
+.spec-flow-hint { font-size: 11.5px; color: var(--text-3); font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+/* The hierarchy under the block diagram (after Signoff PL's Map): the board as trunk, sections as
+   branches joined by elbow lines, blocks as tiles; drag and drop moves headings in the outline. */
+.spec-tree { margin-top: 16px; padding: 14px 16px 16px; }
+.st-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.st-title > span:not(.spacer) { color: var(--text-3); font-size: 12px; }
+.st-title .spacer { flex: 1; }
+.st { --st-in: 22px; --st-line: var(--hair-2); --st-elbow: 22px; }
+.st-trunk, .st-sec { border-radius: 12px; transition: background 0.12s; }
+.st-head { display: flex; align-items: center; gap: 6px; }
+.st-head > .icon-btn { width: 26px; height: 26px; flex: none; opacity: 0.55; font-size: 16px; }
+.st-head:hover > .icon-btn, .st-head > .icon-btn:focus-visible { opacity: 1; }
+.st-fold svg { width: 13px; height: 13px; transition: transform 0.15s; }
+.st-fold.closed { opacity: 1; color: var(--accent); }
+.st-fold.closed svg { transform: rotate(-90deg); }
+.st-top { display: inline-flex; flex-direction: column; gap: 1px; padding: 8px 14px; border-radius: 12px; background: var(--bg-sunk); }
+.st-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+.st-top-name { font: 600 15px var(--display); }
+.st-node, .st-tile { display: inline-flex; align-items: center; gap: 8px; min-width: 0; text-align: left; font: inherit; color: var(--text); background: var(--bg-elev); border: 1px solid var(--hair-2); border-radius: 10px; padding: 6px 12px 6px 9px; cursor: grab; transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease), border-color 0.15s var(--ease); }
+.st-tile { flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 12px; min-width: 140px; }
+.st-node:hover, .st-tile:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.st-node.sel, .st-tile.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.st-glyph { width: 18px; height: 18px; color: var(--accent); flex: none; display: grid; }
+.st-glyph svg { width: 18px; height: 18px; }
+.st-name { font: 600 13.5px var(--display); overflow-wrap: anywhere; }
+.st-sub { font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+.st-kids { display: flex; flex-direction: column; gap: 10px; margin-left: 16px; padding: 10px 0 0 var(--st-in); }
+.st-item { position: relative; min-width: 0; }
+.st-item::before { content: ''; position: absolute; left: calc(-1 * var(--st-in)); top: -10px; bottom: 0; border-left: 2px solid var(--st-line); }
+.st-item::after { content: ''; position: absolute; left: calc(-1 * var(--st-in)); top: var(--st-elbow); width: calc(var(--st-in) - 6px); border-top: 2px solid var(--st-line); }
+.st-item:last-child::before { bottom: auto; height: calc(10px + var(--st-elbow)); width: calc(var(--st-in) - 6px); border-bottom: 2px solid var(--st-line); border-bottom-left-radius: 10px; }
+.st-item:last-child::after { display: none; }
+.st-leaves { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-leaves .map-empty { font-size: 12.5px; color: var(--text-3); padding: 12px 2px 0; }
+.st-dragging .st-trunk, .st-dragging .st-sec { outline: 1px dashed var(--hair-2); outline-offset: 2px; }
+.st-drop-on { background: var(--accent-soft); outline: 2px solid var(--accent) !important; }
+.st-before { box-shadow: -4px 0 0 0 var(--accent) !important; }
+.spec-group-meta { font-size: 11px; font-weight: 600; fill: var(--text-3); pointer-events: none; }
+.su.flash { animation: spec-su-flash 2.4s ease-out; }
+@keyframes spec-su-flash { 0%, 40% { background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); } 100% { background: transparent; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .su.flash { animation: none; background: var(--accent-soft); } }

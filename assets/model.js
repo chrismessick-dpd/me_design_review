@@ -425,18 +425,52 @@
   // A free-form description of the design, top level to drivers (config.spec; on in Signoff FW).
   // One record per heading section, merged like every other record, newer wins per section:
   //   project.spec[id] = { id, order, level (1–4), title, kind, body, createdAt, updatedAt, updatedBy, deleted }
-  // kind is one of SPEC_KINDS or '' and places the section in the diagram. The body is plain text:
+  // kind is one of the tool's kinds (specKinds) or '' and places the section in the diagram. The body is plain text:
   //   [text]{q:<req id>,q:<req id>}  links text to requirements (the editor shows refs: {REQ-004})
   //   [text]{std}                    standard text: description that needs no requirement
   //   [text]{s:<section id>}         points at another section (the editor shows {#Title}); a
   //                                  pointer to an interface section counts as traced
   //   @req                           flags a sentence to become a requirement
-  //   Uses: A, B                     a line naming the sections this one uses, by title
+  //   Uses: A, B                     a link line naming the sections this one uses, by title. The
+  //                                  words come from config.spec.links (FW: Uses; EE: Connects and
+  //                                  Supplies), and a name can carry a signal or rail: MCU (UART)
+  //   Parts: U7, L1, C1–C3           the reference designators a section covers (EE)
   //   > text                         the section's gist (else its first sentence)
   //   - item                         list items; | lines are a table; ``` fences code
   // Tracing is by sentence (and list item): linked, standard, flagged, or untraced. Headings, gists,
   // Uses lines, tables, and code aren't counted. Review files are untrusted: callers escape text.
-  var SPEC_KINDS = ['product', 'task', 'module', 'driver', 'hardware', 'interface'];
+  // Kinds and link words are the tool's (config.spec.kinds, .links), read on every call so a test can
+  // swap them; without them, FW's: the layers product to hardware, and Uses.
+  var SPEC_DEFAULT_KINDS = ['product', 'task', 'module', 'driver', 'hardware', 'interface'];
+  function specCfg() { return (C.spec && typeof C.spec === 'object') ? C.spec : {}; }
+  // A tool can list its kinds, or none ("kinds": [], EE: blocks have no kinds; sections group them).
+  function specKinds() {
+    if (!Array.isArray(specCfg().kinds)) return SPEC_DEFAULT_KINDS;
+    return specCfg().kinds.map(function (x) { return typeof x === 'string' ? x : x && x.id; }).filter(function (x) { return typeof x === 'string' && /^[a-z][a-z-]*$/.test(x); });
+  }
+  function specKindInfo(kind) {
+    var k = (Array.isArray(specCfg().kinds) ? specCfg().kinds : []).filter(function (x) { return x && typeof x === 'object' && x.id === kind; })[0];
+    return k || { id: kind };
+  }
+  function specLinkWords() {
+    var l = Array.isArray(specCfg().links) ? specCfg().links.filter(function (w) { return typeof w === 'string' && /^[A-Za-z][A-Za-z ]*$/.test(w); }) : [];
+    return l.length ? l : ['Uses'];
+  }
+  // The configured spelling of a link word ('uses' -> 'Uses'), or '' when the tool has no such word.
+  function specLinkWord(w) { w = String(w || '').toLowerCase(); return specLinkWords().filter(function (x) { return x.toLowerCase() === w; })[0] || ''; }
+  // The link a new connection from a block of this kind makes (EE: power blocks supply).
+  function specKindLink(kind) { var l = specKindInfo(kind).link; return specLinkWord(l) || specLinkWords()[0]; }
+  function specLinkRe(word) { return new RegExp('^\\s*' + String(word).replace(/[^A-Za-z ]/g, '') + ':', 'i'); }
+  // The link word a line starts with, or ''.
+  function specLinkOf(line) { var w = specLinkWords().filter(function (x) { return specLinkRe(x).test(line); })[0]; return w || ''; }
+  // "MCU (UART), Display board" -> [{ name: 'MCU', label: 'UART' }, { name: 'Display board', label: '' }]
+  function specLinkItems(text) {
+    return String(text || '').split(',').map(function (t) {
+      var m = /^\s*(.*?)\s*(?:\(([^()]*)\))?\s*$/.exec(t);
+      return { name: m[1], label: (m[2] || '').trim() };
+    }).filter(function (x) { return x.name; });
+  }
+  function specLinkText(items) { return items.map(function (x) { return x.name + (x.label ? ' (' + x.label + ')' : ''); }).join(', '); }
   var SPEC_SPAN = /\[([^\[\]\n]*)\]\{([^{}\n]*)\}/g;
   var SPEC_TAG = /(^|[^\w@])@req\b:?/i;
   var SPEC_ABBR = /\b(e\.g|i\.e|etc|vs|approx|incl|min|max|no|fig|ref|rev|ver|v)\.$/i;
@@ -445,9 +479,16 @@
     var lv = parseInt(r.level, 10);
     return { id: String(r.id), order: typeof r.order === 'number' && isFinite(r.order) ? r.order : 0,
       level: lv >= 1 && lv <= 4 ? lv : 1, title: String(r.title == null ? '' : r.title).slice(0, 200),
-      kind: oneOf(SPEC_KINDS, r.kind, ''), body: String(r.body == null ? '' : r.body).slice(0, 40000),
+      kind: oneOf(specKinds(), r.kind, ''), body: String(r.body == null ? '' : r.body).slice(0, 40000),
       createdAt: r.createdAt || '', updatedAt: r.updatedAt || '', updatedBy: r.updatedBy || '',
-      conflictOf: typeof r.conflictOf === 'string' ? r.conflictOf.slice(0, 80) : '' };
+      conflictOf: typeof r.conflictOf === 'string' ? r.conflictOf.slice(0, 80) : '',
+      // Where the block sits in the flow diagram, once someone has arranged it (else laid out).
+      pos: specPos(r.pos) };
+  }
+  function specPos(v) {
+    if (!v || typeof v !== 'object') return null;
+    var x = Number(v.x), y = Number(v.y);
+    return isFinite(x) && isFinite(y) ? { x: Math.max(-5000, Math.min(20000, Math.round(x))), y: Math.max(-5000, Math.min(20000, Math.round(y))) } : null;
   }
   // Live sections in document order, cleaned.
   function liveSpec(project) {
@@ -476,7 +517,9 @@
       if (!x || !y || x === y || typeof x !== 'object' || typeof y !== 'object') return;
       if ((x.updatedAt || '') === (y.updatedAt || '') && (x.updatedBy || '') === (y.updatedBy || '')) return;
       var hx = Array.isArray(x.hist) ? x.hist : [], hy = Array.isArray(y.hist) ? y.hist : [];
-      if (!hx.length && !hy.length) return;
+      // Both sides must carry history: a section built or never edited (no hist) is the base the other
+      // was edited from, so newer wins (a demo rebuilt under an open tab, sections from before hist).
+      if (!hx.length || !hy.length) return;
       if (hy.indexOf(x.updatedAt) >= 0 || hx.indexOf(y.updatedAt) >= 0) return;
       var win = newer(x, y), lose = win === x ? y : x;
       if (lose.deleted) return;
@@ -499,7 +542,7 @@
     var m = /^(#{1,4})\s+(.*?)\s*$/.exec(String(line || ''));
     if (!m) return null;
     var title = m[2], kind = '', k = /\s+[*·]\s*([a-z]+)$/i.exec(title) || /\s+\(([a-z]+)\)$/i.exec(title);
-    if (k && SPEC_KINDS.indexOf(k[1].toLowerCase()) >= 0) { kind = k[1].toLowerCase(); title = title.slice(0, k.index); }
+    if (k && specKinds().indexOf(k[1].toLowerCase()) >= 0) { kind = k[1].toLowerCase(); title = title.slice(0, k.index); }
     return { level: m[1].length, title: title.trim(), kind: kind };
   }
   function specHeadingLine(s) { return new Array(s.level + 1).join('#') + ' ' + s.title + (s.kind ? ' * ' + s.kind : ''); }
@@ -636,10 +679,16 @@
         }
         out.push({ type: 'table', rows: rows }); continue;
       }
-      var um = /^uses:\s*(.*)$/i.exec(trim);
-      if (um) {
+      var lw = specLinkOf(trim);
+      if (lw) {
         endPara();
-        out.push({ type: 'uses', names: um[1].split(',').map(function (n) { return n.trim(); }).filter(Boolean) }); i++; continue;
+        var items = specLinkItems(trim.replace(specLinkRe(lw), ''));
+        out.push({ type: 'uses', word: lw, items: items, names: items.map(function (x) { return x.name; }) }); i++; continue;
+      }
+      var pm = /^parts:\s*(.*)$/i.exec(trim);
+      if (pm) {
+        endPara();
+        out.push({ type: 'parts', items: pm[1].split(',').map(function (n) { return n.trim(); }).filter(Boolean) }); i++; continue;
       }
       if (/^>\s?/.test(trim)) {
         endPara();
@@ -667,10 +716,16 @@
     var ctx = specContext(project), secs = liveSpec(project), use = {}, tags = [];
     var totals = { sections: secs.length, units: 0, linked: 0, std: 0, tag: 0, untraced: 0 };
     var out = secs.map(function (s, si) {
-      var blocks = specBlocks(s.body, ctx), c = { linked: 0, std: 0, tag: 0, untraced: 0 }, gist = '', uses = [], links = [];
+      var blocks = specBlocks(s.body, ctx), c = { linked: 0, std: 0, tag: 0, untraced: 0 }, gist = '', uses = [], links = [], edges = [], parts = [];
       blocks.forEach(function (bk) {
         if (bk.type === 'gist' && !gist) gist = bk.text;
-        if (bk.type === 'uses') bk.names.forEach(function (n) { var id = ctx.titles[n.toLowerCase()]; if (id && id !== s.id && uses.indexOf(id) < 0) uses.push(id); });
+        if (bk.type === 'uses') bk.items.forEach(function (it) {
+          var id = ctx.titles[it.name.toLowerCase()];
+          if (!id || id === s.id) return;
+          if (uses.indexOf(id) < 0) uses.push(id);
+          edges.push({ id: id, word: bk.word, label: it.label });
+        });
+        if (bk.type === 'parts') bk.items.forEach(function (n) { if (parts.indexOf(n) < 0) parts.push(n); });
         (bk.units || []).forEach(function (u) {
           c[u.state]++; totals[u.state]++; totals.units++;
           u.reqs.forEach(function (id) { (use[id] = use[id] || []).push({ sec: s.id, start: u.start, text: u.text }); if (links.indexOf(id) < 0) links.push(id); });
@@ -681,7 +736,8 @@
         var first = blocks.filter(function (bk) { return (bk.type === 'p' || bk.type === 'li') && bk.units.length; })[0];
         gist = first ? first.units[0].text : '';
       }
-      return { sec: s, index: si, blocks: blocks, counts: c, gaps: c.untraced + c.tag, gist: gist, uses: uses, links: links };
+      // uses: ids of the sections its link lines name; edges: each with its link word and label.
+      return { sec: s, index: si, blocks: blocks, counts: c, gaps: c.untraced + c.tag, gist: gist, uses: uses, edges: edges, parts: parts, links: links };
     });
     // Parents: the nearest earlier section with a smaller level.
     out.forEach(function (x, i) {
@@ -870,7 +926,9 @@
       var fence = false, lines = String(s.body || '').split('\n').map(function (l) {
         if (/^\s*```/.test(l)) { fence = !fence; return l; }
         if (fence) return l;
-        if (/^\s*uses:/i.test(l)) return '*Uses: ' + l.replace(/^\s*uses:\s*/i, '') + '*';
+        var lw2 = specLinkOf(l);
+        if (lw2) return '*' + lw2 + ': ' + l.replace(specLinkRe(lw2), '').trim() + '*';
+        if (/^\s*parts:/i.test(l)) return '*Parts: ' + l.replace(/^\s*parts:\s*/i, '') + '*';
         return inline(l);
       });
       out.push(lines.join('\n').replace(/\s+$/, ''), '');
@@ -888,7 +946,7 @@
   }
 
   // Comments tagged @req (on a check, a requirement, or the whole review), oldest first: they wait
-  // in the Description tab's To requirementify list beside the flagged sentences, until handled
+  // in the Description tab's Write as requirements list beside the flagged sentences, until handled
   // (reqDone: the comment's words are left as written).
   function specCommentTags(project) {
     return liveComments(project).filter(function (c) { return !c.reqDone && SPEC_TAG.test(String(c.text || '')); }).map(function (c) {
@@ -898,19 +956,22 @@
 
   // A section's gist (> line) or Uses line, set, replaced, or (empty value) removed. A gist goes
   // first, a Uses line last. Lines inside code fences are left alone.
-  var SPEC_LINE = { gist: /^\s*>\s?/, uses: /^\s*uses:/i };
+  // which: 'gist', or a link word ('uses', 'connects', 'supplies': the tool's own spelling is written).
+  var SPEC_GIST = /^\s*>\s?/;
+  function specLineRe(which) { return which === 'gist' ? SPEC_GIST : specLinkRe(specLinkWord(which) || which); }
   function specLineIndex(lines, which) {
-    var fence = false;
+    var fence = false, re = specLineRe(which);
     for (var i = 0; i < lines.length; i++) {
       if (/^\s*```/.test(lines[i])) { fence = !fence; continue; }
-      if (!fence && SPEC_LINE[which].test(lines[i])) return i;
+      if (!fence && re.test(lines[i])) return i;
     }
     return -1;
   }
   function specSetLine(body, which, value) {
     var lines = String(body || '').split('\n'), i = specLineIndex(lines, which);
     value = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
-    var line = value ? (which === 'gist' ? '> ' : 'Uses: ') + value : null;
+    var word = which === 'gist' ? '' : specLinkWord(which) || String(which).charAt(0).toUpperCase() + String(which).slice(1);
+    var line = value ? (which === 'gist' ? '> ' : word + ': ') + value : null;
     if (i >= 0) { if (line) lines[i] = line; else lines.splice(i, 1); }
     else if (line) {
       if (which === 'gist') lines.unshift(line);
@@ -918,10 +979,14 @@
     }
     return lines.join('\n').replace(/^\s*\n/, '').replace(/\s+$/, '');
   }
-  function specUsesNames(body) {
-    var lines = String(body || '').split('\n'), i = specLineIndex(lines, 'uses');
-    return i < 0 ? [] : lines[i].replace(SPEC_LINE.uses, '').split(',').map(function (n) { return n.trim(); }).filter(Boolean);
+  // The names on a section's link line (word: a link word; the tool's first by default), signal or
+  // rail names left off; specUsesItems keeps them.
+  function specUsesItems(body, word) {
+    word = word || specLinkWords()[0];
+    var lines = String(body || '').split('\n'), i = specLineIndex(lines, word);
+    return i < 0 ? [] : specLinkItems(lines[i].replace(specLineRe(word), ''));
   }
+  function specUsesNames(body, word) { return specUsesItems(body, word).map(function (x) { return x.name; }); }
   // Uses lines name sections by title: a renamed heading is renamed in every Uses line too.
   function specRenameUses(body, from, to) {
     var key = String(from || '').trim().toLowerCase();
@@ -929,10 +994,11 @@
     var fence = false;
     return String(body || '').split('\n').map(function (l) {
       if (/^\s*```/.test(l)) { fence = !fence; return l; }
-      if (fence || !SPEC_LINE.uses.test(l)) return l;
-      var names = l.replace(SPEC_LINE.uses, '').split(',').map(function (n) { return n.trim(); }).filter(Boolean);
-      if (!names.some(function (n) { return n.toLowerCase() === key; })) return l;
-      return 'Uses: ' + names.map(function (n) { return n.toLowerCase() === key ? to : n; }).join(', ');
+      var w = fence ? '' : specLinkOf(l);
+      if (!w) return l;
+      var items = specLinkItems(l.replace(specLinkRe(w), ''));
+      if (!items.some(function (x) { return x.name.toLowerCase() === key; })) return l;
+      return w + ': ' + specLinkText(items.map(function (x) { return x.name.toLowerCase() === key ? { name: to, label: x.label } : x; }));
     }).join('\n');
   }
   // Renaming a section (from the diagram): the records to write, its own and every section whose
@@ -957,7 +1023,7 @@
   function specAddBlock(project, f, user) {
     var secs = liveSpec(project), title = String(f.title || '').replace(/\s+/g, ' ').trim();
     if (!title) return [];
-    var kind = oneOf(SPEC_KINDS, f.kind, ''), parent = f.parent && (project.spec || {})[f.parent] ? cleanSection(project.spec[f.parent]) : null;
+    var kind = oneOf(specKinds(), f.kind, ''), parent = f.parent && (project.spec || {})[f.parent] ? cleanSection(project.spec[f.parent]) : null;
     function subtreeEnd(i) { var lv = secs[i].level, j = i + 1; while (j < secs.length && secs[j].level > lv) j++; return j - 1; }
     var at = -1, level = secs.length ? 2 : 1, i;
     for (i = secs.length - 1; i >= 0; i--) if (kind && secs[i].kind === kind) { at = subtreeEnd(i); level = secs[i].level; break; }
@@ -967,9 +1033,9 @@
     var rec = newSection({ order: (lo + hi) / 2, level: level, title: title, kind: kind, body: specSetLine('', 'gist', f.gist || '') }, user);
     var out = [rec];
     if (parent) {
-      var names = specUsesNames(parent.body);
-      if (!names.some(function (n) { return n.toLowerCase() === title.toLowerCase(); })) {
-        out.push(specStamp(Object.assign({}, project.spec[parent.id], { body: specSetLine(parent.body, 'uses', names.concat([title]).join(', ')) }), user));
+      var lword = specKindLink(parent.kind), items = specUsesItems(parent.body, lword);
+      if (!items.some(function (x) { return x.name.toLowerCase() === title.toLowerCase(); })) {
+        out.push(specStamp(Object.assign({}, project.spec[parent.id], { body: specSetLine(parent.body, lword, specLinkText(items.concat([{ name: title, label: f.label || '' }]))) }), user));
       }
     }
     return out;
@@ -984,7 +1050,7 @@
     if (i < 0) return [];
     var end = i + 1; while (end < secs.length && secs[end].level > secs[i].level) end++;
     var tree = secs.slice(i, end), inTree = {}; tree.forEach(function (s) { inTree[s.id] = 1; });
-    var kind = f.kind === undefined ? secs[i].kind : oneOf(SPEC_KINDS, f.kind, '');
+    var kind = f.kind === undefined ? secs[i].kind : oneOf(specKinds(), f.kind, '');
     var changed = {}, put = function (s, fields) { changed[s.id] = Object.assign(changed[s.id] || {}, fields); };
     if (kind !== secs[i].kind) put(secs[i], { kind: kind });
     var nb = f.before || f.after;
@@ -1004,6 +1070,79 @@
       }
     }
     return Object.keys(changed).map(function (sid) { return specStamp(Object.assign({}, project.spec[sid], changed[sid]), user); });
+  }
+
+  // ── Sections in the flow diagram ──
+  // The outline is the hierarchy: a heading with headings under it is a section (a box in the diagram)
+  // and the headings under it are its blocks. A level-1 heading with headings under it is the board
+  // itself and isn't drawn.
+  function specTreeEnd(secs, i) { var lv = secs[i].level, j = i + 1; while (j < secs.length && secs[j].level > lv) j++; return j; }
+  // Move whole subtrees (ids, each with the headings under it) to the end of `parentId`'s subtree, one
+  // level under it; with no parent, to the end of the document one level under the board (level 2 when
+  // there's a level-1 heading, else 1). With `beforeId`, a heading already there at that level, they go
+  // just before it instead (reordering). Orders are renumbered; only changed records come back.
+  function specNest(project, ids, parentId, user, beforeId) {
+    var secs = liveSpec(project), idx = {}, k;
+    secs.forEach(function (s, i) { idx[s.id] = i; });
+    var parent = parentId && idx[parentId] !== undefined ? secs[idx[parentId]] : null;
+    // The top-most of the chosen headings (one inside another moves with it), in document order.
+    var heads = ids.filter(function (id) { return idx[id] !== undefined; }).sort(function (a, b) { return idx[a] - idx[b]; });
+    var take = {}, moving = [];
+    heads.forEach(function (id) {
+      if (take[id]) return;
+      var i = idx[id], end = specTreeEnd(secs, i);
+      if (parent && idx[parent.id] >= i && idx[parent.id] < end) return;   // never into itself
+      var tree = secs.slice(i, end);
+      tree.forEach(function (s) { take[s.id] = 1; });
+      moving.push(tree);
+    });
+    if (!moving.length) return [];
+    var rest = secs.filter(function (s) { return !take[s.id]; });
+    var hasRoot = secs.some(function (s) { return s.level === 1; });
+    var lvl = parent ? Math.min(4, parent.level + 1) : (hasRoot ? 2 : 1), at = rest.length;
+    if (parent) { var pi = -1; for (k = 0; k < rest.length; k++) if (rest[k].id === parent.id) pi = k; at = specTreeEnd(rest, pi); }
+    if (beforeId) {
+      var lo = parent ? -1 : -1, hi = at;
+      if (parent) for (k = 0; k < rest.length; k++) if (rest[k].id === parent.id) lo = k;
+      for (k = lo + 1; k < hi; k++) if (rest[k].id === beforeId && rest[k].level === lvl) { at = k; break; }
+    }
+    var placed = [];
+    moving.forEach(function (tree) { var shift = lvl - tree[0].level; tree.forEach(function (s) { placed.push({ s: s, level: Math.max(1, Math.min(4, s.level + shift)) }); }); });
+    var order = rest.slice(0, at).map(function (s) { return { s: s, level: s.level }; }).concat(placed, rest.slice(at).map(function (s) { return { s: s, level: s.level }; }));
+    var out = [];
+    order.forEach(function (o, i) {
+      if (o.s.order === i + 1 && o.s.level === o.level) return;
+      out.push(specStamp(Object.assign({}, project.spec[o.s.id], { order: i + 1, level: o.level }), user));
+    });
+    return out;
+  }
+  // A new section around some headings (drawn in the diagram): a heading where the first of them was,
+  // at its level, with them moved under it. Returns the records to write, the new section first.
+  function specGroup(project, ids, title, user) {
+    var secs = liveSpec(project), idx = {};
+    secs.forEach(function (s, i) { idx[s.id] = i; });
+    var heads = ids.filter(function (id) { return idx[id] !== undefined; }).sort(function (a, b) { return idx[a] - idx[b]; });
+    title = String(title || '').replace(/\s+/g, ' ').trim();
+    if (!heads.length || !title) return [];
+    var first = secs[idx[heads[0]]], prev = idx[heads[0]] > 0 ? secs[idx[heads[0]] - 1].order : first.order - 1;
+    var sec = newSection({ order: (prev + first.order) / 2, level: first.level, title: title, kind: '', body: '' }, user);
+    var view = Object.assign({}, project, { spec: Object.assign({}, project.spec || {}) });
+    view.spec[sec.id] = sec;
+    var nest = specNest(view, heads, sec.id, user), mine = {};
+    nest.forEach(function (r) { mine[r.id] = r; });
+    return [mine[sec.id] || sec].concat(nest.filter(function (r) { return r.id !== sec.id; }));
+  }
+  // Ungrouping a section: the headings under it move up a level in its place; the section heading
+  // goes too unless it has text of its own (then it stays, as a block, after them).
+  function specUngroup(project, id, user) {
+    var secs = liveSpec(project), i = -1, k;
+    for (k = 0; k < secs.length; k++) if (secs[k].id === id) i = k;
+    if (i < 0) return [];
+    var end = specTreeEnd(secs, i), sec = secs[i], out = [];
+    secs.slice(i + 1, end).forEach(function (s) { out.push(specStamp(Object.assign({}, project.spec[s.id], { level: Math.max(1, s.level - 1) }), user)); });
+    if (!sec.body.trim()) out.push(specStamp(Object.assign({}, project.spec[id], { deleted: true }), user));
+    else out.push(specStamp(Object.assign({}, project.spec[id], { order: (end < secs.length ? (secs[end - 1].order + secs[end].order) / 2 : secs[end - 1].order + 1) }), user));
+    return out;
   }
 
   // The whole description as the editor shows it: each section's heading line and body.
@@ -1674,9 +1813,9 @@
     cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
-    SPEC_KINDS: SPEC_KINDS, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
+    specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
     specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
-    specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary,
+    specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specNest: specNest, specGroup: specGroup, specUngroup: specUngroup, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, isOutside: isOutside, roleOf: roleOf, sharedRepo: sharedRepo,
