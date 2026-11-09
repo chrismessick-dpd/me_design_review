@@ -308,6 +308,9 @@
     // links that Part to it. Left out when there's none, so other reviews keep their bytes.
     var pp = cleanPlPart(meta.plPart);
     if (pp) out.plPart = pp;
+    // summary.kind: 'assembly' when the review is of an assembly (config.assemblies, Signoff ME);
+    // Signoff PL then shows it on an assembly's branch. Left out for a part, so parts keep their bytes.
+    if (isAssembly(project)) out.kind = 'assembly';
     // summary.spec: the description's top-level gists and gaps (specSummary).
     var sp = specSummary(project);
     if (sp) out.spec = sp;
@@ -350,6 +353,10 @@
   // tool's From Signoff PL list until a review here is started from it (meta.plPart); PL then links
   // the Part to that review (signoff_pl/assets/pl.js claimPlanned). PL files are untrusted: only
   // strings pass, cut short.
+  // A review of an assembly rather than a single part: meta.kind 'assembly', offered where
+  // config.assemblies is set (Signoff ME). Absent means a part.
+  function isAssembly(project) { return !!(project && project.meta && project.meta.kind === 'assembly'); }
+
   function cleanPlPart(p) {
     if (!p || typeof p !== 'object' || typeof p.project !== 'string' || typeof p.node !== 'string' || !p.project || !p.node) return null;
     return { project: p.project.slice(0, 80), node: p.node.slice(0, 80), at: typeof p.at === 'string' ? p.at.slice(0, 40) : '' };
@@ -1845,7 +1852,7 @@
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
-    cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
+    isAssembly: isAssembly, cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,

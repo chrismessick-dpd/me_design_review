@@ -12,7 +12,9 @@
    ids:            prefixes for new project, comment, and custom-check IDs.
    templatePrefixes: checklist id -> required prefix of its section and item IDs.
    words.unit(s):  what one review is called on screen (board / part). "Project" is the
-                   client project several reviews belong to (meta.project). */
+                   client project several reviews belong to (meta.project).
+   assemblies:     the details window asks whether a part is a single part or an assembly
+                   (meta.kind, summary.kind); Signoff PL shows an assembly's review on its branch. */
 window.SIGNOFF_CONFIG = {
   "product": "Signoff ME",
   "discipline": "ME",
@@ -37,6 +39,7 @@ window.SIGNOFF_CONFIG = {
   "defaultStage": "Detailed design",
   "legacyTabs": [],
   "pl": { "tool": "me", "dataRepo": "signoff_pl_data" },
+  "assemblies": true,
   "words": {
     "unit": "part",
     "units": "parts",

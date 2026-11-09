@@ -349,7 +349,9 @@
   }
   function updateMeta(fields) {
     var p = current(); if (!p) return;
-    p.meta = M.stamp(Object.assign({}, p.meta, fields), me());
+    var meta = Object.assign({}, p.meta, fields);
+    Object.keys(fields).forEach(function (k) { if (fields[k] === undefined) delete meta[k]; });   // undefined removes a field (meta.kind)
+    p.meta = M.stamp(meta, me());
     touch(p); render();
   }
 
@@ -703,7 +705,7 @@
     var m = p.meta;
     var sub = [m.client, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).map(esc).join('<span class="sep">·</span>');
     return '<div class="eyebrow">' + esc(m.project ? m.project + ' · ' + eyebrow : eyebrow) + '</div><h1 class="page-title">' + esc(m.name) + '</h1>' +
-      '<div class="page-sub">' + (sub ? '<span>' + sub + '</span>' : '') + '<span class="chip accent">' + esc(m.stage) + '</span></div>';
+      '<div class="page-sub">' + (sub ? '<span>' + sub + '</span>' : '') + (C.assemblies && M.isAssembly(p) ? '<span class="chip">Assembly</span>' : '') + '<span class="chip accent">' + esc(m.stage) + '</span></div>';
   }
 
   function overviewPage(p) {
@@ -3130,6 +3132,9 @@
       '<div class="field"><label for="f-name">' + cap(UNIT) + ' name</label><input class="input" id="f-name" value="' + esc(m.name) + '" placeholder="' + esc(W.namePlaceholder) + '" maxlength="120"></div>' +
       '<div class="row2"><div class="field"><label for="f-project">Project</label><input class="input" id="f-project" list="f-project-list" value="' + esc(m.project || '') + '" placeholder="The product it belongs to, e.g. Smart Thermostat" maxlength="80"><datalist id="f-project-list">' + options('project') + '</datalist></div>' +
       '<div class="field"><label for="f-client">Client</label><input class="input" id="f-client" list="f-client-list" value="' + esc(m.client) + '" placeholder="Optional"><datalist id="f-client-list">' + options('client') + '</datalist></div></div>' +
+      // Part or assembly, where the tool reviews both (config.assemblies, Signoff ME): meta.kind.
+      (C.assemblies ? '<div class="field"><span class="field-label">This ' + UNIT + ' is</span><div class="seg" id="f-kind" role="group" aria-label="Part or assembly">' +
+        [['', 'A single part'], ['assembly', 'An assembly']].map(function (k) { return '<button type="button" data-kind="' + k[0] + '" aria-pressed="' + ((m.kind === 'assembly' ? 'assembly' : '') === k[0]) + '"' + ((m.kind === 'assembly' ? 'assembly' : '') === k[0] ? ' class="on"' : '') + '>' + k[1] + '</button>'; }).join('') + '</div></div>' : '') +
       '<div class="row2">' +
       '<div class="field"><label for="f-board">' + esc(W.number) + '</label><input class="input" id="f-board" value="' + esc(m.board) + '" placeholder="' + esc(W.numberPlaceholder) + '"></div>' +
       '<div class="field"><label for="f-rev">Revision</label><input class="input" id="f-rev" value="' + esc(m.revision) + '" placeholder="e.g. 03"></div></div>' +
@@ -3167,6 +3172,8 @@
     w.addEventListener('click', function (e) {
       var pk = e.target.closest('.pick');
       if (pk) { pk.classList.toggle('on'); updateCount(); return; }
+      var kb = e.target.closest('#f-kind button');
+      if (kb) { Array.prototype.forEach.call(w.querySelectorAll('#f-kind button'), function (x) { x.classList.toggle('on', x === kb); x.setAttribute('aria-pressed', String(x === kb)); }); return; }
       var b = e.target.closest('[data-sheet]');
       if (!b) return;
       if (b.dataset.sheet === 'cancel') return closeSheet();
@@ -3179,6 +3186,8 @@
         description: w.querySelector('#f-desc').value.trim(), profile: picked('f-profile'), checklists: picked('f-checklists')
       };
       if (!fields.checklists.length) { toast('Pick at least one checklist'); return; }
+      // meta.kind is stored only for an assembly; a part leaves it out (undefined isn't written).
+      if (C.assemblies) { var kon = w.querySelector('#f-kind button.on'); fields.kind = kon && kon.dataset.kind === 'assembly' ? 'assembly' : undefined; }
       var people = w.querySelector('#f-people') ? picked('f-people') : null;
       function assign(projectId) {
         if (!people) return;
@@ -3208,6 +3217,7 @@
       if (SPEC) fields.specDecided = true;
       if (editing) { assign(p.id); updateMeta(fields); closeSheet(); syncSoon(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
+      if (fields.kind === 'assembly') doc.meta.kind = 'assembly';
       doc.meta.reqsDecided = true;
       if (SPEC) doc.meta.specDecided = true;
       if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
