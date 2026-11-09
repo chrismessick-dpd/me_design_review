@@ -718,6 +718,13 @@ a.side-link { text-decoration: none; }
 .side-tools.folded .side-tools-toggle .side-label { display: none; }
 .side-tools.folded .side-link { margin: 0; padding: 4px; border-radius: 8px; }
 .side-tools.folded .side-link > span:not(.tool-mark) { display: none; }
+/* From Signoff PL: Parts waiting to be started in this tool. Told apart from reviews by shape, not
+   hue: an empty dashed ring where a review's progress ring sits, and a Start pill. */
+.from-pl { margin-bottom: 6px; }
+.from-pl-head { cursor: default; }
+.pl-wait-ring { width: 22px; height: 22px; margin: 2px; border-radius: 50%; border: 1.5px dashed var(--accent); flex: none; }
+.pl-wait-start { flex: none; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9px; border: 1px solid var(--accent); color: var(--accent); }
+.pl-wait:hover .pl-wait-start { background: var(--accent); color: #fff; }
 .invite-card { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; padding: 11px 12px; border-radius: 11px; background: var(--accent-soft); font-size: 12.5px; }
 .invite-card span { color: var(--text-2); }
 .invite-card .btn { align-self: flex-start; margin-top: 4px; padding: 5px 14px; }

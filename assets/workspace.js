@@ -166,6 +166,14 @@
         }).catch(function () { out.invitations = []; });
       })
       .then(function () {
+        // 5. Signoff PL's Parts waiting to be started here (an FTE's, From Signoff PL). A token that
+        // can't read PL, or a tool without config.pl, just skips it; the list keeps its last read.
+        if (st.dataAccess !== 'ok' || !ws.s.plRepo || !ws.s.plTool) return;
+        return ws.readPl(opts.plCache).then(function (r) { out.pl = r.pl; out.plCache = r.cache; }, function (err) {
+          if (!denied(err)) errors.push({ repo: ws.full(ws.s.plRepo), message: 'Couldn’t read Signoff PL: ' + err.message });
+        });
+      })
+      .then(function () {
         // Forget what was cached about repos nothing here uses any more (a deleted project's
         // repo, one this person lost access to), so no trace of those projects stays behind.
         var used = {};
@@ -175,6 +183,32 @@
         Object.keys(st.cache).forEach(function (r) { if (!used[r]) delete st.cache[r]; });
         out.state = st; out.errors = errors; return out;
       });
+  };
+
+  /* Read Signoff PL's data repo for its projects' Parts waiting for this tool (model.plSlim). Each
+     file is slimmed once and cached by blob sha; the cache carries the slim shape's version (bump
+     PL_CACHE_V whenever plSlim keeps something new, or unchanged files never gain it). Resolves
+     { pl: { at, projects: [slim] }, cache: { v, files: { path: { sha, doc } } } }. */
+  var PL_CACHE_V = 1;
+  Workspace.prototype.readPl = function (cache) {
+    var ws = this, tool = ws.s.plTool, store = ws.store(ws.full(ws.s.plRepo), { summarize: null });
+    var old = cache && cache.v === PL_CACHE_V && cache.files && cache.files[tool] ? cache.files[tool] : {};
+    return store.snapshot().then(function (snap) {
+      var files = snap.entries.filter(function (e) { return e.type === 'blob' && /^projects\/[^/]+\.json$/.test(e.path); }), next = {};
+      return files.reduce(function (chain, e) {
+        return chain.then(function () {
+          if (old[e.path] && old[e.path].sha === e.sha) { next[e.path] = old[e.path]; return; }
+          return store.blob(e.sha).then(function (text) {
+            var doc = null;
+            try { doc = M.plSlim(JSON.parse(text), tool); } catch (err) { /* not JSON: skipped */ }
+            next[e.path] = { sha: e.sha, doc: doc };   // a file that isn't a PL project is cached as null, so it isn't read again
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        var files2 = {}; files2[tool] = next;
+        return { pl: { at: new Date().toISOString(), projects: Object.keys(next).sort().map(function (k) { return next[k].doc; }).filter(Boolean) }, cache: { v: PL_CACHE_V, files: files2 } };
+      });
+    });
   };
 
   /* Throw away unsynced local changes: fetch what GitHub has now for each project in `ids`

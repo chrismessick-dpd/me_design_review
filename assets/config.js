@@ -36,6 +36,7 @@ window.SIGNOFF_CONFIG = {
   "stages": ["Concept", "Detailed design", "Prototype (EVT)", "Validation (DVT)", "Pilot (PVT)", "Released"],
   "defaultStage": "Detailed design",
   "legacyTabs": [],
+  "pl": { "tool": "me", "dataRepo": "signoff_pl_data" },
   "words": {
     "unit": "part",
     "units": "parts",

@@ -54,7 +54,8 @@
   // prefix: name prefix for the private repos of projects shared with contractors.
   // suiteRepos: the rest of the suite FTEs are invited to; always taken from the config.
   var DEFAULT_SETTINGS = { user: '', owner: C.repos.owner, toolRepo: C.repos.toolRepo, dataRepo: C.repos.dataRepo, dataPath: '', prefix: C.repos.prefix, branch: 'main', templatePath: 'templates', theme: 'auto' };
-  var settings = Object.assign({}, DEFAULT_SETTINGS, load('settings', {}), { suiteRepos: (C.repos.suite || []).slice() });
+  var settings = Object.assign({}, DEFAULT_SETTINGS, load('settings', {}), { suiteRepos: (C.repos.suite || []).slice(),
+    plRepo: (C.pl && C.pl.dataRepo) || '', plTool: (C.pl && C.pl.tool) || '' });
   settings.theme = sharedTheme() || settings.theme || 'auto';
   if (!settings.user && !DEMO) {
     // First visit to this tool: reuse the name given in another Signoff tool (EE's settings).
@@ -86,6 +87,7 @@
   var pulledTemplates = load('templates', []);
   var lastSync = load('lastSync', null);    // { at, version, errors }
   var invitations = load('invitations', []);   // repository invitations waiting for this user
+  var plRead = load('pl', null);               // Signoff PL's projects, slimmed (workspace.js readPl): From Signoff PL
   // Unsynced FTE work in this browser while a contractor's token is in use: kept out of sight
   // and pushed when an FTE syncs here again. { projects: { id: doc }, roster: roster | null }
   var held = load('held', { projects: {}, roster: null });
@@ -179,6 +181,7 @@
     settings.tokenTag = tag; settings.login = ''; save('settings', settings);
     dataAccess = ''; save('dataAccess', dataAccess); accessMap = {};
     invitations = []; save('invitations', invitations);
+    plRead = null; save('pl', null);
     return true;
   }
   function visible() { return !checking() && !signedOut(); }
@@ -349,6 +352,31 @@
     touch(p); render();
   }
 
+  // ── From Signoff PL ──────────────────────────────────────
+  // Parts a Signoff PL project marks "Not started yet" in this tool wait here, FTEs only, until a
+  // review is started from one (Chris, 2026-11-08: new things wait in a tray in the tool they belong
+  // to, to be added on purpose). Start opens New design review filled in from the Part; the review
+  // names it (meta.plPart, summary.plPart), and PL links the Part to it at PL's next sync.
+  function plWaitingList() {
+    if (DEMO || !isFte() || !plRead || !C.pl) return [];
+    return M.plWaiting(plRead.projects, Object.keys(projects).map(function (k) { return projects[k]; }));
+  }
+  function fromPlHtml(q) {
+    var list = plWaitingList().filter(function (w) { return !q || [w.name, w.number, w.projectName].join(' ').toLowerCase().indexOf(q) >= 0; });
+    if (!list.length) return '';
+    return '<div class="side-group from-pl"><div class="side-group-head from-pl-head" title="Parts Signoff PL is waiting on: start one to begin its review"><span class="side-group-name">From Signoff PL</span><span class="side-group-count">' + list.length + '</span></div>' +
+      list.map(function (w) {
+        return '<button class="proj pl-wait" data-act="pl-start" data-pl="' + esc(w.project + '/' + w.node) + '" title="' + esc('Start the review of ' + (w.name || 'this Part') + ': it opens New design review filled in from the Part, and Signoff PL links the Part to it at its next sync') + '">' +
+          '<span class="pl-wait-ring" aria-hidden="true"></span><span class="proj-body"><span class="proj-name">' + esc(w.name || 'Unnamed Part') + '</span>' +
+          '<span class="proj-sub">' + esc([w.number, w.projectName].filter(Boolean).join(' · ')) + '</span></span><span class="pl-wait-start">Start</span></button>';
+      }).join('') + '</div>';
+  }
+  function startFromPl(key) {
+    var w = plWaitingList().filter(function (x) { return x.project + '/' + x.node === key; })[0];
+    if (!w) { toast('That Part isn’t waiting in Signoff PL any more. Sync to refresh the list.'); return; }
+    projectSheet(null, { name: w.name, board: w.number, project: w.clientProject, plPart: { project: w.project, node: w.node }, from: w });
+  }
+
   // ── Sidebar ──────────────────────────────────────────────
   function renderSidebar() {
     var q = ($('#project-search').value || '').toLowerCase();
@@ -390,6 +418,7 @@
       html += '<div class="side-archived"><div class="side-head"><span class="side-label">Archived</span><button class="btn-plain btn" style="padding:2px 6px;font-size:12px" data-act="toggle-archived">' + (ui.showArchived ? 'Hide' : 'Show ' + archived.length) + '</button></div>' +
         (ui.showArchived ? archived.map(row).join('') : '') + '</div>';
     }
+    html = fromPlHtml(q) + html;
     if (invitations.length && !DEMO) {
       html = '<div class="invite-card"><b>' + plural(invitations.length, 'invitation') + ' from ' + esc(settings.owner) + '</b><span>' +
         invitations.map(function (i) { return esc(String(i.repo).split('/')[1]); }).join(', ') + '</span><button class="btn btn-primary" data-act="accept-invites">Accept</button></div>' + html;
@@ -1736,20 +1765,22 @@
   }
   function closeSheet() { var s = $('#sheet'); if (s) s.remove(); }
 
-  function projectSheet(p) {
+  // preset (a new review only): fields to start from, and plPart, the Signoff PL Part it's started from.
+  function projectSheet(p, preset) {
     var editing = !!p;
     var contractors = M.liveUsers(roster).filter(M.isOutside);   // clients and contractors
     var defaults = C.defaultChecklists || TEMPLATES.map(function (t) { return t.id; });
     // A new review starts in the project of the one that's open, the usual next step.
     var cur = !p && current();
-    var m = p ? p.meta : { name: '', project: (cur && cur.meta.project) || '', client: (cur && cur.meta.client) || '', board: '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
+    var m = p ? p.meta : { name: (preset && preset.name) || '', project: preset ? preset.project || '' : (cur && cur.meta.project) || '', client: preset ? '' : (cur && cur.meta.client) || '', board: (preset && preset.board) || '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
     var reqsPicked = p ? reqsOn(p) : true;
     var reqCount = p ? M.liveReqs(p).length : 0;
     // Projects and clients already in use, offered as suggestions so a product's reviews group.
     var known = { project: {}, client: {} };
     visibleProjects().forEach(function (d) { ['project', 'client'].forEach(function (k) { var v = String(d.meta[k] || '').trim(); if (v) known[k][v] = 1; }); });
     function options(k) { return Object.keys(known[k]).sort().map(function (v) { return '<option value="' + esc(v) + '">'; }).join(''); }
-    var w = sheet('<div class="sheet-head"><h2>' + (editing ? cap(UNIT) + ' details' : 'New design review') + '</h2><p>' + (editing ? 'Changes sync to everyone on this ' + UNIT + '.' : 'Pick the checklists and describe the ' + W.thing + '. Checks that don’t fit its profile are set aside as N/A, and you can still bring any of them back.') + '</p></div>' +
+    var from = !editing && preset && preset.from;
+    var w = sheet('<div class="sheet-head"><h2>' + (editing ? cap(UNIT) + ' details' : 'New design review') + '</h2><p>' + (editing ? 'Changes sync to everyone on this ' + UNIT + '.' : (from ? esc('Started from ' + from.projectName + '’s Part in Signoff PL' + (from.path.length ? ' (' + from.path.join(' › ') + ')' : '') + '. PL links the Part to this review at its next sync. ') : '') + 'Pick the checklists and describe the ' + W.thing + '. Checks that don’t fit its profile are set aside as N/A, and you can still bring any of them back.') + '</p></div>' +
       '<div class="sheet-body">' +
       '<div class="field"><label for="f-name">' + cap(UNIT) + ' name</label><input class="input" id="f-name" value="' + esc(m.name) + '" placeholder="' + esc(W.namePlaceholder) + '" maxlength="120"></div>' +
       '<div class="row2"><div class="field"><label for="f-project">Project</label><input class="input" id="f-project" list="f-project-list" value="' + esc(m.project || '') + '" placeholder="The product it belongs to, e.g. Smart Thermostat" maxlength="80"><datalist id="f-project-list">' + options('project') + '</datalist></div>' +
@@ -1830,6 +1861,7 @@
       if (editing) { assign(p.id); updateMeta(fields); closeSheet(); syncSoon(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
       doc.meta.reqsDecided = true;
+      if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
       var slug = doc.slug, n = 2;
       while (projects[slug]) slug = doc.slug + '-' + n++;
       doc.slug = slug;
@@ -2314,7 +2346,7 @@
     var names = Object.keys(dirty).map(function (k) { return k === 'roster' ? 'people' : st0.projects[k] ? st0.projects[k].meta.name : k; });
     var message = names.length ? 'Review update: ' + names.join(', ') + ' (' + me() + ')' : 'Review update (' + me() + ')';
     workspace().sync(st0, { message: message, onRetry: function () { toast('Someone else just synced — merging their changes'); },
-      keepLocal: function (id) { return !!dirty[id]; } })
+      keepLocal: function (id) { return !!dirty[id]; }, plCache: load('plCache', null) })
       .then(function (res) {
         var st = res.state;
         if (res.userName && !settings.user) settings.user = res.userName;
@@ -2371,6 +2403,7 @@
         openWanted(true);
         if (res.templates && res.templates.length) { pulledTemplates = res.templates; save('templates', pulledTemplates); refreshTemplates(); }
         invitations = res.invitations || [];
+        if (res.pl) { plRead = res.pl; save('pl', plRead); save('plCache', res.plCache); }
         lastSync = { at: M.now(), startedAt: startedAt, version: res.version || (lastSync && lastSync.version), errors: res.errors };
         save('cache2', cache); save('lastSync', lastSync); save('dataAccess', dataAccess); save('invitations', invitations); persist();
         lastError = res.errors.length ? res.errors[0].message : '';
@@ -2583,6 +2616,7 @@
       case 'sync-details': if (popWasOpen) closeMenu(); else syncDetails(el); break;
       case 'goto-change': gotoChange(el); break;
       case 'new-project': if (isFte()) projectSheet(null); break;
+      case 'pl-start': if (isFte()) startFromPl(el.dataset.pl); break;
       case 'people': closeMenu(); openPeople(); break;
       case 'edit-project': projectSheet(current()); break;
       case 'open-project':

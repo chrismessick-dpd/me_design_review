@@ -295,6 +295,10 @@
       at: last.updatedAt || project.createdAt || '', by: last.updatedBy || ''
     };
     if (revs.length) out.revisions = revs;
+    // summary.plPart: the waiting Signoff PL Part this review was started from (From Signoff PL); PL
+    // links that Part to it. Left out when there's none, so other reviews keep their bytes.
+    var pp = cleanPlPart(meta.plPart);
+    if (pp) out.plPart = pp;
     return out;
   }
 
@@ -327,6 +331,46 @@
       byKey[key].docs.push(d);
     });
     return order.sort(function (a, b) { return (a === '') - (b === '') || a.localeCompare(b); }).map(function (k) { return byKey[k]; });
+  }
+
+  // ── Signoff PL's waiting Parts (config.pl) ──
+  // A PL Part marked "Not started yet" in this tool (source config.pl.tool, no ref) waits in this
+  // tool's From Signoff PL list until a review here is started from it (meta.plPart); PL then links
+  // the Part to that review (signoff_pl/assets/pl.js claimPlanned). PL files are untrusted: only
+  // strings pass, cut short.
+  function cleanPlPart(p) {
+    if (!p || typeof p !== 'object' || typeof p.project !== 'string' || typeof p.node !== 'string' || !p.project || !p.node) return null;
+    return { project: p.project.slice(0, 80), node: p.node.slice(0, 80), at: typeof p.at === 'string' ? p.at.slice(0, 40) : '' };
+  }
+  // One PL project file, slimmed to what the list needs: its name, the client project PL matches by
+  // (its name when unset), and its live Parts waiting for `tool`, with their place in the tree.
+  function plSlim(doc, tool) {
+    if (!doc || typeof doc !== 'object' || !doc.meta || typeof doc.meta !== 'object' || !doc.nodes || typeof doc.nodes !== 'object') return null;
+    var str = function (v, n) { return (v == null || typeof v === 'object' ? '' : String(v)).slice(0, n || 200); };
+    var nodes = doc.nodes;
+    function path(id) {
+      var out = [], seen = {};
+      for (var n = nodes[nodes[id] && nodes[id].parent]; n && typeof n === 'object' && !seen[n.id]; n = nodes[n.parent]) { seen[n.id] = 1; if (!n.deleted) out.unshift(str(n.name)); }
+      return out;
+    }
+    var planned = Object.keys(nodes).map(function (k) { return nodes[k]; }).filter(function (n) {
+      return n && typeof n === 'object' && !n.deleted && n.kind !== 'assembly' && n.source === tool && !n.ref && typeof n.id === 'string' && n.id;
+    }).map(function (n) { return { node: str(n.id, 80), name: str(n.name), number: str(n.number, 80), path: path(n.id) }; });
+    return { id: str(doc.id, 80), name: str(doc.meta.name), clientProject: str(doc.meta.clientProject).trim() || str(doc.meta.name).trim(),
+      archived: !!doc.meta.archived || !!doc.meta.deleted, planned: planned };
+  }
+  // The list: every waiting Part of the live PL projects that no review here (`docs`, archived ones
+  // included) was started from yet, by PL project, then place in the tree, then name.
+  function plWaiting(slims, docs) {
+    var taken = {}, out = [];
+    (docs || []).forEach(function (d) { var pp = d && d.meta && cleanPlPart(d.meta.plPart); if (pp) taken[pp.project + '/' + pp.node] = 1; });
+    (slims || []).forEach(function (s) {
+      if (!s || s.archived || !s.id) return;
+      (s.planned || []).forEach(function (n) {
+        if (!taken[s.id + '/' + n.node]) out.push(Object.assign({ project: s.id, projectName: s.name, clientProject: s.clientProject }, n));
+      });
+    });
+    return out.sort(function (a, b) { return a.projectName.localeCompare(b.projectName) || a.path.join('/').localeCompare(b.path.join('/')) || a.name.localeCompare(b.name); });
   }
 
   function withSummary(project, summarize) {
@@ -948,6 +992,7 @@
     resolveTemplates: resolveTemplates, indexTemplates: indexTemplates, applies: applies,
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
+    cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
