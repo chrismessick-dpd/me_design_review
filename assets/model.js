@@ -160,7 +160,8 @@
   }
 
   // Checks set aside by the board profile aren't counted at all (a new review starts at
-  // 0%). Section N/A is a reviewer's decision, so those count as reviewed.
+  // 0%). Section N/A is a reviewer's decision, so those count as reviewed. With nothing to review
+  // (no checks, or a review of requirements only) it's 100% (Chris, 2026-11-09).
   // Reference rows (waived findings kept to read) aren't checks, so they count nowhere either.
   function countStatuses(rows) {
     var c = { total: 0, pass: 0, issue: 0, na: 0, open: 0, reviewed: 0, issuesOpen: 0, outside: 0, reference: 0 };
@@ -172,7 +173,7 @@
       if (r.status !== 'open') c.reviewed++;
       if (r.status === 'issue' && !r.resolution) c.issuesOpen++;
     });
-    c.pct = c.total ? Math.round(100 * c.reviewed / c.total) : 0;
+    c.pct = c.total ? Math.round(100 * c.reviewed / c.total) : 100;
     return c;
   }
 
