@@ -201,7 +201,7 @@
     return !project.meta.reqsDecided && liveReqs(project).length > 0;
   }
 
-  // The Description tab is picked per review like a checklist ('spec' in meta.checklists), where the
+  // Scribe (the description tab) is picked per review like a checklist ('spec' in meta.checklists), where the
   // tool offers it (config.spec). Reviews from before that choice show it if they have a description.
   function specEnabled(project) {
     if (!C.spec) return false;
@@ -421,7 +421,7 @@
       .sort(function (a, b) { return latest(b).localeCompare(latest(a)); });
   }
 
-  // ── Description (project.spec) ───────────────────────────
+  // ── Scribe: the description (project.spec) ───────────────
   // A free-form description of the design, top level to drivers (config.spec; on in Signoff FW).
   // One record per heading section, merged like every other record, newer wins per section:
   //   project.spec[id] = { id, order, level (1–4), title, kind, body, createdAt, updatedAt, updatedBy, deleted }
@@ -946,7 +946,7 @@
   }
 
   // Comments tagged @req (on a check, a requirement, or the whole review), oldest first: they wait
-  // in the Description tab's Write as requirements list beside the flagged sentences, until handled
+  // in Scribe's Write as requirements list beside the flagged sentences, until handled
   // (reqDone: the comment's words are left as written).
   function specCommentTags(project) {
     return liveComments(project).filter(function (c) { return !c.reqDone && SPEC_TAG.test(String(c.text || '')); }).map(function (c) {

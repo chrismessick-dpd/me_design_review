@@ -522,7 +522,7 @@
   // last sync started (model.changesSince). A project with no home repo was never synced, so
   // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
   // it's listed without details. Nothing here touches dirty or sync.
-  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Description' };
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe' };
   var CHANGES_SHOWN = 8;
   function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
   function unsyncedList() {
@@ -1723,11 +1723,11 @@
     });
   }
 
-  // ── Description (config.spec; model.specAnalysis) ────────
+  // ── Scribe, the description tab (config.spec; model.specAnalysis) ────────
   // A free-form description, top level to drivers, tied to the requirements both ways. Sentences
   // are linked, standard, flagged (@req), or untraced; a section is edited as text in place.
   var SPEC = C.spec ? (typeof C.spec === 'object' ? C.spec : {}) : null;
-  var SPEC_LABEL = (SPEC && SPEC.label) || 'Description';
+  var SPEC_LABEL = (SPEC && SPEC.label) || 'Scribe';
   // Kinds and link words are the tool's (config.spec.kinds, .links; model.specKinds): FW's layers and
   // Uses by default, EE's subcircuit kinds with Connects and Supplies.
   function kindLabel(k) { var i = M.specKindInfo(k); return k ? i.label || k.charAt(0).toUpperCase() + k.slice(1) : 'None'; }
@@ -1904,43 +1904,67 @@
   }
 
   // The writing guide: everything the editor understands, as "type this / what it does", with
-  // examples from a thermostat. Opened from the editor's bottom row; the text being edited stays.
+  // examples from the demo: FW's firmware (layers, kinds, Uses) or EE's board (blocks and sections,
+  // Connects, Supplies, Parts). Opened from the editor's bottom row; the text being edited stays.
   function specGuideSheet() {
     function rows(list) {
       return '<table class="table spec-guide-table"><thead><tr><th>Type this</th><th>What it does</th></tr></thead><tbody>' + list.map(function (r) {
         return '<tr><td><code>' + esc(r[0]).replace(/\n/g, '<br>') + '</code></td><td>' + r[1] + '</td></tr>';
       }).join('') + '</tbody></table>';
     }
+    var board = !M.specKinds().length && M.specLinkWords().length > 1;
     var kinds = M.specKinds().map(function (k) { return '<code>' + k + '</code>'; }).join(', ');
-    var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>The ' + esc(SPEC_LABEL.toLowerCase()) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
-      '<div class="sheet-body spec-guide">' +
+    var structure = board ?
+      '<h3>Headings make blocks and sections</h3><p class="note">Every heading is a block in the diagram. A heading with headings under it is a section: a box around those blocks.</p>' + rows([
+        ['# Main PCBA', 'The board itself. Its text is about the whole board, and it isn’t drawn as a box. Start the line with <b>#</b> and a space.'],
+        ['## Power', 'With headings under it, a section. Text written right under it belongs to the whole section, like a power budget, and can be tied to its requirement.'],
+        ['### 3V3 buck', 'A block: one subcircuit. Up to four levels: <b>#</b>, <b>##</b>, <b>###</b>, and <b>####</b>.'],
+        ['> Steps 5 V down to the 3.3 V rail.', 'The block’s gist: one line shown at the Gists depth, on the block, and in Signoff PL. Without one, the first sentence is used.']
+      ]) +
+      '<p class="note">Moving a block into another section moves its heading in the text; the hierarchy under the diagram does that by dragging.</p>' +
+      '<h3>How blocks connect</h3>' + rows([
+        ['Connects: Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one sends signals to, with the signal or bus in brackets. Write it in the direction signals go; it draws the diagram’s labeled arrows.'],
+        ['Supplies: MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. Each block fed shows a power flag with the rail’s name.'],
+        ['Parts: U7, L1, C1–C3, C12', 'The reference designators the block covers, with ranges. Shown as chips on the block; not traced.']
+      ]) +
+      '<p class="note">Blocks are named by their heading, so <code>Connects: MCU</code> needs a heading called MCU. Rename a heading and every Connects and Supplies line follows.</p>'
+      :
       '<h3>Headings make the outline</h3>' + rows([
         ['# Thermostat firmware', 'A top-level section. Start the line with <b>#</b> and a space.'],
         ['## Control loop', 'A section inside the one above. Up to four levels: <b>#</b>, <b>##</b>, <b>###</b>, and <b>####</b>.'],
         ['## Control loop * task', 'Adds a kind, which puts the section in the Diagram. Type a space, an asterisk (*), a space, and the kind: ' + kinds + '. Brackets work too: <code>## Control loop (task)</code>.'],
         ['> Reads the room once a second.', 'The section’s gist: one line shown at the Gists depth and in Signoff PL. Without one, the first sentence is used.'],
-      ].concat(M.specLinkWords().length > 1 ? M.specLinkWords().map(function (w) {
-        var low = w.toLowerCase();
-        return low === 'supplies' ? [w + ': MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. A power block’s Supplies show as power flags on the blocks it feeds.']
-          : [w + ': Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one ' + esc(linkVerb(w)) + ', with the signal or bus in brackets. Write it in the direction signals go; it draws the Diagram’s labeled lines.'];
-      }) : [['Uses: Sensor driver, Relay driver', 'What the section uses, by heading title. Draws the Diagram’s lines.']]).concat(SPEC && SPEC.parts ? [['Parts: U7, L1, C1–C3', 'The reference designators the section covers, with ranges. Shown as chips; not traced.']] : [])) +
-      '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, or untraced. Untraced sentences get a dotted underline until you do one of these.</p>' + rows([
-        ['[the relays go off]{REQ-003}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
-        ['[off on reset]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
-        ['[It runs on FreeRTOS.]{std}', 'Standard text: background or explanation that needs no requirement.'],
-        ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
-        ['the [status frame]{#Status frame}', 'Points at another section by its heading. Pointing at an interface section counts as linked.']
-      ]) +
-      '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you.</p>' +
+        ['Uses: Sensor driver, Relay driver', 'What the section uses, by heading title. Draws the Diagram’s lines.']
+      ]);
+    var tie = board ? [
+      ['[The rail stays within ±3% at 1.5 A]{REQ-006}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
+      ['[off within 100 ms]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
+      ['[U7 is a 2 A synchronous buck.]{std}', 'Standard text: how the circuit works, which needs no requirement of its own.'],
+      ['Keep the ripple under 30 mV at the Wi-Fi module @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
+      ['the [display link]{#Display connector}', 'Points at another block by its heading; the sentence’s panel has a button to go there.']
+    ] : [
+      ['[the relays go off]{REQ-003}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
+      ['[off on reset]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
+      ['[It runs on FreeRTOS.]{std}', 'Standard text: background or explanation that needs no requirement.'],
+      ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
+      ['the [status frame]{#Status frame}', 'Points at another section by its heading. Pointing at an interface section counts as linked.']
+    ];
+    var example = board ?
+      '## Power\n> From mains to the 5 V and 3.3 V rails.\nThe whole board draws no more than 1.5 W @req\n\n### 3V3 buck\n> Steps 5 V down to the 3.3 V rail.\n[U7 is a 2 A synchronous buck.]{std} [The rail stays within ±3% at 1.5 A]{REQ-006}.\nParts: U7, L1, C1–C3\nSupplies: MCU (3V3), Wi-Fi module (3V3)'
+      : '## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays';
+    var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>' + esc(SPEC_LABEL) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
+      '<div class="sheet-body spec-guide">' + structure +
+      '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, or untraced. Untraced sentences get a dotted underline until you do one of these.</p>' + rows(tie) +
+      '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you. Select a few words first to link just those.</p>' +
       '<h3>Paragraphs, lists, and tables</h3>' + rows([
         ['First paragraph.\n\nSecond paragraph.', 'A blank line starts a new paragraph. Lines without a blank between them run together.'],
-        ['- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing.'],
-        ['| Field | Units |\n| --- | --- |\n| temp | °C |', 'A table: a header row, a row of dashes, then the rows. Good for interface fields. Tables aren’t traced.'],
+        [board ? '- Line voltage\n- Neutral' : '- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing.'],
+        [board ? '| Rail | Max load |\n| --- | --- |\n| 3V3 | 1.5 A |' : '| Field | Units |\n| --- | --- |\n| temp | °C |', board ? 'A table: a header row, a row of dashes, then the rows. Good for a power budget or a pin list. Tables aren’t traced.' : 'A table: a header row, a row of dashes, then the rows. Good for interface fields. Tables aren’t traced.'],
         ['```\nstatus = 0x01\n```', 'Code, shown as typed. Put three backticks on their own line before and after.']
       ]) +
-      '<h3>A short example</h3><pre class="spec-code">## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays</pre>' +
+      '<h3>A short example</h3><pre class="spec-code">' + esc(example) + '</pre>' +
       '<p class="note">Not supported: bold, italics, and links to web pages show as typed.</p>' +
-      (specGuideId() && window.SignoffSpecGuide ? '<p class="note">New to the tab? <button class="btn btn-sm" data-act="spec-guide-start">Take the guide</button> walks through it on the demo.</p>' : '') +
+      (specGuideId() && window.SignoffSpecGuide ? '<p class="note">New to ' + esc(SPEC_LABEL) + '? <button class="btn btn-sm" data-act="spec-guide-start">Take the guide</button> walks through it on the demo.</p>' : '') +
       '</div><div class="sheet-foot"><span class="spacer"></span><button class="btn btn-primary" data-sheet="done">Back to writing</button></div>', { wide: true });
     w.querySelector('[data-sheet="done"]').addEventListener('click', function () { closeSheet(); var t = $('#spec-editor'); if (t) t.focus(); });
   }
@@ -1953,7 +1977,7 @@
       (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' untraced</span>' : '') +
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
       (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
-      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (specGuideId() && window.SignoffSpecGuide ? '<button class="btn" data-act="spec-guide-start" title="A walk through the Description tab, on the demo">Guide</button>' : '') +
+      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (specGuideId() && window.SignoffSpecGuide ? '<button class="btn" data-act="spec-guide-start" title="A walk through ' + esc(SPEC_LABEL) + ', on the demo">Guide</button>' : '') +
       (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
       '<button class="btn" data-act="spec-paste">Paste text</button>' + (t.sections ? '<button class="btn" data-act="spec-export">Export</button>' : '') + '<button class="btn btn-primary" data-act="spec-add">Add section</button>') + '</div></div>';
     // Editing the whole description: the text, with its outline read live beside it.
@@ -2000,7 +2024,7 @@
         return '<button class="btn btn-sm" data-act="spec-change"' + d + ' data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
       }).join('');
       var tsec = a.ctx.secs[t.sec] || {};
-      var from = 'Tagged @req in the ' + SPEC_LABEL.toLowerCase() + ', in ' + secTitle(t.sec) + (tsec.updatedBy ? ', by ' + tsec.updatedBy : '') + (tsec.updatedAt ? ', ' + relTime(tsec.updatedAt) : '');
+      var from = 'Tagged @req in ' + SPEC_LABEL + ', in ' + secTitle(t.sec) + (tsec.updatedBy ? ', by ' + tsec.updatedBy : '') + (tsec.updatedAt ? ', ' + relTime(tsec.updatedAt) : '');
       return '<div class="spec-need"><button class="spec-need-text" data-act="spec-jump"' + d + ' title="Show it in the text"><span>' + esc(t.text) + '</span><span class="muted">' + esc(from) + '</span></button>' +
         '<div class="spec-need-acts"><button class="btn btn-sm btn-primary" data-act="spec-make"' + d + '>New requirement</button>' + changes +
         '<button class="btn btn-sm" data-act="spec-untag"' + d + ' title="Remove the @req flag">Remove flag</button></div></div>';
@@ -2773,7 +2797,7 @@
     return '<div class="field"><span class="field-label">Described in</span>' + (uses.length ? uses.map(function (w) {
       var s = a.ctx.secs[w.sec];
       return '<div class="req-link"><button class="req-link-main" data-act="spec-open" data-sec="' + esc(w.sec) + '" data-u="' + w.start + '"><span><span class="req-link-text">' + esc(w.text) + '</span><span class="muted">' + esc(SPEC_LABEL + ' › ' + (s.title || 'Untitled')) + '</span></span></button></div>';
-    }).join('') : '<p class="note" style="margin:0 0 8px">Nothing in the ' + esc(SPEC_LABEL.toLowerCase()) + ' describes it yet.</p><button class="btn btn-sm" data-act="spec-describe" data-id="' + esc(q.id) + '">Describe in…</button>') + '</div>';
+    }).join('') : '<p class="note" style="margin:0 0 8px">Nothing in ' + esc(SPEC_LABEL) + ' describes it yet.</p><button class="btn btn-sm" data-act="spec-describe" data-id="' + esc(q.id) + '">Describe in…</button>') + '</div>';
   }
 
   function specOpenUnit(sec, start, phrase) {
@@ -2785,7 +2809,7 @@
     renderPage(); renderInspector();
     var el = document.querySelector('.su.sel'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
-  // ── The Description guide's way in (assets/specguide.js) ──
+  // ── The Scribe guide's way in (assets/specguide.js) ──
   // The guide runs on the demo review named by config.spec.guide (a demo seed) and drives the page
   // through these calls rather than clicks, since the page is redrawn with innerHTML.
   function specGuideId() { return SPEC && SPEC.guide != null && S.demo ? S.demo.id(SPEC.guide) : ''; }
@@ -2978,7 +3002,7 @@
     specUnitEdit(p, sec, start, 'link', reqId);
     if (q.status === 'approved') p.reqs[reqId] = M.stamp(Object.assign({}, q, { status: 'changed' }), me());
     var cid = M.uid(C.ids.comment || 'c');
-    p.comments[cid] = M.stamp({ id: cid, item: reqId, author: me(), at: M.now(), text: 'From the ' + SPEC_LABEL.toLowerCase() + ' (' + (f.x.sec.title || 'Untitled') + '): ' + text }, me());
+    p.comments[cid] = M.stamp({ id: cid, item: reqId, author: me(), at: M.now(), text: 'From ' + SPEC_LABEL + ' (' + (f.x.sec.title || 'Untitled') + '): ' + text }, me());
     touch(p); renderPage(); renderToolbar(); syncSoon();
     toast(q.ref + (q.status === 'approved' ? ' marked Changed; ' : ': ') + 'the note is in its discussion');
   }
@@ -3093,7 +3117,7 @@
     var cur = !p && current();
     var m = p ? p.meta : { name: (preset && preset.name) || '', project: preset ? preset.project || '' : (cur && cur.meta.project) || '', client: preset ? '' : (cur && cur.meta.client) || '', board: (preset && preset.board) || '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
     var reqsPicked = p ? reqsOn(p) : true;
-    // Description, where the tool offers it: off for a new review unless config.spec.default.
+    // Scribe, where the tool offers it: off for a new review unless config.spec.default.
     var specPicked = p ? specOn(p) : !!(SPEC && SPEC.default), specCount = p && SPEC ? M.liveSpec(p).length : 0;
     var reqCount = p ? M.liveReqs(p).length : 0;
     // Projects and clients already in use, offered as suggestions so a product's reviews group.
@@ -3187,7 +3211,7 @@
       doc.meta.reqsDecided = true;
       if (SPEC) doc.meta.specDecided = true;
       if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
-      // A new review with the Description picked starts from the tool's template (config.spec.template).
+      // A new review with Scribe picked starts from the tool's template (config.spec.template).
       if (SPEC && SPEC.template && M.specEnabled(doc)) {
         doc.spec = {};
         M.specSave(doc, null, M.specTemplate(doc), me()).forEach(function (r) { doc.spec[r.id] = r; });

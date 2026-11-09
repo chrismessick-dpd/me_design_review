@@ -930,7 +930,10 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-node.gap .spec-node-sub { fill: var(--warn); font-weight: 600; }
 @media (max-width: 860px) {
   .spec-wrap { grid-template-columns: minmax(0, 1fr); }
-  .spec-outline { display: none; }
+  /* On a narrow screen the outline is a wrapping row of section names above the text. */
+  .spec-outline { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; max-height: none; overflow: visible; padding: 0 0 10px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
+  .spec-outline button, .spec-outline .lv-1, .spec-outline .lv-2, .spec-outline .lv-3, .spec-outline .lv-4 { padding: 3px 9px; margin: 0; font-size: 12.5px; background: var(--bg-sunk); border-radius: 980px; flex: none; }
+  .spec-outline .lv-1 { font-weight: 600; }
   .spec-sec.lv-3, .spec-sec.lv-4 { margin-left: 8px; }
 }
 .spec-editor-all { margin-top: 0; }

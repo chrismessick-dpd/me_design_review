@@ -1,8 +1,8 @@
 /* Shared Signoff engine (EE, ME, and FW). Edit it in ee_design_review only; me_design_review and
    fw_design_review vendor it unchanged with tools/sync_engine.py. Tool specifics go in assets/config.js. */
-/* The Description guide: a walk through the Description tab (a written description tied to the
+/* The Scribe guide: a walk through Scribe, the description tab (a written description tied to the
    requirements, and its diagram) on the demo review named by config.spec.guide, for anyone new to it.
-   Signoff FW sets it (the thermostat firmware) and Signoff EE (the Main PCBA, as a block diagram,
+   Scribe FW sets it (the thermostat firmware) and Scribe EE (the Main PCBA, as a block diagram,
    with its own steps); a tool without it shows no Guide button.
 
    Modeled on Loom's guide (loom/assets/guide.js): a card carries each step (what the feature is and a
@@ -43,13 +43,13 @@
   var FLOW = !!(window.SIGNOFF_CONFIG && window.SIGNOFF_CONFIG.spec && window.SIGNOFF_CONFIG.spec.layout === 'flow');
   var FW_CHAPTERS = [
     { title: 'Welcome', steps: [
-      { title: 'The Description tab',
-        text: 'A requirements list says what must be true; it rarely reads as what the firmware does. This tab is the other half: a written description of the firmware, from the product down to the drivers, tied sentence by sentence to the requirements. The same text draws a diagram, and the diagram can build the text.',
+      { title: 'Scribe',
+        text: 'A requirements list says what must be true; it rarely reads as what the firmware does. Scribe is the other half: a written description of the firmware, from the product down to the drivers, tied sentence by sentence to the requirements. The same text draws a diagram, and the diagram can build the text.',
         do: 'This guide uses the demo thermostat firmware, so nothing real changes. Each step sets the page up and rings what it’s about. Use {Next} and {Back}, or {Contents} to jump around.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline, down to four levels. The outline at the left jumps to any section. {Headings} shows just the structure, {Gists} adds each section’s one-line summary, and {Full text} shows everything.',
+        text: 'Headings make the outline, down to four levels. The outline, beside the text or above it on a narrow screen, jumps to any section. {Headings} shows just the structure, {Gists} adds each section’s one-line summary, and {Full text} shows everything.',
         do: 'Click {Gists}, then {Headings}, then {Full text}. Click {Control loop} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return [['[data-act="spec-depth"][data-depth="1"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
@@ -150,7 +150,7 @@
     { title: 'Sharing', steps: [
       { title: '@req in comments',
         text: 'A comment anywhere in the review that ends in @req joins Write as requirements too, with who wrote it and what it’s on. {New requirement} traces the draft to the check the comment was on. The comment’s words are left as written.',
-        do: 'Open any check in a checklist tab, comment “Log every relay change @req”, post it, and come back to {Description}.',
+        do: 'Open any check in a checklist tab, comment “Log every relay change @req”, post it, and come back to {Scribe}.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Export and print',
@@ -173,13 +173,13 @@
   // EE: the thermostat's Main PCBA (pdemo7) as a block diagram.
   var EE_CHAPTERS = [
     { title: 'Welcome', steps: [
-      { title: 'The Description tab',
-        text: 'A board’s block diagram, written down. Each heading is a subcircuit; its text says what the subcircuit does and how, and its sentences link to the requirements it meets. The same text draws the block diagram, and building in the diagram writes the text.',
+      { title: 'Scribe',
+        text: 'Scribe is a board’s block diagram, written down. Each heading is a subcircuit; its text says what the subcircuit does and how, and its sentences link to the requirements it meets. The same text draws the block diagram, and building in the diagram writes the text.',
         do: 'This guide uses the demo Main PCBA, so nothing real changes. Each step sets the page up and rings what it’s about. Use {Next} and {Back}, or {Contents} to jump around.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline. The outline at the left jumps to any subcircuit. {Headings} shows just the structure, {Gists} adds each subcircuit’s one-line summary, and {Full text} shows everything.',
+        text: 'Headings make the outline. The outline, beside the text or above it on a narrow screen, jumps to any subcircuit. {Headings} shows just the structure, {Gists} adds each subcircuit’s one-line summary, and {Full text} shows everything.',
         do: 'Click {Gists}, then {Headings}, then {Full text}. Click {MCU} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return [['[data-act="spec-depth"][data-depth="1"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
@@ -278,7 +278,7 @@
     { title: 'Sharing', steps: [
       { title: '@req in comments',
         text: 'A comment anywhere in the review that ends in @req joins Write as requirements too, with who wrote it and what it’s on. {New requirement} traces the draft to the check the comment was on.',
-        do: 'Open any check in a checklist tab, comment “Add a reverse-polarity diode on the 5 V input @req”, post it, and come back to {Description}.',
+        do: 'Open any check in a checklist tab, comment “Add a reverse-polarity diode on the 5 V input @req”, post it, and come back to {Scribe}.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Export and print',
@@ -336,7 +336,7 @@
     if (!st) { if (el) el.remove(); spotStop(); return; }
     var s = STEPS[st.step];
     if (enter && s.setup) { try { s.setup(); } catch (e) { /* a step's setup is a convenience */ } }
-    if (!el) { el = document.createElement('div'); el.id = 'sg-guide'; el.className = 'sg-guide'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Description guide'); document.body.appendChild(el); }
+    if (!el) { el = document.createElement('div'); el.id = 'sg-guide'; el.className = 'sg-guide'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Scribe guide'); document.body.appendChild(el); }
     var ch = CHAPTERS[s.chapter], narrow = A() && A().narrow();
     var head = '<div class="sg-top" data-g="drag"><span>Guide · ' + esc(ch.title) + '</span><span class="sg-n">' + (st.step + 1) + ' / ' + STEPS.length + '</span>' +
       '<button class="sg-x' + (st.contents ? ' on' : '') + '" data-g="contents" title="Contents" aria-label="Contents" aria-expanded="' + !!st.contents + '"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4h10M3 8h10M3 12h7"/></svg></button>' +
@@ -367,8 +367,22 @@
   function place(el, st) {
     if (!el) return;
     var W = el.offsetWidth, H = el.offsetHeight, m = 12, x, y;
+    el.style.maxHeight = '';
+    H = el.offsetHeight;
     if (st.x != null) { x = st.x; y = st.y; }
-    else if (A() && A().narrow()) { x = m; y = m; }
+    else if (A() && A().narrow()) {
+      // A narrow screen: the card takes the largest free band of the window between the things the
+      // step points at (Chris: docked at the top it hid Headings, Gists, and Full text, and the outline
+      // sits further down), shrinking to fit (it scrolls inside) when the band is short.
+      var rs = spotAll().slice().sort(function (r1, r2) { return r1.top - r2.top; }), bands = [], from = 8;
+      rs.forEach(function (r) { if (r.top - from > 0) bands.push([from, r.top]); from = Math.max(from, r.bottom); });
+      bands.push([from, innerHeight - 8]);
+      var best = bands.reduce(function (acc, g) { return g[1] - g[0] > acc[1] - acc[0] ? g : acc; }, bands[0]);
+      var room = best[1] - best[0] - 2 * 6;
+      if (rs.length && room < H && room >= 150) { el.style.maxHeight = room + 'px'; H = el.offsetHeight; }
+      x = m; y = rs.length ? best[0] + 6 : m;
+      if (!rs.length || room < 150) y = rs.length && rs[0].top < innerHeight / 2 ? innerHeight - H - m : m;
+    }
     else {
       var main = ($('#main') || document.body).getBoundingClientRect(), ins = $('#inspector.open');
       var right = ins ? ins.getBoundingClientRect().left - 16 : main.right - 16;
@@ -427,6 +441,19 @@
     }
     return { top: top, bottom: bottom };
   }
+  // Every shown element the step's spots name (each spot's first match), for placing the card.
+  function spotAll() {
+    var st = get(), s2 = st && !st.contents && STEPS[st.step], out = [];
+    spotAll.first = null;
+    if (!s2 || !s2.spot) return out;
+    (s2.spot() || []).forEach(function (q) {
+      (Array.isArray(q) ? q : [q]).forEach(function (one) {
+        var el = typeof one === 'string' ? document.querySelector(one) : one;
+        if (el && !el.closest('#sg-guide')) { var r = el.getBoundingClientRect(); if (r.width && r.height && r.bottom > 0 && r.top < innerHeight) { out.push(r); if (!spotAll.first) spotAll.first = el; } }
+      });
+    });
+    return out;
+  }
   function spotRect() { var t = target(); if (!t) return null; var r = t.r; return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom }; }
   function tick() {
     raf = 0;
@@ -444,8 +471,8 @@
       if (was !== el) { was = el; var v = viewOf(el); if (r.top < v.top || r.bottom > v.bottom) el.scrollIntoView({ block: r.height > (v.bottom - v.top) * 0.6 ? 'start' : 'center' }); }
     }
     // The card moves again when the details pane opens, closes, or finishes sliding in, an editor or a
-    // sheet appears, or the ring moves to another element, unless the card was dragged.
-    var insEl = $('#inspector.open'), key = (insEl ? Math.round(insEl.getBoundingClientRect().left / 24) : 'shut') + '|' + !!$('#spec-editor') + '|' + !!$('#sheet') + '|' + (el ? el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className : '');
+    // sheet appears, or the ring moves (another element, or its own scrolled into view), unless the card was dragged.
+    var insEl = $('#inspector.open'), key = (insEl ? Math.round(insEl.getBoundingClientRect().left / 24) : 'shut') + '|' + !!$('#spec-editor') + '|' + !!$('#sheet') + '|' + (el ? Math.round(t.r.left / 60) + ',' + Math.round(t.r.top / 60) + ',' + (el.className && el.className.baseVal !== undefined ? el.className.baseVal : el.className) : '');
     if (key !== lastKey) { lastKey = key; var g = $('#sg-guide'); if (g && st.x == null && !st.contents) place(g, st); }
     raf = requestAnimationFrame(tick);
   }
