@@ -1907,6 +1907,7 @@
       ]) +
       '<h3>A short example</h3><pre class="spec-code">## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays</pre>' +
       '<p class="note">Not supported: bold, italics, and links to web pages show as typed.</p>' +
+      (specGuideId() && window.SignoffSpecGuide ? '<p class="note">New to the tab? <button class="btn btn-sm" data-act="spec-guide-start">Take the guide</button> walks through it on the demo.</p>' : '') +
       '</div><div class="sheet-foot"><span class="spacer"></span><button class="btn btn-primary" data-sheet="done">Back to writing</button></div>', { wide: true });
     w.querySelector('[data-sheet="done"]').addEventListener('click', function () { closeSheet(); var t = $('#spec-editor'); if (t) t.focus(); });
   }
@@ -1919,7 +1920,8 @@
       (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' untraced</span>' : '') +
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
       (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
-      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
+      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (specGuideId() && window.SignoffSpecGuide ? '<button class="btn" data-act="spec-guide-start" title="A walk through the Description tab, on the demo">Guide</button>' : '') +
+      (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
       '<button class="btn" data-act="spec-paste">Paste text</button>' + (t.sections ? '<button class="btn" data-act="spec-export">Export</button>' : '') + '<button class="btn btn-primary" data-act="spec-add">Add section</button>') + '</div></div>';
     // Editing the whole description: the text, with its outline read live beside it.
     if (specEditing === 'all') {
@@ -2325,6 +2327,69 @@
     renderPage(); renderInspector();
     var el = document.querySelector('.su.sel'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
+  // ── The Description guide's way in (assets/specguide.js) ──
+  // The guide runs on the demo review named by config.spec.guide (a demo seed) and drives the page
+  // through these calls rather than clicks, since the page is redrawn with innerHTML.
+  function specGuideId() { return SPEC && SPEC.guide != null && S.demo ? S.demo.id(SPEC.guide) : ''; }
+  function specGuideSlug() { var id = specGuideId(); return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
+  function specGuideOpen(view, depth) {
+    var slug = specGuideSlug(); if (!slug) return false;
+    ui.slug = slug; ui.home = false; ui.page = '';
+    ui.view = view === 'reqs' ? 'reqs' : 'spec';
+    if (view === 'doc' || view === 'map') ui.specView = view;
+    if (depth) ui.specDepth = depth;
+    specEditing = null; specDraft = ''; selected = null; closeInspector(); saveUi(); render();
+    return true;
+  }
+  function specGuideSec(title) {
+    var p = current(), t = String(title || '').toLowerCase();
+    return p ? M.liveSpec(p).filter(function (s) { return s.title.toLowerCase() === t; })[0] || null : null;
+  }
+  // The pristine demo review, to tell whether the visitor's copy has changed and to rebuild it.
+  function specGuidePristine() { var id = specGuideId(); return id ? S.demo.projects(TEMPLATES).filter(function (p) { return p.id === id; })[0] : null; }
+  function specGuideSig(p) {
+    return p ? JSON.stringify([M.specToText(p), M.liveReqs(p).map(function (q) { return q.ref + ' ' + q.text; }), M.specCommentTags(p).length]) : '';
+  }
+  function specHook() {
+    return {
+      available: function () { return !!specGuideId() && !!specGuidePristine(); },
+      demoId: specGuideId,
+      narrow: function () { return window.innerWidth <= 860; },
+      open: specGuideOpen,
+      project: function () { return current(); },
+      analysis: function () { var p = current(); return p && specOn(p) ? M.specAnalysis(p) : null; },
+      section: specGuideSec,
+      // The visitor's newest section (not one of the demo's fixed s<seed>-<n> ids), or null.
+      newest: function () {
+        var p = current(); if (!p) return null;
+        return M.liveSpec(p).filter(function (s) { return !/^s\d+-\d+$/.test(s.id); }).sort(function (a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); }).pop() || null;
+      },
+      // Open the sentence that contains `text` in its panel; false when there's none.
+      unit: function (text, panel) {
+        var p = current(); if (!p) return false;
+        var a = M.specAnalysis(p), hit = null, want = String(text).toLowerCase();
+        a.sections.forEach(function (x) { x.blocks.forEach(function (b) { (b.units || []).forEach(function (u) { if (!hit && u.text.toLowerCase().indexOf(want) >= 0) hit = { sec: x.sec.id, start: u.start }; }); }); });
+        if (!hit) return false;
+        if (panel === false) { specGoto(hit.sec); return true; }
+        specOpenUnit(hit.sec, hit.start); return true;
+      },
+      block: function (id) { if (!id) return false; ui.view = 'spec'; ui.specView = 'map'; saveUi(); specOpenBlock(id); return true; },
+      edit: function (id) { if (!id) return false; specStartEdit(id); return true; },
+      editAll: function () { var p = current(); if (!p) return; ui.view = 'spec'; ui.specView = 'doc'; saveUi(); specEditing = 'all'; specDraft = M.specToText(p); closeInspector(); selected = null; renderPage(); specFocusEditor(); },
+      goto: specGoto,
+      req: function (ref) {
+        var p = current(), q = p && M.liveReqs(p).filter(function (r) { return r.ref === ref; })[0];
+        if (!q) return false; ui.view = 'reqs'; saveUi(); openReq(q.id); return true;
+      },
+      close: function () { selected = null; closeInspector(); renderPage(); },
+      stale: function () { var p = projects[specGuideSlug()]; return !!p && specGuideSig(p) !== specGuideSig(specGuidePristine()); },
+      fresh: function () {
+        var slug = specGuideSlug(), fresh = specGuidePristine(); if (!slug || !fresh) return;
+        projects[slug] = fresh; delete dirty[fresh.id]; persist(); render();
+      }
+    };
+  }
+
   function specGoto(id) {
     if (ui.view !== 'spec' || ui.specView === 'map') { ui.view = 'spec'; ui.specView = 'doc'; saveUi(); renderPage(); }
     var el = document.getElementById('spec-' + id);
@@ -3457,6 +3522,7 @@
         specEditing = 'new'; specDraft = '## New section' + String.fromCharCode(10); closeInspector(); renderPage(); specFocusEditor(); break;
       case 'spec-save': specSaveEdit(); break;
       case 'spec-guide': specGuideSheet(); break;
+      case 'spec-guide-start': closeSheet(); if (window.SignoffSpecGuide) window.SignoffSpecGuide.start(); break;
       case 'spec-kind-set': specKindSet(el.dataset.kind); break;
       case 'spec-uses-add': specUsesAdd(el); break;
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
@@ -3838,5 +3904,5 @@
   if (wantPeople) openPeople();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
 
-  S.app = { sync: sync, render: render };
+  S.app = { sync: sync, render: render, spec: specHook() };
 })(window.Signoff = window.Signoff || {});
