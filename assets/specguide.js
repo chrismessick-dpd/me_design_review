@@ -117,7 +117,7 @@
         spot: function () { return ['#sheet .sheet', '.spec-row-add[data-kind="module"]']; } },
       { title: 'Write it up, then its requirement',
         text: 'A block is a section: what you draw, you then describe. A gist alone isn’t traced, so a new block’s behavior starts as text, and the text then gets its requirement.',
-        do: 'Click {Write its text}, add a sentence such as “The scheduler changes the setpoint at each scheduled time.”, and press {k:Ctrl+Enter}. Then click that sentence and {Make requirement}. (No new block? Use Status LED.)',
+        do: 'Click {Edit its text}, add a sentence such as “The scheduler changes the setpoint at each scheduled time.”, and press {k:Ctrl+Enter}. Then click that sentence and {Make requirement}. (No new block? Use Status LED.)',
         setup: function () { var a = A(); a.open('map'); var s = a.section(mineOr('Status LED')); if (s) a.block(s.id); },
         spot: function () { return ['#spec-editor', '#inspector [data-act="spec-make"]', '#inspector [data-act="spec-edit"]']; } },
       { title: 'Connect blocks',

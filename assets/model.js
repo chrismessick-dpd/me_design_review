@@ -1071,6 +1071,41 @@
     return out;
   }
 
+  // A starting description from the tool's template (config.spec.template), shaped by the review's
+  // profile. The template is a list of entries { when: [tags], unless: [tags], lines: [...] }: an
+  // entry is used when it has no `when` or the profile has one of them, and the profile has none of
+  // its `unless`. "{name}" in a line is the review's name. Afterwards a Uses line keeps only the
+  // sections that made it in (dropped when none did), and a heading left with no text and no
+  // sections under it (a "## Drivers" with every driver left out) is dropped. Returns the text for
+  // specSave, or '' when there's no template. The template is the tool's own; its text is trusted.
+  function specTemplate(project, tpl) {
+    tpl = tpl || (C.spec && C.spec.template);
+    if (!Array.isArray(tpl) || !tpl.length) return '';
+    var prof = (project && project.meta && project.meta.profile) || [];
+    var has = function (t) { return prof.indexOf(t) >= 0; };
+    var name = String((project && project.meta && project.meta.name) || '').trim() || 'Untitled';
+    var lines = [];
+    tpl.forEach(function (e) {
+      if (!e || !Array.isArray(e.lines)) return;
+      if (Array.isArray(e.when) && e.when.length && !e.when.some(has)) return;
+      if (Array.isArray(e.unless) && e.unless.some(has)) return;
+      if (lines.length && lines[lines.length - 1].trim()) lines.push('');
+      e.lines.forEach(function (l) { lines.push(String(l).replace(/\{name\}/g, name)); });
+    });
+    var chunks = specSplit(lines.join('\n')).filter(function (c) { return c.heading; });
+    for (var i = chunks.length - 1; i >= 0; i--) {
+      var next = chunks[i + 1];
+      if (!chunks[i].body.trim() && (!next || next.heading.level <= chunks[i].heading.level)) chunks.splice(i, 1);
+    }
+    var titles = {};
+    chunks.forEach(function (c) { titles[c.heading.title.trim().toLowerCase()] = true; });
+    return chunks.map(function (c) {
+      var names = specUsesNames(c.body), body = c.body;
+      if (names.length) body = specSetLine(body, 'uses', names.filter(function (n) { return titles[n.toLowerCase()]; }).join(', '));
+      return specHeadingLine(c.heading) + (body ? '\n' + body : '');
+    }).join('\n\n') + '\n';
+  }
+
   // summary.spec: the top-level sections' gists (and the level under them when there's only one
   // top section; `depth` 0 or 1) and the gaps, for Signoff PL. Left out while the description is
   // empty, so other reviews keep their bytes.
@@ -1676,7 +1711,7 @@
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     SPEC_KINDS: SPEC_KINDS, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
     specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
-    specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary,
+    specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specTemplate: specTemplate, specSummary: specSummary,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
     emptyRoster: emptyRoster, mergeRosters: mergeRosters, liveUsers: liveUsers, isOutside: isOutside, roleOf: roleOf, sharedRepo: sharedRepo,
