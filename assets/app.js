@@ -1802,6 +1802,17 @@
     return html;
   }
   function gapMark(n, title) { return n ? '<span class="spec-gap" title="' + esc(title) + '">' + n + '</span>' : ''; }
+  // A block's gaps, one row per sentence: click to open that sentence in the document, where it can be
+  // linked to a requirement, made one, or marked standard.
+  function specGapList(x) {
+    var gaps = [];
+    x.blocks.forEach(function (bk) { (bk.units || []).forEach(function (u) { if (u.state === 'untraced' || u.state === 'tag') gaps.push(u); }); });
+    if (!gaps.length) return '';
+    return '<div class="field"><span class="field-label">Gaps</span>' + gaps.map(function (u) {
+      return '<div class="req-link"><button class="req-link-main" data-act="spec-open" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"><span><span class="req-link-text">' + esc(u.text) + '</span><span class="muted">' +
+        (u.state === 'tag' ? 'Flagged to become a requirement' : 'Untraced: link a requirement, make one, or mark it standard') + '</span></span></button></div>';
+    }).join('') + '</div>';
+  }
   function specGapTitle(x) {
     return [x.counts.untraced ? plural(x.counts.untraced, 'untraced sentence') : '', x.counts.tag ? x.counts.tag + ' flagged for a requirement' : ''].filter(Boolean).join(', ');
   }
@@ -1953,7 +1964,8 @@
     if (!t.sections && specEditing !== 'new' && ui.specView !== 'map') {
       return html + '<div class="card empty"><div class="empty-art">' + ICON.doc + '</div><h2>Describe what this ' + esc(W.thing) + ' does</h2>' +
         '<p>Write it the way you’d explain it: the product first, then its structure, down to the drivers. Headings make the outline. Link sentences to requirements, mark background as standard, and flag new behavior with @req to turn it into a requirement later.</p>' +
-        '<button class="btn btn-primary" data-act="spec-add">Add section</button> <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
+        (SPEC.template ? '<button class="btn btn-primary" data-act="spec-template">Start from template</button> <button class="btn" data-act="spec-add">Add section</button>' : '<button class="btn btn-primary" data-act="spec-add">Add section</button>') +
+        ' <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
     }
     html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button></div>' +
       (view === 'doc' ? '<div class="seg" title="How much to show">' + [[1, 'Headings'], [2, 'Gists'], [3, 'Full text']].map(function (d) {
@@ -2487,8 +2499,8 @@
           var q = a.ctx.reqs[qid];
           return '<div class="req-link"><button class="req-link-main" data-act="open-req" data-id="' + esc(qid) + '"><span><span class="req-link-text"><b>' + esc(q.ref) + '</b> ' + esc(q.text || 'No text yet') + '</span></span></button></div>';
         }).join('') : '<p class="note" style="margin:0">None yet. Write text for the whole section, such as its power budget, and link it to the requirement it meets.</p>') + '</div>' +
-        '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-add-block" data-kind="" data-section="' + esc(id) + '">Add a block here</button><button class="btn" data-act="spec-edit" data-id="' + esc(id) + '">Write its text</button>' +
-        '<button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Read it</button><button class="btn" data-act="spec-ungroup" data-id="' + esc(id) + '">Ungroup</button></div>' +
+        '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-add-block" data-kind="" data-section="' + esc(id) + '">Add a block here</button><button class="btn" data-act="spec-edit" data-id="' + esc(id) + '">Edit its text</button>' +
+        '<button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Show in document</button><button class="btn" data-act="spec-ungroup" data-id="' + esc(id) + '">Ungroup</button></div>' +
         '<p class="note">Last changed ' + (x.sec.updatedBy ? 'by ' + esc(x.sec.updatedBy) + ', ' : '') + relTime(x.sec.updatedAt) + '.</p></div>';
       el.dataset.item = selected;
       return;
@@ -2529,7 +2541,8 @@
       linkFields + fromFields +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : ''].filter(Boolean).join(' · ')) + '</p></div>' +
-      '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Write its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Read it</button>' +
+      specGapList(x) +
+      '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Edit its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Show in document</button>' +
       (lower ? '<button class="btn" data-act="spec-add-block" data-kind="' + lower + '" data-parent="' + esc(id) + '">Add a ' + lower + ' it uses</button>' : '') +
       '<button class="btn btn-danger" data-act="spec-block-delete" data-id="' + esc(id) + '">Delete</button></div>' +
       '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
@@ -2914,6 +2927,34 @@
       toast('Added ' + plural(recs.length, 'section'));
     });
   }
+  // Start from the tool's template (config.spec.template, model.specTemplate), shaped by the review's
+  // profile: the text, editable, before it's added.
+  function specTemplateSheet() {
+    var p = current(); if (!p) return;
+    var text = M.specTemplate(p); if (!text) return;
+    var prof = (p.meta.profile || []).map(function (id) { var t = M.TAGS.filter(function (x) { return x.id === id; })[0]; return t ? t.label : ''; }).filter(Boolean);
+    var w = sheet('<div class="sheet-head"><h2>Start from template</h2><p>Headings for the usual parts of ' + esc(W.thing) + ' like this, ' +
+      (prof.length ? 'chosen from its ' + esc((W.profile || 'profile').toLowerCase()) + ' (' + esc(prof.join(', ')) + ')' : 'from the general template (set a ' + esc((W.profile || 'profile').toLowerCase()) + ' in the details for more)') +
+      ', each with a question to answer in its place. Change anything here first, or later; leave out what doesn’t apply.</p></div>' +
+      '<div class="sheet-body"><textarea class="input" id="spec-template" rows="18"></textarea></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add</button></div>', { wide: true });
+    var ta = w.querySelector('#spec-template');
+    ta.value = text; ta.scrollTop = 0;
+    setTimeout(function () { try { ta.setSelectionRange(0, 0); ta.scrollTop = 0; } catch (e) { /* ignore */ } }, 0);
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      var t = w.querySelector('#spec-template').value;
+      if (!t.trim()) { toast('Nothing to add'); return; }
+      if (M.specSplit(t).length && !M.specSplit(t)[0].heading) t = '# Overview\n' + t;
+      var recs = M.specSave(p, null, t, me());
+      p.spec = p.spec || {};
+      recs.forEach(function (r) { p.spec[r.id] = r; });
+      touch(p); closeSheet();
+      ui.view = 'spec'; saveUi(); renderPage(); syncSoon();
+      toast('Added ' + plural(recs.length, 'section'));
+    });
+  }
   // A new requirement from a sentence: draft, its text the sentence without the flag, the section
   // and date as its source; the sentence then links to it.
   function specMakeReq(sec, start) {
@@ -3146,6 +3187,11 @@
       doc.meta.reqsDecided = true;
       if (SPEC) doc.meta.specDecided = true;
       if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
+      // A new review with the Description picked starts from the tool's template (config.spec.template).
+      if (SPEC && SPEC.template && M.specEnabled(doc)) {
+        doc.spec = {};
+        M.specSave(doc, null, M.specTemplate(doc), me()).forEach(function (r) { doc.spec[r.id] = r; });
+      }
       var slug = doc.slug, n = 2;
       while (projects[slug]) slug = doc.slug + '-' + n++;
       doc.slug = slug;
@@ -4031,6 +4077,7 @@
         if (confirm('Delete this section?')) { var sp = current(); specPut(sp, id, { deleted: true }); specEditing = null; specDraft = ''; renderPage(); syncSoon(); }
         break;
       case 'spec-paste': specPasteSheet(); break;
+      case 'spec-template': specTemplateSheet(); break;
       case 'spec-make': specMakeReq(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-change': specChangeReq(el.dataset.sec, parseInt(el.dataset.u, 10), id); break;
       case 'spec-untag': { var up = current(); if (specUnitEdit(up, el.dataset.sec, parseInt(el.dataset.u, 10), 'tag', false)) { renderPage(); renderInspector(); renderToolbar(); syncSoon(); } break; }
