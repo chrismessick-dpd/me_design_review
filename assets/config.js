@@ -37,6 +37,7 @@ window.SIGNOFF_CONFIG = {
   "defaultStage": "Detailed design",
   "legacyTabs": [],
   "pl": { "tool": "me", "dataRepo": "signoff_pl_data" },
+  "spec": { "label": "Description" },
   "words": {
     "unit": "part",
     "units": "parts",

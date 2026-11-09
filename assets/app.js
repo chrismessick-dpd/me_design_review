@@ -259,6 +259,7 @@
     undo: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5L3.5 8 7 11.5"/><path d="M3.5 8H12a4.5 4.5 0 010 9H8"/></svg>',
     moon: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M16.2 12.4A6.6 6.6 0 017.6 3.8a6.6 6.6 0 108.6 8.6z"/></svg>',
     sun: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.4"/><path d="M10 2v1.8M10 16.2V18M2 10h1.8M16.2 10H18M4.3 4.3l1.3 1.3M14.4 14.4l1.3 1.3M15.7 4.3l-1.3 1.3M5.6 14.4l-1.3 1.3"/></svg>',
+    pencil: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M11.5 5.5l3 3"/></svg>',
     clipboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4.5M8.5 17h7"/></svg>'
   };
 
@@ -521,7 +522,7 @@
   // last sync started (model.changesSince). A project with no home repo was never synced, so
   // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
   // it's listed without details. Nothing here touches dirty or sync.
-  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision' };
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Description' };
   var CHANGES_SHOWN = 8;
   function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
   function unsyncedList() {
@@ -588,10 +589,11 @@
     if (!p) return;
     var kind = el.dataset.kind, id = el.dataset.id, item = el.dataset.item, gone = !!el.dataset.deleted;
     ui.slug = slug; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = false; selected = null;
-    ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : 'overview';
+    ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : kind === 'spec' && specOn(p) ? 'spec' : 'overview';
     closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open');
     if (kind === 'req' && !gone && ui.view === 'reqs' && reqOf(p, id)) openReq(id);
     else if ((kind === 'check' || kind === 'custom' || kind === 'comment') && item && (!gone || kind === 'comment') && !itemDef(p, item).retired) gotoItem(item);
+    else if (kind === 'spec' && !gone && ui.view === 'spec') specGoto(id);
     else $('#main').scrollTop = 0;
   }
 
@@ -630,7 +632,8 @@
     }
     var st = M.projectStats(p, TEMPLATES);
     var reqIdx = checkIdx(p), reqFail = M.liveReqs(p).some(function (q) { return reqTrouble(q, reqIdx); });
-    var views = [{ id: 'overview', label: 'Overview' }].concat(reqsOn(p) ? [{ id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }] : [], projectTemplates(p).map(function (t) {
+    var specFlags = specOn(p) ? M.specAnalysis(p).tags.length + M.specCommentTags(p).length : 0;
+    var views = [{ id: 'overview', label: 'Overview' }].concat(specOn(p) ? [{ id: 'spec', label: SPEC_LABEL, extra: specFlags ? '<span class="count" title="Flagged for a requirement">' + specFlags + '</span>' : '' }] : [], reqsOn(p) ? [{ id: 'reqs', label: 'Requirements', extra: reqFail ? '<span class="dot"></span>' : '' }] : [], projectTemplates(p).map(function (t) {
       var c = st.per[t.id];
       return { id: t.id, label: t.short, extra: c && c.issuesOpen ? '<span class="dot"></span>' : '' };
     }));
@@ -664,6 +667,7 @@
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
     else if (ui.view === 'revisions') { loadRuns(p); page.innerHTML = revisionsPage(p); }
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
+    else if (ui.view === 'spec') page.innerHTML = specPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
   }
@@ -1185,6 +1189,7 @@
   function composerFoot() {
     return '<div class="composer-foot"><span class="composer-hints">' +
       (C.runs ? '<span><b>@revnotes</b> notes it for the next revision</span>' : '') +
+      (SPEC ? '<span><b>@req</b> flags it to become a requirement</span>' : '') +
       '<span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to post</span></span><button class="btn btn-primary" data-act="post-comment">Comment</button></div>';
   }
   function emptyCard(title, text) { return '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>' + esc(title) + '</h2><p>' + text + '</p></div>'; }
@@ -1403,6 +1408,8 @@
     if (!p || !selected || !el.classList.contains('open')) return;
     var rq = reqOf(p, selected);
     if (rq) return renderReqInspector(p, rq);
+    if (specSel()) return renderSpecInspector(p);
+    if (specBlockSel()) return renderSpecBlockInspector(p);
     var d = itemDef(p, selected);
     var st = p.items[selected] || {};
     var row = null;
@@ -1637,6 +1644,7 @@
       '<div class="field"><span class="field-label">Status</span>' + seg('status', M.REQ_STATUS) + '</div>' +
       '<div class="field"><span class="field-label">Verified</span>' + seg('verify', M.REQ_VERIFY) + '</div>' +
       '<div class="field"><label for="req-ev">Evidence</label><textarea class="input" id="req-ev" rows="2" data-req-input="evidence" placeholder="Test report, measurement, analysis…">' + esc(q.evidence) + '</textarea></div>' +
+      specDescribedIn(p, q) +
       '<div class="field"><span class="field-label">Traced checks ' + traceChip(M.reqTrace(q, idx)) + '</span>' +
       (links || '<p class="note" style="margin:0 0 8px">Link the checks that show this requirement is met; their status shows here.</p>') +
       '<input class="input" id="req-link-search" placeholder="Search checks to link…" value="' + esc(linkQuery) + '" autocomplete="off">' +
@@ -1715,6 +1723,757 @@
     });
   }
 
+  // ── Description (config.spec; model.specAnalysis) ────────
+  // A free-form description, top level to drivers, tied to the requirements both ways. Sentences
+  // are linked, standard, flagged (@req), or untraced; a section is edited as text in place.
+  var SPEC = C.spec ? (typeof C.spec === 'object' ? C.spec : {}) : null;
+  var SPEC_LABEL = (SPEC && SPEC.label) || 'Description';
+  var SPEC_ROWS = [['product', 'Product'], ['task', 'Tasks'], ['module', 'Modules'], ['driver', 'Drivers'], ['hardware', 'Hardware']];
+  var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Untraced' };
+  var specEditing = null, specDraft = '', specPhrase = '';
+  function specOn(p) { return !!SPEC && !!p && M.specEnabled(p); }
+  function specSelKey(sec, start) { return 'spec|' + sec + '|' + start; }
+  function specSel() {
+    var m = /^spec\|(.+)\|(\d+)$/.exec(selected || '');
+    return m ? { sec: m[1], start: parseInt(m[2], 10) } : null;
+  }
+  function specFind(a, sec, start) {
+    var x = a.sections.filter(function (y) { return y.sec.id === sec; })[0], hit = null;
+    if (x) x.blocks.forEach(function (b) { (b.units || []).forEach(function (u) { if (u.start === start) hit = u; }); });
+    return x && hit ? { x: x, u: hit } : null;
+  }
+  // Rewrite one section's body (a sentence edit, a describe-in, a save).
+  function specPut(p, id, fields) {
+    p.spec = p.spec || {};
+    p.spec[id] = M.specStamp(Object.assign({}, p.spec[id], fields), me());
+    touch(p);
+  }
+  function specUnitEdit(p, sec, start, op, arg) {
+    var a = M.specAnalysis(p), f = specFind(a, sec, start);
+    if (!f) return false;
+    specPut(p, sec, { body: M.specEdit(f.x.sec.body, f.u.start, f.u.end, op, arg) });
+    return true;
+  }
+  function reqLabel(q) { return (q.ref || '?') + (q.text ? ': ' + q.text : ''); }
+
+  function specUnitHtml(p, a, x, u) {
+    var sel = specSel(), on = sel && sel.sec === x.sec.id && sel.start === u.start;
+    var tip = u.reqs.map(function (id) { return reqLabel(a.ctx.reqs[id]); }).concat(u.missing.map(function (t) { return t + ': not found'; })).join('\n');
+    var inner = u.tokens.map(function (t) {
+      if (t.t === 'tag') return '<span class="sl-tag" title="Flagged to become a requirement">@req</span>';
+      if (t.t === 'text') return esc(t.text);
+      var cls = 'sl' + (t.reqs.length ? ' sl-req' : '') + (t.secs.length ? ' sl-sec' : '') + (t.std ? ' sl-std' : '') + (t.missing.length ? ' sl-missing' : '');
+      return '<span class="' + cls + '">' + esc(t.text) + '</span>';
+    }).join('');
+    return '<span class="su su-' + u.state + (on ? ' sel' : '') + '" data-act="spec-unit" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"' +
+      (tip ? ' title="' + esc(tip) + '"' : ' title="' + STATE_LABEL[u.state] + '"') + '>' + inner + '</span>';
+  }
+  function specBlocksHtml(p, a, x) {
+    var html = '', list = false;
+    x.blocks.forEach(function (b) {
+      if (b.type !== 'li' && list) { html += '</ul>'; list = false; }
+      if (b.type === 'p') html += '<p class="spec-p">' + b.units.map(function (u) { return specUnitHtml(p, a, x, u); }).join(' ') + '</p>';
+      else if (b.type === 'li') { if (!list) { html += '<ul class="spec-ul">'; list = true; } html += '<li>' + b.units.map(function (u) { return specUnitHtml(p, a, x, u); }).join(' ') + '</li>'; }
+      else if (b.type === 'gist') html += '<p class="spec-gist">' + esc(b.text) + '</p>';
+      else if (b.type === 'code') html += '<pre class="spec-code">' + esc(b.text) + '</pre>';
+      else if (b.type === 'uses') {
+        html += '<div class="spec-uses"><span>Uses</span>' + b.names.map(function (n) {
+          var id = a.ctx.titles[n.toLowerCase()];
+          return id ? '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(n) + '</button>' : '<span class="chip spec-chip-missing" title="No section has this title">' + esc(n) + '</span>';
+        }).join('') + '</div>';
+      } else if (b.type === 'table' && b.rows.length) {
+        html += '<div class="table-scroll spec-table-wrap"><table class="table spec-table"><thead><tr>' + b.rows[0].map(function (c) { return '<th>' + esc(M.specPlain(c)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          b.rows.slice(1).map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(M.specPlain(c)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+      }
+    });
+    if (list) html += '</ul>';
+    return html;
+  }
+  function gapMark(n, title) { return n ? '<span class="spec-gap" title="' + esc(title) + '">' + n + '</span>' : ''; }
+  function specGapTitle(x) {
+    return [x.counts.untraced ? plural(x.counts.untraced, 'untraced sentence') : '', x.counts.tag ? x.counts.tag + ' flagged for a requirement' : ''].filter(Boolean).join(', ');
+  }
+  var KIND_LABEL = { product: 'Product', task: 'Task', module: 'Module', driver: 'Driver', hardware: 'Hardware', interface: 'Interface' };
+  // The bar over the editor: the kinds left to right, as the diagram's layers run top to bottom. The
+  // one lit is the kind of the heading the cursor is under; a click sets it. Add to Uses… adds a
+  // section to that heading's Uses line.
+  function specKindBarHtml() {
+    return '<div class="spec-kindbar" role="toolbar" aria-label="Kind of the heading at the cursor"><span class="spec-kindbar-label">Heading kind</span>' +
+      M.SPEC_KINDS.map(function (k) { return '<button type="button" data-act="spec-kind-set" data-kind="' + k + '" title="Make the heading at the cursor a ' + k + '">' + KIND_LABEL[k] + '<span class="count"></span></button>'; }).join('<span class="spec-kindbar-arrow" aria-hidden="true">›</span>') +
+      '<button type="button" data-act="spec-kind-set" data-kind="" title="No kind: in the outline only, not the diagram">None</button>' +
+      '<span class="spacer"></span><button type="button" class="btn btn-sm" data-act="spec-uses-add" title="Add a section to the Uses line of the heading at the cursor">Add to Uses…</button></div>';
+  }
+  // The heading the cursor is under: { lines, at (its line), head (specHeading), cursorLine }.
+  function specCursorHeading(ta) {
+    var lines = ta.value.split('\n'), cl = ta.value.slice(0, ta.selectionStart).split('\n').length - 1, fence = false, at = -1;
+    for (var i = 0; i <= cl && i < lines.length; i++) {
+      if (/^\s*```/.test(lines[i])) { fence = !fence; continue; }
+      if (!fence && M.specHeading(lines[i])) at = i;
+    }
+    return { lines: lines, at: at, head: at >= 0 ? M.specHeading(lines[at]) : null, cursorLine: cl };
+  }
+  function specBarRefresh() {
+    var ta = $('#spec-editor'), bar = document.querySelector('.spec-kindbar'); if (!ta || !bar) return;
+    var h = specCursorHeading(ta), counts = {};
+    M.specSplit(ta.value).forEach(function (c) { if (c.heading && c.heading.kind) counts[c.heading.kind] = (counts[c.heading.kind] || 0) + 1; });
+    bar.querySelectorAll('[data-act="spec-kind-set"]').forEach(function (b) {
+      var k = b.dataset.kind, c = b.querySelector('.count');
+      b.classList.toggle('on', !!h.head && h.head.kind === k);
+      b.disabled = !h.head;
+      if (c) c.textContent = counts[k] ? ' ' + counts[k] : '';
+    });
+    bar.querySelector('[data-act="spec-uses-add"]').disabled = !h.head;
+  }
+  // Rewrite the editor's text, keeping the cursor where it was relative to the text around it.
+  function specEditorReplace(ta, lines, cursor) {
+    ta.value = lines.join('\n');
+    ta.setSelectionRange(cursor, cursor);
+    specDraft = ta.value;
+    if (specEditing === 'all') { var lo = $('#spec-live-outline'); if (lo) lo.innerHTML = specLiveOutline(); }
+    ta.focus(); specBarRefresh();
+  }
+  function specKindSet(kind) {
+    var ta = $('#spec-editor'); if (!ta) return;
+    var h = specCursorHeading(ta);
+    if (!h.head) { toast('Put the cursor under a heading first'); return; }
+    var before = h.lines.slice(0, h.at).join('\n').length + (h.at ? 1 : 0), old = h.lines[h.at], pos = ta.selectionStart;
+    h.lines[h.at] = M.specHeadingLine({ level: h.head.level, title: h.head.title, kind: kind });
+    var delta = h.lines[h.at].length - old.length;
+    specEditorReplace(ta, h.lines, pos > before + old.length ? pos + delta : Math.min(pos, before + h.lines[h.at].length));
+  }
+  function specUsesAdd(anchor) {
+    var ta = $('#spec-editor'); if (!ta) return;
+    var h = specCursorHeading(ta);
+    if (!h.head) { toast('Put the cursor under a heading first'); return; }
+    var p = current(), titles = {}, entries = [];
+    M.specSplit(ta.value).concat(specEditing === 'all' || !p ? [] : M.liveSpec(p).map(function (s) { return { heading: s }; })).forEach(function (c) {
+      var t = c.heading && c.heading.title; if (!t || titles[t.toLowerCase()] || t.toLowerCase() === h.head.title.toLowerCase()) return;
+      titles[t.toLowerCase()] = 1; entries.push([t, t + (c.heading.kind ? '  (' + c.heading.kind + ')' : '')]);
+    });
+    if (!entries.length) { toast('No other sections to use yet'); return; }
+    menu(anchor, entries).then(function (title) {
+      var t2 = $('#spec-editor'); if (!t2) return;
+      var hh = specCursorHeading(t2), end = hh.lines.length;
+      for (var i = hh.at + 1; i < hh.lines.length; i++) if (M.specHeading(hh.lines[i])) { end = i; break; }
+      var body = hh.lines.slice(hh.at + 1, end).join('\n'), names = M.specUsesNames(body);
+      if (names.some(function (n) { return n.toLowerCase() === title.toLowerCase(); })) { toast(title + ' is already in Uses'); return; }
+      var nb = M.specSetLine(body, 'uses', names.concat([title]).join(', ')).split('\n');
+      var tail = hh.lines.slice(end), lines = hh.lines.slice(0, hh.at + 1).concat(nb, end < hh.lines.length ? [''] : [], tail);
+      specEditorReplace(t2, lines, lines.slice(0, hh.at + 1 + nb.length).join('\n').length);
+      toast('Added ' + title + ' to Uses');
+    });
+  }
+  function specEditorHtml(id, all) {
+    var lines = specDraft.split('\n').length;
+    return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() +
+      '<textarea class="input" id="spec-editor" data-sec="' + esc(id || '') + '" rows="' + (all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) + '" spellcheck="true">' + esc(specDraft) + '</textarea>' +
+      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.SPEC_KINDS.join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · <code>Uses: Title, Title</code> · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section</div>' +
+      '<div class="spec-editor-foot"><button class="btn" data-act="spec-guide" title="How to write headings, links, lists, and tables">Writing guide</button>' +
+      (id ? '<button class="btn btn-danger" data-act="spec-delete" data-id="' + esc(id) + '">Delete section</button>' : '') +
+      '<span class="spacer"></span><button class="btn" data-act="spec-cancel">Cancel</button><button class="btn btn-primary" data-act="spec-save">Save <span class="kbd">Ctrl+Enter</span></button></div></div>';
+  }
+
+  // The writing guide: everything the editor understands, as "type this / what it does", with
+  // examples from a thermostat. Opened from the editor's bottom row; the text being edited stays.
+  function specGuideSheet() {
+    function rows(list) {
+      return '<table class="table spec-guide-table"><thead><tr><th>Type this</th><th>What it does</th></tr></thead><tbody>' + list.map(function (r) {
+        return '<tr><td><code>' + esc(r[0]).replace(/\n/g, '<br>') + '</code></td><td>' + r[1] + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    var kinds = M.SPEC_KINDS.map(function (k) { return '<code>' + k + '</code>'; }).join(', ');
+    var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>The ' + esc(SPEC_LABEL.toLowerCase()) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
+      '<div class="sheet-body spec-guide">' +
+      '<h3>Headings make the outline</h3>' + rows([
+        ['# Thermostat firmware', 'A top-level section. Start the line with <b>#</b> and a space.'],
+        ['## Control loop', 'A section inside the one above. Up to four levels: <b>#</b>, <b>##</b>, <b>###</b>, and <b>####</b>.'],
+        ['## Control loop * task', 'Adds a kind, which puts the section in the Diagram. Type a space, an asterisk (*), a space, and the kind: ' + kinds + '. Brackets work too: <code>## Control loop (task)</code>.'],
+        ['> Reads the room once a second.', 'The section’s gist: one line shown at the Gists depth and in Signoff PL. Without one, the first sentence is used.'],
+        ['Uses: Sensor driver, Relay driver', 'What the section uses, by heading title. Draws the Diagram’s lines.']
+      ]) +
+      '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, or untraced. Untraced sentences get a dotted underline until you do one of these.</p>' + rows([
+        ['[the relays go off]{REQ-003}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
+        ['[off on reset]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
+        ['[It runs on FreeRTOS.]{std}', 'Standard text: background or explanation that needs no requirement.'],
+        ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under To requirementify.'],
+        ['the [status frame]{#Status frame}', 'Points at another section by its heading. Pointing at an interface section counts as linked.']
+      ]) +
+      '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you.</p>' +
+      '<h3>Paragraphs, lists, and tables</h3>' + rows([
+        ['First paragraph.\n\nSecond paragraph.', 'A blank line starts a new paragraph. Lines without a blank between them run together.'],
+        ['- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing.'],
+        ['| Field | Units |\n| --- | --- |\n| temp | °C |', 'A table: a header row, a row of dashes, then the rows. Good for interface fields. Tables aren’t traced.'],
+        ['```\nstatus = 0x01\n```', 'Code, shown as typed. Put three backticks on their own line before and after.']
+      ]) +
+      '<h3>A short example</h3><pre class="spec-code">## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays</pre>' +
+      '<p class="note">Not supported: bold, italics, and links to web pages show as typed.</p>' +
+      '</div><div class="sheet-foot"><span class="spacer"></span><button class="btn btn-primary" data-sheet="done">Back to writing</button></div>', { wide: true });
+    w.querySelector('[data-sheet="done"]').addEventListener('click', function () { closeSheet(); var t = $('#spec-editor'); if (t) t.focus(); });
+  }
+
+  function specPage(p) {
+    var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth || 3, view = ui.specView === 'map' ? 'map' : 'doc';
+    var html = '<div class="page spec-page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">' + esc(SPEC_LABEL) + '</h1>' +
+      '<div class="page-sub"><span>' + plural(t.sections, 'section') + '</span>' +
+      (t.units ? '<span class="sep">·</span><span>' + t.linked + ' linked</span><span class="sep">·</span><span>' + t.std + ' standard</span>' : '') +
+      (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' untraced</span>' : '') +
+      (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
+      (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
+      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
+      '<button class="btn" data-act="spec-paste">Paste text</button>' + (t.sections ? '<button class="btn" data-act="spec-export">Export</button>' : '') + '<button class="btn btn-primary" data-act="spec-add">Add section</button>') + '</div></div>';
+    // Editing the whole description: the text, with its outline read live beside it.
+    if (specEditing === 'all') {
+      return html + '<div class="spec-wrap depth-3"><nav class="spec-outline" id="spec-live-outline" aria-label="Outline of the text">' + specLiveOutline() + '</nav>' +
+        '<div class="spec-doc">' + specEditorHtml(null, true) + '</div></div></div>';
+    }
+    if (!t.sections && specEditing !== 'new' && ui.specView !== 'map') {
+      return html + '<div class="card empty"><div class="empty-art">' + ICON.doc + '</div><h2>Describe what this ' + esc(W.thing) + ' does</h2>' +
+        '<p>Write it the way you’d explain it: the product first, then its structure, down to the drivers. Headings make the outline. Link sentences to requirements, mark background as standard, and flag new behavior with @req to turn it into a requirement later.</p>' +
+        '<button class="btn btn-primary" data-act="spec-add">Add section</button> <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
+    }
+    html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button></div>' +
+      (view === 'doc' ? '<div class="seg" title="How much to show">' + [[1, 'Headings'], [2, 'Gists'], [3, 'Full text']].map(function (d) {
+        return '<button class="' + (depth === d[0] ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
+      }).join('') + '</div>' : '') + '</div>';
+    html += specNeedsHtml(p, a);
+    if (view === 'map') return html + specMapHtml(p, a) + '</div>';
+    var outline = '<nav class="spec-outline" aria-label="Outline">' + a.sections.map(function (x) {
+      return '<button class="lv-' + x.sec.level + '" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(x.sec.title || 'Untitled') + '</span>' + gapMark(x.gaps, specGapTitle(x)) + '</button>';
+    }).join('') + '</nav>';
+    var doc = a.sections.map(function (x, i) {
+      var s = x.sec, next = a.sections[i + 1], group = next && next.sec.level > s.level;
+      if (specEditing === s.id) return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '">' + specEditorHtml(s.id) + '</section>';
+      var hn = 'h' + Math.min(5, s.level + 1);
+      return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '"><div class="spec-h"><' + hn + '>' + esc(s.title || 'Untitled') + '</' + hn + '>' +
+        (s.kind ? '<span class="chip spec-kind">' + esc(s.kind) + '</span>' : '') + gapMark(x.gaps, specGapTitle(x)) +
+        '<button class="icon-btn spec-edit" data-act="spec-edit" data-id="' + esc(s.id) + '" title="Edit this section" aria-label="Edit ' + esc(s.title) + '">' + ICON.pencil + '</button></div>' +
+        (depth === 2 && x.gist ? '<p class="spec-gist">' + esc(x.gist) + '</p>' : '') +
+        (depth === 3 ? (x.blocks.length ? specBlocksHtml(p, a, x) : group ? '' : '<p class="note">Nothing written yet.</p>') : '') + '</section>';
+    }).join('') + (specEditing === 'new' ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
+    return html + '<div class="spec-wrap depth-' + depth + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
+  }
+
+  // The two lists that need someone: flagged sentences and requirements nothing describes.
+  function specNeedsHtml(p, a) {
+    var copies = a.sections.filter(function (x) { return x.sec.conflictOf; }), ctags = M.specCommentTags(p);
+    if (!a.tags.length && !a.undescribed.length && !copies.length && !ctags.length) return '';
+    var secTitle = function (id) { var s = a.ctx.secs[id]; return s ? s.title || 'Untitled' : ''; };
+    var tags = a.tags.map(function (t) {
+      var d = ' data-sec="' + esc(t.sec) + '" data-u="' + t.start + '"';
+      var changes = t.sectionReqs.filter(function (id) { return t.reqs.indexOf(id) < 0; }).slice(0, 3).map(function (id) {
+        return '<button class="btn btn-sm" data-act="spec-change"' + d + ' data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
+      }).join('');
+      return '<div class="spec-need"><button class="spec-need-text" data-act="spec-unit"' + d + '><span>' + esc(t.text) + '</span><span class="muted">' + esc(secTitle(t.sec)) + '</span></button>' +
+        '<div class="spec-need-acts"><button class="btn btn-sm btn-primary" data-act="spec-make"' + d + '>New requirement</button>' + changes +
+        '<button class="btn btn-sm" data-act="spec-untag"' + d + ' title="Remove the @req flag">Remove flag</button></div></div>';
+    }).join('');
+    // @req in comments: on a check (New requirement traces to it), on a requirement (Change it), or general.
+    tags += ctags.map(function (c) {
+      var q = reqOf(p, c.item), d = itemDef(p, c.item), on = q ? q.ref + ' ' + (q.text || '') : c.item ? d.def.text : 'the whole ' + UNIT;
+      return '<div class="spec-need"><button class="spec-need-text" data-act="spec-ctag-open" data-id="' + esc(c.id) + '"><span>' + esc(c.text) + '</span>' +
+        '<span class="muted">' + esc('Comment by ' + c.author + ', ' + relTime(c.at) + ', on ' + cutText(on, 90)) + '</span></button>' +
+        '<div class="spec-need-acts">' + (q ? '<button class="btn btn-sm btn-primary" data-act="spec-ctag-change" data-id="' + esc(c.id) + '">Change ' + esc(q.ref) + '</button>' : '') +
+        '<button class="btn btn-sm' + (q ? '' : ' btn-primary') + '" data-act="spec-ctag-make" data-id="' + esc(c.id) + '">New requirement</button>' +
+        '<button class="btn btn-sm" data-act="spec-ctag-untag" data-id="' + esc(c.id) + '" title="Remove the @req flag from the comment">Remove flag</button></div></div>';
+    }).join('');
+    var nTags = a.tags.length + ctags.length;
+    var missing = a.undescribed.map(function (id) {
+      var q = a.ctx.reqs[id];
+      return '<div class="spec-need"><button class="spec-need-text" data-act="open-req" data-id="' + esc(id) + '"><span><b>' + esc(q.ref) + '</b> ' + esc(q.text || 'No text yet') + '</span></button>' +
+        '<div class="spec-need-acts"><button class="btn btn-sm" data-act="spec-describe" data-id="' + esc(id) + '">Describe in…</button></div></div>';
+    }).join('');
+    var conflicts = copies.map(function (x) {
+      var orig = a.ctx.secs[x.sec.conflictOf];
+      return '<div class="spec-need"><button class="spec-need-text" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(orig ? orig.title || 'Untitled' : x.sec.title) + '</span>' +
+        '<span class="muted">' + esc((x.sec.updatedBy ? x.sec.updatedBy + '’s' : 'An') + ' edit from ' + relTime(x.sec.updatedAt) + ', kept beside the newer one') + '</span></button>' +
+        '<div class="spec-need-acts">' + (orig ? '<button class="btn btn-sm" data-act="spec-goto" data-id="' + esc(orig.id) + '">Newer version</button>' : '') +
+        '<button class="btn btn-sm" data-act="spec-edit" data-id="' + esc(x.sec.id) + '">Edit copy</button>' +
+        '<button class="btn btn-sm" data-act="spec-copy-delete" data-id="' + esc(x.sec.id) + '" title="Delete the copy once its text is merged into the newer version">Delete copy</button></div></div>';
+    }).join('');
+    return '<div class="spec-needs">' +
+      (copies.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Edited in two places <span class="count">' + copies.length + '</span></div>' +
+        '<p class="note" style="margin:0 0 6px">Two people changed the same section at once. The newer edit won; the other is kept as a copy. Move what you need from the copy into the section, then delete the copy.</p>' + conflicts + '</div>' : '') +
+      (nTags ? '<div class="card spec-needs-card"><div class="spec-needs-title">To requirementify <span class="count">' + nTags + '</span></div>' + tags + '</div>' : '') +
+      (a.undescribed.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Not described <span class="count">' + a.undescribed.length + '</span></div>' + missing + '</div>' : '') + '</div>';
+  }
+
+  // The layered diagram, drawn from the outline: one block per section with a kind, lines from
+  // Uses (or to the nearest section above it in the outline), interfaces as labeled dashed lines.
+  function specMapHtml(p, a) {
+    var byId = {}, rows = [], MW = 1000, LBL = 124, GAP = 16, BH = 54, RH = 112, TOP = 24;
+    a.sections.forEach(function (x) { byId[x.sec.id] = x; });
+    var ifaces = a.sections.filter(function (x) { return x.sec.kind === 'interface'; });
+    var looseIf = ifaces.filter(function (x) { return x.uses.filter(function (id) { return byId[id] && byId[id].sec.kind && byId[id].sec.kind !== 'interface'; }).length < 2; });
+    // Every layer is drawn, empty ones too, so a design can be built here from nothing.
+    SPEC_ROWS.concat([['interface', 'Interfaces']]).forEach(function (r) {
+      var xs = r[0] === 'interface' ? looseIf : a.sections.filter(function (x) { return x.sec.kind === r[0]; });
+      rows.push({ kind: r[0], label: r[1], xs: xs });
+    });
+    var pos = {}, selBlock = specBlockSel();
+    rows.forEach(function (r, ri) {
+      if (!r.xs.length) return;
+      var n = r.xs.length, bw = Math.min(210, (MW - LBL - GAP * (n + 1)) / n), span = n * bw + (n - 1) * GAP, x0 = LBL + (MW - LBL - span) / 2;
+      r.xs.forEach(function (x, i) { pos[x.sec.id] = { x: x0 + i * (bw + GAP), y: TOP + ri * RH, w: bw, h: BH, row: ri }; });
+    });
+    var H = TOP + rows.length * RH - (RH - BH) + 24;
+    function inMap(id) { return !!pos[id]; }
+    // An ancestor in the outline that's on the map, for sections without Uses.
+    function mapParent(x) { for (var id = x.parent; id; id = byId[id] && byId[id].parent) if (inMap(id)) return id; return ''; }
+    var edges = [], incoming = {};
+    a.sections.forEach(function (x) {
+      if (!inMap(x.sec.id) || x.sec.kind === 'interface') return;
+      x.uses.filter(inMap).forEach(function (id) { edges.push({ a: x.sec.id, b: id, cls: 'uses' }); incoming[id] = 1; });
+    });
+    // A block nothing uses hangs from the nearest section above it in the outline.
+    a.sections.forEach(function (x) {
+      if (!inMap(x.sec.id) || x.sec.kind === 'interface' || incoming[x.sec.id]) return;
+      var par = mapParent(x);
+      if (par) edges.push({ a: par, b: x.sec.id, cls: 'tree' });
+    });
+    ifaces.forEach(function (x) {
+      if (inMap(x.sec.id)) { x.uses.filter(inMap).forEach(function (id) { edges.push({ a: id, b: x.sec.id, cls: 'iface', link: x.sec.id }); }); return; }
+      var ends = x.uses.filter(inMap);
+      edges.push({ a: ends[0], b: ends[1], cls: 'iface', label: x.sec.title, link: x.sec.id });
+    });
+    function path(e) {
+      var A = pos[e.a], B = pos[e.b];
+      if (A.row > B.row) { var t = A; A = B; B = t; }
+      if (A.row === B.row) {
+        var l = A.x < B.x ? A : B, r2 = A.x < B.x ? B : A, y = A.y + A.h, dy = 34;
+        return { d: 'M' + (l.x + l.w / 2) + ' ' + y + ' C' + (l.x + l.w / 2) + ' ' + (y + dy) + ' ' + (r2.x + r2.w / 2) + ' ' + (y + dy) + ' ' + (r2.x + r2.w / 2) + ' ' + y, mx: (l.x + l.w / 2 + r2.x + r2.w / 2) / 2, my: y + dy * 0.75 };
+      }
+      var x1 = A.x + A.w / 2, y1 = A.y + A.h, x2 = B.x + B.w / 2, y2 = B.y, my = (y1 + y2) / 2;
+      return { d: 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my + ' ' + x2 + ' ' + my + ' ' + x2 + ' ' + y2, mx: (x1 + x2) / 2, my: my };
+    }
+    var svg = '<svg class="spec-map" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-top="' + TOP + '" data-rh="' + RH + '" data-bh="' + BH + '">' +
+      '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern></defs>';
+    rows.forEach(function (r, ri) {
+      var y = TOP + ri * RH;
+      svg += '<text class="spec-row-label" x="8" y="' + (y + BH / 2 + 4) + '">' + esc(r.label) + '</text>' +
+        '<g class="spec-row-add" data-act="spec-add-block" data-kind="' + r.kind + '"><title>Add a ' + esc(KIND_LABEL[r.kind].toLowerCase()) + '</title>' +
+        '<circle cx="' + (LBL - 10) + '" cy="' + (y + BH / 2) + '" r="10"/><path d="M' + (LBL - 14) + ' ' + (y + BH / 2) + 'h8M' + (LBL - 10) + ' ' + (y + BH / 2 - 4) + 'v8"/></g>' +
+        (r.xs.length ? '' : '<text class="spec-row-empty" x="' + (LBL + 14) + '" y="' + (y + BH / 2 + 4) + '">No ' + esc(r.label.toLowerCase()) + ' yet</text>');
+      if (ri) svg += '<line class="spec-row-line" x1="8" x2="' + MW + '" y1="' + (y - (RH - BH) / 2) + '" y2="' + (y - (RH - BH) / 2) + '"/>';
+    });
+    edges.forEach(function (e) {
+      if (!e.a || !e.b || !pos[e.a] || !pos[e.b]) return;
+      var pth = path(e);
+      svg += '<path class="spec-edge ' + e.cls + '" d="' + pth.d + '"/>';
+      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + pth.d + '"><title>' + esc(byId[e.a].sec.title + ' uses ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
+      if (e.label) {
+        var lw = Math.min(180, 12 + e.label.length * 6.4);
+        svg += '<g class="spec-edge-label" data-act="spec-block" data-id="' + esc(e.link) + '"><title>' + esc(e.label) + '</title><rect x="' + (pth.mx - lw / 2) + '" y="' + (pth.my - 10) + '" width="' + lw + '" height="20" rx="10"/>' +
+          '<text x="' + pth.mx + '" y="' + (pth.my + 4) + '" text-anchor="middle">' + esc(cutText(e.label, Math.floor((lw - 12) / 6.4))) + '</text></g>';
+      }
+    });
+    rows.forEach(function (r) {
+      r.xs.forEach(function (x) {
+        var b = pos[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
+        svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (x.sec.kind === 'interface' ? ' iface' : '') + (selBlock === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-row="' + esc(r.kind) + '" data-cx="' + (b.x + b.w / 2) + '"><title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '')) + '</title>' +
+          '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="' + (x.sec.kind === 'interface' ? b.h / 2 : 10) + '"/>' +
+          (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="' + (x.sec.kind === 'interface' ? b.h / 2 : 10) + '"/>' : '') +
+          '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 23) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', chars)) + '</text>' +
+          '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 40) + '" text-anchor="middle">' + esc(x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.links.length ? plural(x.links.length, 'requirement') : x.sec.kind) + '</text>' +
+          '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w / 2) + '" cy="' + (b.y + b.h) + '" r="7"><title>Drag to a block this one uses</title></circle></g>';
+      });
+    });
+    svg += '</svg>';
+    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line to remove it. Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines are interfaces. Dotted blocks have untraced or flagged sentences.</p>';
+  }
+  function cutText(t, n) { t = String(t || ''); return n > 1 && t.length > n ? t.slice(0, n - 1) + '…' : t; }
+
+  // ── Blocks (the diagram's sections) ──
+  function specBlockSel() { var m = /^specblock\|(.+)$/.exec(selected || ''); return m ? m[1] : ''; }
+  function specOpenBlock(id) {
+    selected = 'specblock|' + id;
+    $('#inspector').classList.add('open');
+    renderPage(); renderInspector();
+  }
+  function specPutAll(p, recs) {
+    if (!recs.length) return;
+    p.spec = p.spec || {};
+    recs.forEach(function (r) { p.spec[r.id] = r; });
+    touch(p); renderPage(); renderInspector(); renderToolbar(); syncSoon();
+  }
+  function renderSpecBlockInspector(p) {
+    var el = $('#inspector'), id = specBlockSel(), a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0];
+    if (!x) { closeInspector(); return; }
+    var s = x.sec, usedBy = a.sections.filter(function (y) { return y.uses.indexOf(id) >= 0; });
+    var names = M.specUsesNames(s.body), byTitle = a.ctx.titles;
+    var opts = a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && names.map(function (n) { return n.toLowerCase(); }).indexOf(y.sec.title.toLowerCase()) < 0; });
+    var kinds = [''].concat(M.SPEC_KINDS);
+    var lower = { product: 'task', task: 'module', module: 'driver', driver: 'hardware' }[s.kind] || '';
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › ' + esc(s.title || 'Untitled') + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<div class="field"><label for="spec-block-title">Name</label><input class="input" id="spec-block-title" value="' + esc(s.title) + '"></div>' +
+      '<div class="field"><span class="field-label">Kind</span><div class="seg full spec-kind-seg">' + kinds.map(function (k) {
+        return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? KIND_LABEL[k] : 'None') + '</button>';
+      }).join('') + '</div></div>' +
+      '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
+      '<div class="field"><span class="field-label">Uses</span><div class="chips">' + (names.length ? names.map(function (n) {
+        var tid = byTitle[n.toLowerCase()];
+        return '<span class="chip spec-use-chip' + (tid ? '' : ' spec-chip-missing') + '">' + (tid ? '<button data-act="spec-block" data-id="' + esc(tid) + '">' + esc(n) + '</button>' : esc(n)) +
+          '<button class="spec-use-x" data-act="spec-block-unuse" data-name="' + esc(n) + '" aria-label="Stop using ' + esc(n) + '">×</button></span>';
+      }).join('') : '<span class="note" style="margin:0">Nothing yet</span>') + '</div>' +
+      (opts.length ? '<select class="input" id="spec-block-use" style="margin-top:8px"><option value="">Add a block it uses…</option>' + SPEC_ROWS.concat([['interface', 'Interfaces'], ['', 'Other sections']]).map(function (r) {
+        var o = opts.filter(function (y) { return y.sec.kind === r[0]; });
+        return o.length ? '<optgroup label="' + esc(r[1]) + '">' + o.map(function (y) { return '<option value="' + esc(y.sec.title) + '">' + esc(y.sec.title) + '</option>'; }).join('') + '</optgroup>' : '';
+      }).join('') + '</select>' : '') + '</div>' +
+      (usedBy.length ? '<div class="field"><span class="field-label">Used by</span><div class="chips">' + usedBy.map(function (y) { return '<button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(y.sec.id) + '">' + esc(y.sec.title) + '</button>'; }).join('') + '</div></div>' : '') +
+      '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Write its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Read it</button>' +
+      (lower ? '<button class="btn" data-act="spec-add-block" data-kind="' + lower + '" data-parent="' + esc(id) + '">Add a ' + lower + ' it uses</button>' : '') +
+      '<button class="btn btn-danger" data-act="spec-block-delete" data-id="' + esc(id) + '">Delete</button></div>' +
+      '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
+    el.dataset.item = selected;
+  }
+  function specBlockField(key, value) {
+    var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur) return;
+    if (key === 'title') {
+      value = String(value || '').trim();
+      if (!value) { renderInspector(); return; }
+      var clash = M.liveSpec(p).some(function (s) { return s.id !== id && s.title.toLowerCase() === value.toLowerCase(); });
+      if (clash) { toast('Another section is already called ' + value); renderInspector(); return; }
+      return specPutAll(p, M.specRename(p, id, value, me()));
+    }
+    var f = {};
+    if (key === 'kind') f.kind = M.oneOf(M.SPEC_KINDS, value, '');
+    if (key === 'gist') f.body = M.specSetLine(cur.body, 'gist', value);
+    if (key === 'uses') f.body = M.specSetLine(cur.body, 'uses', value);
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, f), me())]);
+  }
+  // Drag-to-connect: `from` uses `to` (its Uses line gains to's title).
+  function specConnect(from, to) {
+    var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to];
+    if (!a || !b || from === to) return;
+    var names = M.specUsesNames(a.body), t = M.liveSpec(p).filter(function (s) { return s.id === to; })[0].title;
+    if (names.some(function (n) { return n.toLowerCase() === t.toLowerCase(); })) { toast((a.title || 'It') + ' already uses ' + t); return; }
+    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, 'uses', names.concat([t]).join(', ')) }), me())]);
+    toast((a.title || 'It') + ' uses ' + t);
+  }
+  function specDisconnect(from, to) {
+    var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to]; if (!a || !b) return;
+    var t = String(b.title || '').toLowerCase();
+    if (!confirm('Stop ' + (a.title || 'this block') + ' using ' + (b.title || 'that block') + '?')) return;
+    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, 'uses', M.specUsesNames(a.body).filter(function (n) { return n.toLowerCase() !== t; }).join(', ')) }), me())]);
+  }
+  var specDrag = null;
+  function specDragStart(e, handle) {
+    var svg = handle.ownerSVGElement; if (!svg) return;
+    e.preventDefault(); e.stopPropagation();
+    var m = svg.getScreenCTM().inverse(), pt = svg.createSVGPoint();
+    function local(ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); }
+    var x0 = +handle.getAttribute('cx'), y0 = +handle.getAttribute('cy');
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('class', 'spec-drag-line'); svg.appendChild(line);
+    svg.classList.add('dragging');
+    specDrag = { from: handle.dataset.src, line: line, svg: svg, local: local, x0: x0, y0: y0, over: null, moved: false };
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { /* old browsers */ }
+    specDragMove(e);
+  }
+  function specDragMove(e) {
+    var d = specDrag; if (!d) return;
+    var q = d.local(e), my = (d.y0 + q.y) / 2;
+    if (Math.abs(q.x - d.x0) + Math.abs(q.y - d.y0) > 6) d.moved = true;
+    d.line.setAttribute('d', 'M' + d.x0 + ' ' + d.y0 + ' C' + d.x0 + ' ' + my + ' ' + q.x + ' ' + my + ' ' + q.x + ' ' + q.y);
+    var el = document.elementFromPoint(e.clientX, e.clientY), node = el && el.closest && el.closest('.spec-node');
+    var over = node && node.dataset.id !== d.from ? node : null;
+    if (d.over !== over) { if (d.over) d.over.classList.remove('drop'); if (over) over.classList.add('drop'); d.over = over; }
+  }
+  function specDragEnd() {
+    var d = specDrag; if (!d) return;
+    specDrag = null;
+    d.line.remove(); d.svg.classList.remove('dragging');
+    if (d.over) { d.over.classList.remove('drop'); specConnect(d.from, d.over.dataset.id); }
+    else if (d.moved) toast('Drop on a block to connect');
+    specDragJustEnded = d.moved;
+    setTimeout(function () { specDragJustEnded = false; }, 0);
+  }
+  var specDragJustEnded = false;
+  // Dragging a block: a ghost follows the pointer, the layer under it lights up, and the drop sets
+  // the kind (the layer) and the place (beside the nearest blocks), written to the text.
+  var specMove = null;
+  function specMoveDown(e, node) {
+    if (e.button !== 0) return;
+    var svg = node.ownerSVGElement; if (!svg || svg.querySelector('.spec-node.dragging')) return;
+    specMove = { node: node, svg: svg, x: e.clientX, y: e.clientY, on: false };
+  }
+  function specMoveMove(e) {
+    var d = specMove; if (!d) return;
+    if (!d.on) {
+      if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 8) return;
+      d.on = true;
+      var m = d.svg.getScreenCTM().inverse(), pt = d.svg.createSVGPoint();
+      d.local = function (ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); };
+      d.start = d.local(e); d.ghost = d.node.cloneNode(true);
+      d.ghost.classList.add('ghost'); d.ghost.removeAttribute('data-act');
+      d.svg.appendChild(d.ghost); d.node.classList.add('dragging'); d.svg.classList.add('moving');
+      d.band = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.band.setAttribute('class', 'spec-row-band');
+      d.band.setAttribute('x', 0); d.band.setAttribute('width', 1000); d.svg.insertBefore(d.band, d.svg.firstChild.nextSibling);
+      d.mark = document.createElementNS('http://www.w3.org/2000/svg', 'line'); d.mark.setAttribute('class', 'spec-drop-mark'); d.svg.appendChild(d.mark);
+    }
+    e.preventDefault();
+    var q = d.local(e), rows = d.svg.dataset.rows.split(','), top = +d.svg.dataset.top, rh = +d.svg.dataset.rh, bh = +d.svg.dataset.bh;
+    d.ghost.setAttribute('transform', 'translate(' + (q.x - d.start.x) + ' ' + (q.y - d.start.y) + ')');
+    var ri = Math.max(0, Math.min(rows.length - 1, Math.floor((q.y - top + (rh - bh) / 2) / rh)));
+    d.kind = rows[ri];
+    d.band.setAttribute('y', top + ri * rh - (rh - bh) / 2); d.band.setAttribute('height', rh);
+    // The nearest blocks in that layer (not this one): sit before the first whose middle is right of the pointer.
+    var others = Array.prototype.filter.call(d.svg.querySelectorAll('.spec-node[data-row="' + d.kind + '"]'), function (g) { return g !== d.node && !g.classList.contains('ghost'); })
+      .sort(function (a, b) { return a.dataset.cx - b.dataset.cx; });
+    var next = others.filter(function (g) { return +g.dataset.cx > q.x; })[0], prev = others.filter(function (g) { return +g.dataset.cx <= q.x; }).pop();
+    d.before = next ? next.dataset.id : ''; d.after = !next && prev ? prev.dataset.id : '';
+    var ref = next || prev;
+    if (ref) {
+      var bb = ref.querySelector('rect').getBBox(), mx = next ? bb.x - 8 : bb.x + bb.width + 8;
+      d.mark.setAttribute('x1', mx); d.mark.setAttribute('x2', mx); d.mark.setAttribute('y1', bb.y - 4); d.mark.setAttribute('y2', bb.y + bb.height + 4); d.mark.style.display = '';
+    } else d.mark.style.display = 'none';
+  }
+  function specMoveUp() {
+    var d = specMove; specMove = null; if (!d || !d.on) return;
+    d.ghost.remove(); d.band.remove(); d.mark.remove(); d.node.classList.remove('dragging'); d.svg.classList.remove('moving');
+    specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0);
+    var p = current(), id = d.node.dataset.id, recs = p ? M.specMoveBlock(p, id, { kind: d.kind, before: d.before, after: d.after }, me()) : [];
+    if (!recs.length) return;
+    specPutAll(p, recs);
+    toast('Moved ' + ((p.spec[id] || {}).title || 'the block') + (d.kind !== d.node.dataset.row ? ' to ' + (KIND_LABEL[d.kind] || d.kind).toLowerCase() + 's' : ''));
+  }
+
+  function specAddBlockSheet(kind, parent) {
+    var p = current(); if (!p) return;
+    var secs = M.liveSpec(p), label = KIND_LABEL[kind] ? KIND_LABEL[kind].toLowerCase() : 'block';
+    var w = sheet('<div class="sheet-head"><h2>Add a ' + esc(label) + '</h2><p>It becomes a section in the text, ready to write. You can fill it out there later.</p></div>' +
+      '<div class="sheet-body"><div class="field"><label for="spec-new-title">Name</label><input class="input" id="spec-new-title" placeholder="' + esc({ product: 'Thermostat firmware', task: 'Control loop', module: 'Scheduler', driver: 'Relay driver', hardware: 'Relays', interface: 'Status frame' }[kind] || 'Name') + '"></div>' +
+      '<div class="field"><label for="spec-new-gist">Gist (optional)</label><input class="input" id="spec-new-gist" placeholder="One line: what it does"></div>' +
+      '<div class="field"><label for="spec-new-parent">Used by</label><select class="input" id="spec-new-parent"><option value="">Nothing yet</option>' + secs.map(function (s) {
+        return '<option value="' + esc(s.id) + '"' + (s.id === parent ? ' selected' : '') + '>' + esc(s.title || 'Untitled') + (s.kind ? ' (' + esc(s.kind) + ')' : '') + '</option>';
+      }).join('') + '</select></div></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add</button></div>');
+    function ok() {
+      var title = w.querySelector('#spec-new-title').value.trim();
+      if (!title) { toast('Give it a name'); return; }
+      if (M.liveSpec(p).some(function (s) { return s.title.toLowerCase() === title.toLowerCase(); })) { toast('Another section is already called ' + title); return; }
+      var recs = M.specAddBlock(p, { title: title, kind: kind, gist: w.querySelector('#spec-new-gist').value, parent: w.querySelector('#spec-new-parent').value }, me());
+      closeSheet();
+      ui.view = 'spec'; ui.specView = 'map'; saveUi();
+      selected = 'specblock|' + recs[0].id; $('#inspector').classList.add('open');
+      specPutAll(p, recs);
+      toast('Added ' + title + ' to the text');
+    }
+    w.addEventListener('click', function (e) { var b = e.target.closest('[data-sheet]'); if (!b) return; if (b.dataset.sheet === 'cancel') closeSheet(); else ok(); });
+    w.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); ok(); } });
+  }
+
+  function renderSpecInspector(p) {
+    var el = $('#inspector'), sel = specSel(), a = M.specAnalysis(p), f = sel && specFind(a, sel.sec, sel.start);
+    if (!f) { closeInspector(); return; }
+    var u = f.u, search = el.dataset.item === selected && el.querySelector('#spec-link-search'), query = search ? search.value : '';
+    var links = u.reqs.map(function (id) {
+      var q = a.ctx.reqs[id];
+      return '<div class="req-link"><button class="req-link-main" data-act="open-req" data-id="' + esc(id) + '"><span><span class="req-link-text"><b>' + esc(q.ref) + '</b> ' + esc(q.text || 'No text yet') + '</span>' +
+        '<span class="muted">' + esc(REQ_LABEL[q.status] + ' · ' + REQ_LABEL[q.verify]) + '</span></span></button>' +
+        '<button class="cmt-del" style="opacity:1" data-act="spec-unlink" data-id="' + esc(id) + '">Remove</button></div>';
+    }).join('') + u.missing.map(function (t) {
+      return '<div class="req-link missing"><span class="req-link-main"><span><span class="req-link-text">' + esc(t) + '</span><span class="muted">Not found: no requirement or section by that name</span></span></span></div>';
+    }).join('');
+    var secLinks = [];
+    u.tokens.forEach(function (t) { if (t.t === 'span') t.secs.forEach(function (id) { if (secLinks.indexOf(id) < 0) secLinks.push(id); }); });
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">' + esc(SPEC_LABEL) + ' › ' + esc(f.x.sec.title || 'Untitled') + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<div class="field"><span class="field-label">Sentence <span class="spec-state st-' + u.state + '">' + STATE_LABEL[u.state] + '</span></span>' +
+      '<div class="spec-quote">' + specUnitHtml(p, a, f.x, u).replace(' data-act="spec-unit"', '') + '</div></div>' +
+      (specPhrase ? '<div class="spec-phrase"><span>Linking just <b>“' + esc(specPhrase) + '”</b></span><button class="btn btn-sm" data-act="spec-phrase-clear">Whole sentence</button></div>' :
+        '<p class="note" style="margin:-6px 0 10px">Select words in the sentence to link just those.</p>') +
+      '<div class="field"><span class="field-label">Requirements</span>' + (links || '<p class="note" style="margin:0 0 8px">' + (u.state === 'std' ? 'Standard text: description that needs no requirement.' : 'Not linked to a requirement yet.') + '</p>') +
+      '<input class="input" id="spec-link-search" placeholder="Search requirements to link…" value="' + esc(query) + '" autocomplete="off">' +
+      '<div id="spec-link-results">' + specLinkResults(p, u, query) + '</div></div>' +
+      (secLinks.length ? '<div class="field"><span class="field-label">Points at</span><div class="chips">' + secLinks.map(function (id) { return '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(a.ctx.secs[id].title) + '</button>'; }).join('') + '</div></div>' : '') +
+      '<div class="spec-acts">' +
+      '<button class="btn btn-primary" data-act="spec-make" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '">Make requirement</button>' +
+      (u.tag ? f.x.links.filter(function (id) { return u.reqs.indexOf(id) < 0; }).slice(0, 3).map(function (id) {
+        return '<button class="btn" data-act="spec-change" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '" data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
+      }).join('') : '') +
+      (u.std ? '<button class="btn" data-act="spec-std" data-on="">Not standard</button>' : !u.reqs.length ? '<button class="btn" data-act="spec-std" data-on="1" title="Description that needs no requirement">Mark standard</button>' : '') +
+      (u.tag ? '<button class="btn" data-act="spec-tag" data-on="">Remove @req flag</button>' : '<button class="btn" data-act="spec-tag" data-on="1" title="Flag it to turn into a requirement later">Flag @req</button>') +
+      '<button class="btn" data-act="spec-edit" data-id="' + esc(f.x.sec.id) + '">Edit section</button></div>' +
+      '<p class="note">Last changed ' + (f.x.sec.updatedBy ? 'by ' + esc(f.x.sec.updatedBy) + ', ' : '') + relTime(f.x.sec.updatedAt) + '.</p></div>';
+    el.dataset.item = selected;
+  }
+  function specLinkResults(p, u, query) {
+    query = (query || '').trim().toLowerCase();
+    if (query.length < 2) return '';
+    var hits = M.liveReqs(p).filter(function (q) { return q.status !== 'deprecated' && u.reqs.indexOf(q.id) < 0 && [q.ref, q.text, q.category].join(' ').toLowerCase().indexOf(query) >= 0; }).slice(0, 8);
+    if (!hits.length) return '<p class="note">No requirements match.</p>';
+    return '<div class="req-results">' + hits.map(function (q) { return '<button data-act="spec-link" data-id="' + esc(q.id) + '"><span><b>' + esc(q.ref) + '</b> ' + esc(q.text) + '</span></button>'; }).join('') + '</div>';
+  }
+  // On a requirement: the sentences that describe it.
+  function specDescribedIn(p, q) {
+    if (!specOn(p)) return '';
+    var a = M.specAnalysis(p), uses = a.uses[q.id] || [];
+    return '<div class="field"><span class="field-label">Described in</span>' + (uses.length ? uses.map(function (w) {
+      var s = a.ctx.secs[w.sec];
+      return '<div class="req-link"><button class="req-link-main" data-act="spec-open" data-sec="' + esc(w.sec) + '" data-u="' + w.start + '"><span><span class="req-link-text">' + esc(w.text) + '</span><span class="muted">' + esc(SPEC_LABEL + ' › ' + (s.title || 'Untitled')) + '</span></span></button></div>';
+    }).join('') : '<p class="note" style="margin:0 0 8px">Nothing in the ' + esc(SPEC_LABEL.toLowerCase()) + ' describes it yet.</p><button class="btn btn-sm" data-act="spec-describe" data-id="' + esc(q.id) + '">Describe in…</button>') + '</div>';
+  }
+
+  function specOpenUnit(sec, start, phrase) {
+    var p = current(); if (!p) return;
+    specPhrase = phrase || '';
+    ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
+    selected = specSelKey(sec, start);
+    $('#inspector').classList.add('open');
+    renderPage(); renderInspector();
+    var el = document.querySelector('.su.sel'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function specGoto(id) {
+    if (ui.view !== 'spec' || ui.specView === 'map') { ui.view = 'spec'; ui.specView = 'doc'; saveUi(); renderPage(); }
+    var el = document.getElementById('spec-' + id);
+    if (el) { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  }
+  function specStartEdit(id) {
+    var p = current(); if (!p) return;
+    var a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0];
+    if (!x) return;
+    ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+    specEditing = id;
+    specDraft = M.specHeadingLine(x.sec) + '\n' + M.specToEditor(x.sec.body, a.ctx);
+    closeInspector(); renderPage(); specFocusEditor();
+  }
+  function specFocusEditor() {
+    setTimeout(function () {
+      var t = $('#spec-editor'); if (!t) return;
+      t.focus(); t.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); specBarRefresh();
+    }, 30);
+  }
+  // The outline of the text being edited, read as the editor would save it.
+  function specLiveOutline() {
+    var heads = M.specSplit(specDraft).map(function (c) { return c.heading || { level: 1, title: 'Untitled', kind: '' }; });
+    return heads.map(function (h) { return '<button class="lv-' + h.level + '" tabindex="-1"><span>' + esc(h.title || 'Untitled') + '</span>' + (h.kind ? '<span class="chip spec-kind">' + esc(h.kind) + '</span>' : '') + '</button>'; }).join('') ||
+      '<p class="note">Headings (# Title) make the outline.</p>';
+  }
+  function specSaveAll() {
+    var p = current(); if (!p) return;
+    var recs = M.specSaveAll(p, specDraft, me());
+    var gone = recs.filter(function (r) { return r.deleted; });
+    if (gone.length && !confirm('Saving removes ' + plural(gone.length, 'section') + ': ' + gone.map(function (r) { return r.title || 'Untitled'; }).join(', ') + '. Links to them stop working. Save anyway?')) return;
+    p.spec = p.spec || {};
+    recs.forEach(function (r) { p.spec[r.id] = r; });
+    specEditing = null; specDraft = '';
+    if (recs.length) touch(p);
+    renderPage(); renderToolbar(); syncSoon();
+    toast(recs.length ? 'Saved: ' + plural(recs.length - gone.length, 'section') + ' changed or added' + (gone.length ? ', ' + gone.length + ' removed' : '') : 'No changes');
+  }
+  function specSaveEdit() {
+    var p = current(); if (!p || !specEditing) return;
+    if (specEditing === 'all') return specSaveAll();
+    var id = specEditing === 'new' ? null : specEditing;
+    if (id && !specDraft.trim() && !confirm('Delete this section?')) return;
+    var recs = M.specSave(p, id, specDraft, me());
+    p.spec = p.spec || {};
+    recs.forEach(function (r) { p.spec[r.id] = r; });
+    specEditing = null; specDraft = '';
+    if (recs.length) touch(p);
+    renderPage(); syncSoon();
+  }
+  function specPasteSheet() {
+    var p = current(); if (!p) return;
+    var w = sheet('<div class="sheet-head"><h2>Paste text</h2><p>Paste a description, for example from meeting notes or a design document. Lines starting with <b>#</b>, <b>##</b>, <b>###</b>, or <b>####</b> start sections; text before the first heading goes in a section of its own. Sections are added after the ones already here.</p></div>' +
+      '<div class="sheet-body"><textarea class="input" id="spec-paste" rows="14" placeholder="# Overview&#10;The thermostat runs a home’s heating and cooling.&#10;&#10;## Control loop * task&#10;…"></textarea></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add</button></div>', { wide: true });
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      var text = w.querySelector('#spec-paste').value;
+      if (!text.trim()) { toast('Nothing to add'); return; }
+      var chunks = M.specSplit(text);
+      if (chunks.length && !chunks[0].heading) text = '# Overview\n' + text;
+      var recs = M.specSave(p, null, text, me());
+      p.spec = p.spec || {};
+      recs.forEach(function (r) { p.spec[r.id] = r; });
+      touch(p); closeSheet();
+      ui.view = 'spec'; saveUi(); renderPage(); syncSoon();
+      toast('Added ' + plural(recs.length, 'section'));
+    });
+  }
+  // A new requirement from a sentence: draft, its text the sentence without the flag, the section
+  // and date as its source; the sentence then links to it.
+  function specMakeReq(sec, start) {
+    var p = current(); if (!p) return;
+    var a = M.specAnalysis(p), f = specFind(a, sec, start); if (!f) return;
+    p.reqs = p.reqs || {};
+    var q = M.newReq(p, { text: f.u.text, source: SPEC_LABEL + ': ' + (f.x.sec.title || 'Untitled') + ', ' + M.now().slice(0, 10) }, me());
+    p.reqs[q.id] = q;
+    specUnitEdit(p, sec, start, 'link', q.id);
+    selected = specSelKey(sec, start);
+    $('#inspector').classList.add('open');
+    renderPage(); renderInspector(); renderToolbar(); syncSoon();
+    toast(q.ref + ' added as a draft');
+  }
+  // A flagged sentence that changes a requirement the section already links: link it, mark the
+  // requirement Changed (approved ones need approving again), and put the sentence in its discussion.
+  function specChangeReq(sec, start, reqId) {
+    var p = current(); if (!p) return;
+    var a = M.specAnalysis(p), f = specFind(a, sec, start), q = reqOf(p, reqId); if (!f || !q) return;
+    var text = f.u.text;
+    specUnitEdit(p, sec, start, 'link', reqId);
+    if (q.status === 'approved') p.reqs[reqId] = M.stamp(Object.assign({}, q, { status: 'changed' }), me());
+    var cid = M.uid(C.ids.comment || 'c');
+    p.comments[cid] = M.stamp({ id: cid, item: reqId, author: me(), at: M.now(), text: 'From the ' + SPEC_LABEL.toLowerCase() + ' (' + (f.x.sec.title || 'Untitled') + '): ' + text }, me());
+    touch(p); renderPage(); renderToolbar(); syncSoon();
+    toast(q.ref + (q.status === 'approved' ? ' marked Changed; ' : ': ') + 'the note is in its discussion');
+  }
+  // A comment flagged @req: make a draft requirement from it (traced to the check it's on), mark the
+  // requirement it's on Changed, or just drop the flag. Each way the comment is marked handled.
+  function specCommentTag(op, cid) {
+    var p = current(), c = p && p.comments[cid]; if (!c) return;
+    var text = M.specPlain(c.text), q = reqOf(p, c.item);
+    if (op === 'make') {
+      var links = c.item && checkIdx(p)[c.item] ? [c.item] : [];
+      var nq = M.newReq(p, { text: text, source: 'Comment by ' + (c.author || '?') + ', ' + String(c.at || M.now()).slice(0, 10), links: links }, me());
+      p.reqs = p.reqs || {}; p.reqs[nq.id] = nq;
+      toast(nq.ref + ' added as a draft' + (links.length ? ', traced to that check' : ''));
+    } else if (op === 'change' && q) {
+      if (q.status === 'approved') p.reqs[q.id] = M.stamp(Object.assign({}, q, { status: 'changed' }), me());
+      toast(q.ref + (q.status === 'approved' ? ' marked Changed' : '') + '; the comment is in its discussion');
+    }
+    p.comments[cid] = M.stamp(Object.assign({}, c, { reqDone: true }), me());
+    touch(p); renderPage(); renderToolbar(); syncSoon();
+  }
+  // The description on paper: the report overlay (whose print styles show only it), with the
+  // document at full text and the requirements it describes.
+  function specPrint(p) {
+    var a = M.specAnalysis(p), m = p.meta;
+    var body = a.sections.map(function (x) {
+      var hn = 'h' + Math.min(5, x.sec.level + 1);
+      return '<section class="spec-sec lv-' + x.sec.level + '"><div class="spec-h"><' + hn + '>' + esc(x.sec.title || 'Untitled') + '</' + hn + '>' + (x.sec.kind ? '<span class="chip spec-kind">' + esc(x.sec.kind) + '</span>' : '') + '</div>' +
+        specBlocksHtml(p, a, x).replace(/ data-act="[^"]*"/g, '') + '</section>';
+    }).join('');
+    var reqs = M.liveReqs(p).filter(function (q) { return q.status !== 'deprecated'; });
+    var table = reqs.length ? '<h2 style="margin-top:28px">Requirements</h2><table class="table"><thead><tr><th>ID</th><th>Requirement</th><th>Described in</th></tr></thead><tbody>' + reqs.map(function (q) {
+      var where = (a.uses[q.id] || []).map(function (w) { return a.ctx.secs[w.sec].title; }).filter(function (t, i, all) { return all.indexOf(t) === i; });
+      return '<tr><td>' + esc(q.ref) + '</td><td>' + esc(q.text) + '</td><td>' + esc(where.join(', ') || 'Not described') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '';
+    var r = $('#report');
+    r.innerHTML = '<div class="report-bar"><b>' + esc(SPEC_LABEL) + '</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print / Save PDF</button></div></div>' +
+      '<div class="paper spec-paper"><h1>' + esc(m.name) + '</h1><div style="color:#515154;margin-bottom:18px">' + esc([SPEC_LABEL, m.project, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).join(' · ')) + '</div>' + body + table + '</div>';
+    r.hidden = false;
+  }
+  function specDescribe(anchor, reqId) {
+    var p = current(), q = reqOf(p, reqId); if (!q) return;
+    var secs = M.liveSpec(p);
+    if (!secs.length) { toast('Add a section first'); return; }
+    menu(anchor, secs.slice(0, 40).map(function (s) { return [s.id, new Array(s.level).join(' ') + (s.title || 'Untitled')]; })).then(function (id) {
+      var cur = (p.spec || {})[id]; if (!cur) return;
+      var body = String(cur.body || '').replace(/\s+$/, '');
+      var line = '[' + (q.text || q.ref).replace(/[\[\]{}]/g, '') + ']{q:' + q.id + '}';
+      specPut(p, id, { body: (body ? body + '\n\n' : '') + line });
+      var a = M.specAnalysis(p), w = (a.uses[q.id] || [])[0];
+      if (w) specOpenUnit(w.sec, w.start); else renderPage();
+      syncSoon();
+      toast('Added to ' + (cur.title || 'the section') + '. Rewrite it as prose with Edit section.');
+    });
+  }
+
   // Overview card next to the checklists.
   function reqsCard(p) {
     var st = M.reqStats(p), idx = checkIdx(p);
@@ -1774,6 +2533,8 @@
     var cur = !p && current();
     var m = p ? p.meta : { name: (preset && preset.name) || '', project: preset ? preset.project || '' : (cur && cur.meta.project) || '', client: preset ? '' : (cur && cur.meta.client) || '', board: (preset && preset.board) || '', revision: '', stage: C.defaultStage, description: '', profile: [], checklists: TEMPLATES.map(function (t) { return t.id; }).filter(function (id) { return defaults.indexOf(id) >= 0; }).concat(['reqs']) };
     var reqsPicked = p ? reqsOn(p) : true;
+    // Description, where the tool offers it: off for a new review unless config.spec.default.
+    var specPicked = p ? specOn(p) : !!(SPEC && SPEC.default), specCount = p && SPEC ? M.liveSpec(p).length : 0;
     var reqCount = p ? M.liveReqs(p).length : 0;
     // Projects and clients already in use, offered as suggestions so a product's reviews group.
     var known = { project: {}, client: {} };
@@ -1793,6 +2554,8 @@
       '<div class="field"><span class="field-label">Checklists</span><div class="pick-grid" id="f-checklists">' +
       '<button type="button" class="pick' + (reqsPicked ? ' on' : '') + '" data-pick="reqs"><b>Requirements</b><span>' +
       (reqCount ? plural(reqCount, 'requirement') : 'Your own list, traced to checks') + '</span></button>' +
+      (SPEC ? '<button type="button" class="pick' + (specPicked ? ' on' : '') + '" data-pick="spec"><b>' + esc(SPEC_LABEL) + '</b><span>' +
+        (specCount ? plural(specCount, 'section') : 'What it does, in words and a diagram, tied to requirements') + '</span></button>' : '') +
       TEMPLATES.map(function (t) {
         var n = 0; t.sections.forEach(function (s) { n += s.items.length; });
         return '<button type="button" class="pick' + (m.checklists.indexOf(t.id) >= 0 ? ' on' : '') + '" data-pick="' + t.id + '"><b>' + esc(t.short) + '</b><span>' + n + ' checks</span></button>';
@@ -1858,9 +2621,11 @@
       }
       // Requirements is chosen like a checklist; from now on that choice is explicit.
       fields.reqsDecided = true;
+      if (SPEC) fields.specDecided = true;
       if (editing) { assign(p.id); updateMeta(fields); closeSheet(); syncSoon(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
       doc.meta.reqsDecided = true;
+      if (SPEC) doc.meta.specDecided = true;
       if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
       var slug = doc.slug, n = 2;
       while (projects[slug]) slug = doc.slug + '-' + n++;
@@ -2519,8 +3284,13 @@
     m.innerHTML = entries.map(function (e) { return e === '-' ? '<hr>' : '<button data-menu="' + e[0] + '"' + (e[2] ? ' class="danger"' : '') + '>' + esc(e[1]) + '</button>'; }).join('');
     document.body.appendChild(m);
     var r = anchor.getBoundingClientRect();
-    m.style.top = (r.bottom + 6) + 'px';
     m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.right - m.offsetWidth)) + 'px';
+    // A long menu scrolls; with more room above the button than below, it opens upward.
+    var vh = window.innerHeight, rt = Math.max(0, Math.min(r.top, vh)), rb = Math.max(0, Math.min(r.bottom, vh));
+    var below = vh - rb - 14, above = rt - 14, h = m.offsetHeight;
+    if (h > below && above > below) { m.style.maxHeight = above + 'px'; m.style.top = Math.max(8, rt - 6 - Math.min(h, above)) + 'px'; }
+    else { m.style.maxHeight = Math.max(120, below) + 'px'; m.style.top = Math.min(rb + 6, vh - 128) + 'px'; }
+    m.style.overflowY = 'auto';
     return new Promise(function (resolve) {
       m.addEventListener('click', function (e) { var b = e.target.closest('[data-menu]'); if (b) { closeMenu(); resolve(b.dataset.menu); } });
     });
@@ -2640,6 +3410,7 @@
         break;
       }
       case 'view':
+        specEditing = null;
         ui.view = el.dataset.view; ui.query = ''; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
       case 'filter': ui.filter = el.dataset.filter; saveUi(); renderPage(); break;
       case 'toggle-sec':
@@ -2669,6 +3440,82 @@
       case 'post-comment': { var ta = $('#comment-input'); addComment(selected, ta.value); var t2 = $('#comment-input'); if (t2) { t2.value = ''; t2.focus(); } break; }
       case 'del-comment': if (confirm('Delete this comment?')) deleteComment(id); break;
       case 'req-add': addReq(); break;
+      case 'spec-view': ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
+      case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; saveUi(); renderPage(); break;
+      case 'spec-goto': specGoto(id); break;
+      case 'spec-unit': case 'spec-open':
+        if (window.getSelection && String(window.getSelection()) && act === 'spec-unit') break;   // selecting text to copy
+        specOpenUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
+      case 'spec-edit': specStartEdit(id); break;
+      case 'spec-edit-all': {
+        var ea = current(); if (!ea) break;
+        ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+        specEditing = 'all'; specDraft = M.specToText(ea); closeInspector(); selected = null; renderPage(); specFocusEditor(); break;
+      }
+      case 'spec-add':
+        ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+        specEditing = 'new'; specDraft = '## New section' + String.fromCharCode(10); closeInspector(); renderPage(); specFocusEditor(); break;
+      case 'spec-save': specSaveEdit(); break;
+      case 'spec-guide': specGuideSheet(); break;
+      case 'spec-kind-set': specKindSet(el.dataset.kind); break;
+      case 'spec-uses-add': specUsesAdd(el); break;
+      case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
+      case 'spec-edge': specDisconnect(el.dataset.a, el.dataset.b); break;
+      case 'spec-ctag-open': {
+        var op2 = current(), oc = op2 && op2.comments[id];
+        if (!oc) break;
+        if (reqOf(op2, oc.item)) { ui.view = 'reqs'; saveUi(); openReq(oc.item); }
+        else if (oc.item) gotoItem(oc.item);
+        else { ui.view = 'overview'; saveUi(); renderPage(); }
+        break;
+      }
+      case 'spec-ctag-make': case 'spec-ctag-change': case 'spec-ctag-untag': specCommentTag(act.slice(10), id); break;
+      case 'spec-export': {
+        var xp = current(); if (!xp) break;
+        menu(el, [['md', 'Markdown (.md)'], ['print', 'Print or save as PDF']]).then(function (ch) {
+          if (ch === 'md') download(xp.slug + '-description.md', M.specMarkdown(xp), 'text/markdown');
+          else if (ch === 'print') specPrint(xp);
+        });
+        break;
+      }
+      case 'spec-copy-delete': {
+        var cp = current(), cc = cp && (cp.spec || {})[id];
+        if (cc && confirm('Delete this conflict copy? Its text is gone once you do.')) specPutAll(cp, [M.specStamp(Object.assign({}, cc, { deleted: true }), me())]);
+        break;
+      }
+      case 'spec-add-block': specAddBlockSheet(el.dataset.kind, el.dataset.parent || specBlockSel()); break;
+      case 'spec-block-kind': specBlockField('kind', el.dataset.kind); break;
+      case 'spec-block-unuse': {
+        var bp = current(), bc = bp && (bp.spec || {})[specBlockSel()];
+        if (bc) specBlockField('uses', M.specUsesNames(bc.body).filter(function (n) { return n !== el.dataset.name; }).join(', '));
+        break;
+      }
+      case 'spec-block-delete': {
+        var dp = current(), dc = dp && (dp.spec || {})[id];
+        if (dc && confirm('Delete ' + (dc.title || 'this block') + ' and its text?')) { selected = null; closeInspector(); specPutAll(dp, [M.specStamp(Object.assign({}, dc, { deleted: true }), me())]); }
+        break;
+      }
+      case 'spec-cancel': specEditing = null; specDraft = ''; renderPage(); break;
+      case 'spec-delete':
+        if (confirm('Delete this section?')) { var sp = current(); specPut(sp, id, { deleted: true }); specEditing = null; specDraft = ''; renderPage(); syncSoon(); }
+        break;
+      case 'spec-paste': specPasteSheet(); break;
+      case 'spec-make': specMakeReq(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
+      case 'spec-change': specChangeReq(el.dataset.sec, parseInt(el.dataset.u, 10), id); break;
+      case 'spec-untag': { var up = current(); if (specUnitEdit(up, el.dataset.sec, parseInt(el.dataset.u, 10), 'tag', false)) { renderPage(); renderInspector(); renderToolbar(); syncSoon(); } break; }
+      case 'spec-describe': specDescribe(el, id); break;
+      case 'spec-phrase-clear': specPhrase = ''; renderInspector(); break;
+      case 'spec-link': case 'spec-unlink': case 'spec-std': case 'spec-tag': {
+        var ss = specSel(), sp2 = current(); if (!ss || !sp2) break;
+        var op = act.slice(5), arg = op === 'link' || op === 'unlink' ? id : !!el.dataset.on;
+        if (op === 'link' && specPhrase) {
+          var fa = specFind(M.specAnalysis(sp2), ss.sec, ss.start);
+          if (fa && M.specEdit(fa.x.sec.body, fa.u.start, fa.u.end, 'phrase', { id: id, text: specPhrase }) === fa.x.sec.body) { toast('Pick words outside other links, or link the whole sentence'); break; }
+          op = 'phrase'; arg = { id: id, text: specPhrase }; specPhrase = '';
+        }
+        if (specUnitEdit(sp2, ss.sec, ss.start, op, arg)) { renderPage(); renderInspector(); renderToolbar(); syncSoon(); }
+        break;
+      }
       case 'req-import': importReqsSheet(); break;
       case 'req-export': { var rp = current(); download(rp.slug + '-requirements.csv', M.reqsCsv(rp, checkIdx(rp)), 'text/csv'); break; }
       case 'req-filter': ui.reqFilter = el.dataset.filter; saveUi(); renderPage(); break;
@@ -2756,6 +3603,10 @@
     var inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); sync(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.activeElement.id === 'comment-input') { e.preventDefault(); $('[data-act="post-comment"]').click(); return; }
+    if (document.activeElement.id === 'spec-editor') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); specSaveEdit(); return; }
+      if (e.key === 'Escape' && !$('#sheet')) { e.preventDefault(); specEditing = null; specDraft = ''; renderPage(); return; }
+    }
     if (e.key === 'Escape') {
       if ($('#menu')) { closeMenu(); return; }
       if ($('#sheet')) { closeSheet(); applyTheme(settings.theme); return; }
@@ -2796,6 +3647,15 @@
       renderPage();
       var rs = $('#req-search'); rs.focus(); rs.setSelectionRange(rpos, rpos);
     }
+    if (e.target.id === 'spec-editor') {
+      specDraft = e.target.value;
+      if (specEditing === 'all') { var lo = $('#spec-live-outline'); if (lo) lo.innerHTML = specLiveOutline(); }
+      specBarRefresh();
+    }
+    if (e.target.id === 'spec-link-search') {
+      var sp3 = current(), ss3 = specSel(), a3 = sp3 && ss3 && M.specAnalysis(sp3), f3 = a3 && specFind(a3, ss3.sec, ss3.start);
+      if (f3) $('#spec-link-results').innerHTML = specLinkResults(sp3, f3.u, e.target.value);
+    }
     if (e.target.id === 'req-link-search') {
       // Only the result list redraws, so typing isn't interrupted.
       var rp = current(), rq = reqOf(rp, selected);
@@ -2812,6 +3672,12 @@
       if (cur && cur[rk] !== rv) { var rf2 = {}; rf2[rk] = rv; setReq(selected, rf2); }
     }
     if (e.target.id === 'import-file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
+    if (e.target.id === 'spec-block-title') specBlockField('title', e.target.value);
+    if (e.target.id === 'spec-block-gist') specBlockField('gist', e.target.value);
+    if (e.target.id === 'spec-block-use' && e.target.value) {
+      var up = current(), uc = up && (up.spec || {})[specBlockSel()];
+      if (uc) specBlockField('uses', M.specUsesNames(uc.body).concat([e.target.value]).join(', '));
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {
@@ -2829,6 +3695,35 @@
       touch(p); renderPage();
     }
   });
+  // Selecting words inside one sentence (in the document or the sentence panel) opens the sentence
+  // to link just those words.
+  document.addEventListener('mouseup', function (e) {
+    if (ui.view !== 'spec' || specEditing) return;
+    setTimeout(function () {
+      var sel = window.getSelection && window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+      var el = function (n) { return n && (n.nodeType === 1 ? n : n.parentElement); };
+      var a = el(sel.anchorNode) && el(sel.anchorNode).closest('.su'), b = el(sel.focusNode) && el(sel.focusNode).closest('.su');
+      var text = String(sel).replace(/\s+/g, ' ').trim();
+      if (!a || a !== b || !text || text.length < 2) return;
+      var whole = a.textContent.replace(/@req/g, '').replace(/\s+/g, ' ').trim();
+      if (text === whole) return;
+      specOpenUnit(a.dataset.sec, parseInt(a.dataset.u, 10), text);
+    }, 0);
+  });
+  ['keyup', 'click', 'focusin'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { if (e.target && e.target.id === 'spec-editor') specBarRefresh(); });
+  });
+  document.addEventListener('pointerdown', function (e) {
+    var h = e.target.closest && e.target.closest('.spec-handle');
+    if (h) { specDragStart(e, h); return; }
+    var n = e.target.closest && e.target.closest('.spec-map .spec-node');
+    if (n && e.pointerType !== 'touch') specMoveDown(e, n);
+  });
+  document.addEventListener('pointermove', function (e) { if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); });
+  document.addEventListener('pointerup', function () { if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); });
+  document.addEventListener('pointercancel', function () { if (specDrag) specDragEnd(); specMove = null; });
+  document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 
   // ── Boot ─────────────────────────────────────────────────

@@ -107,6 +107,19 @@
       q.id = 'q' + seed + '-' + i; q.updatedAt = when;
       p.reqs[q.id] = q;
     });
+    // The description (config.spec), written as one text: refs and #titles resolve to the ids
+    // above; sections get fixed ids so links into the demo keep working.
+    if (only.spec && only.spec.length) {
+      var recs = M.specSave(p, null, only.spec.join('\n'), users[0]), rename = {};
+      recs.forEach(function (r, i) { rename[r.id] = 's' + seed + '-' + i; });
+      p.spec = {};
+      recs.forEach(function (r, i) {
+        var when = at(0.3 + 0.6 * i / recs.length);
+        r.id = rename[r.id]; r.createdAt = r.updatedAt = when; r.updatedBy = users[i % users.length];
+        r.body = r.body.replace(/\bs:([\w-]+)/g, function (all, id) { return rename[id] ? 's:' + rename[id] : all; });
+        p.spec[r.id] = r;
+      });
+    }
     p.meta.updatedAt = at(1);
     return p;
   }
@@ -114,14 +127,14 @@
   S.demo = {
     projects: function (templates) {
       return (D.projects || []).map(function (d) {
-        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck });
+        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec });
         p.id = demoId(d.seed);
         return p;
       });
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 11
+    VERSION: 12
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.
