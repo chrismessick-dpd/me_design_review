@@ -353,7 +353,7 @@
   }
 
   // ── From Signoff PL ──────────────────────────────────────
-  // Parts a Signoff PL project marks "Not started yet" in this tool wait here, FTEs only, until a
+  // Parts a Signoff PL project marks as a Placeholder for this tool wait here, FTEs only, until a
   // review is started from one (Chris, 2026-11-08: new things wait in a tray in the tool they belong
   // to, to be added on purpose). Start opens New design review filled in from the Part; the review
   // names it (meta.plPart, summary.plPart), and PL links the Part to it at PL's next sync.

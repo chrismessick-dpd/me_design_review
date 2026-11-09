@@ -334,7 +334,7 @@
   }
 
   // ── Signoff PL's waiting Parts (config.pl) ──
-  // A PL Part marked "Not started yet" in this tool (source config.pl.tool, no ref) waits in this
+  // A PL Part marked as a Placeholder for this tool (source config.pl.tool, no ref) waits in this
   // tool's From Signoff PL list until a review here is started from it (meta.plPart); PL then links
   // the Part to that review (signoff_pl/assets/pl.js claimPlanned). PL files are untrusted: only
   // strings pass, cut short.
