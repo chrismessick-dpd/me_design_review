@@ -471,6 +471,18 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border-radius: 4px; backgrou
 .table tbody tr { cursor: pointer; transition: background 0.12s; }
 .table tbody tr:hover { background: rgba(127, 127, 127, 0.05); }
 .table .muted { color: var(--text-3); font-size: 12.5px; }
+/* A wide table scrolls sideways inside its card at any width (the Requirements table clipped beside the
+   sidebar), and a soft shade on an edge shows there's more that way: the covers scroll with the table
+   (local) and uncover the shades (scroll) once it has moved. */
+.card.table-scroll, .spec-table-wrap { overflow-x: auto; overscroll-behavior-x: contain;
+  background:
+    linear-gradient(to right, var(--bg-elev) 40%, transparent) left center / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--bg-elev) 40%, transparent) right center / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) left center / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll,
+    var(--bg-elev); }
+.table.reqs td:nth-child(2) { min-width: 200px; }
+.table.reqs td:nth-child(n+3) { white-space: nowrap; }
 
 /* ── Sheets (modals) ── */
 .sheet-wrap {
@@ -607,6 +619,7 @@ html.embed #page > .page { padding-top: 22px; }
 .toasts { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast { background: rgba(29, 29, 31, 0.92); color: #fff; padding: 9px 16px; border-radius: 980px; font-size: 13px; box-shadow: var(--shadow-lg); animation: rise 0.25s var(--ease); backdrop-filter: blur(12px); pointer-events: auto; }
 .toast a { color: #7fd8e2; margin-left: 6px; }
+.toast-act { margin-left: 10px; border: none; background: none; padding: 0; color: #7fd8e2; font: 600 13px var(--sans); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 .demo-banner { background: linear-gradient(90deg, #004952, #00727f); color: #fff; font-size: 12.5px; padding: 7px 16px; text-align: center; }
 .demo-banner button { background: rgba(255, 255, 255, 0.18); color: #fff; border: none; border-radius: 980px; padding: 2px 10px; margin-left: 10px; font-size: 12px; }
@@ -868,8 +881,13 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-ul { padding-left: 22px; }
 .spec-gist { font-size: 14.5px; color: var(--text-2); margin: 0 0 10px; max-width: 72ch; font-style: italic; }
 .spec-code { font: 12.5px/1.5 var(--mono); background: var(--bg-sunk); padding: 10px 12px; border-radius: 9px; overflow: auto; max-width: 100%; }
-.spec-table-wrap { margin: 4px 0 12px; border-radius: 10px; box-shadow: var(--shadow); overflow: auto; }
+/* A long table scrolls inside itself, so its sideways scrollbar is on screen; its header row stays. */
+.spec-table-wrap { margin: 4px 0 12px; border-radius: 10px; box-shadow: var(--shadow); overflow: auto; max-height: 70vh; }
 .spec-table { font-size: 13px; }
+.spec-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-elev); white-space: nowrap; }
+.spec-table td { min-width: 10ch; }
+.spec-paper .spec-table-wrap { max-height: none; }
+@media print { .spec-table-wrap { max-height: none; overflow: visible; } }
 .spec-uses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: var(--text-3); }
 .spec-uses > span:first-child { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
 .spec-uses .chip { border: none; }
@@ -885,6 +903,15 @@ button.req-link-main:hover { background: var(--hair-2); }
 .sl-sec { box-shadow: inset 0 -1.5px 0 color-mix(in srgb, var(--accent) 60%, transparent); border-radius: 0; }
 .sl-req.sl-sec { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 5px; }
 .sl-missing { box-shadow: inset 0 0 0 1px var(--issue); text-decoration: line-through wavy var(--issue); }
+.su-broken { text-decoration: underline wavy var(--issue); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.sl-broken { font: 600 11px/1 var(--mono); padding: 2px 5px; margin-left: 4px; border-radius: 5px; color: var(--issue); background: var(--issue-hatch), var(--issue-soft); white-space: nowrap; }
+.spec-broken-note { margin: -4px 0 10px; color: var(--issue); }
+.spec-warn { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px; background: var(--issue-hatch), var(--issue-soft); border: 1px dashed var(--issue); }
+.spec-warn p { margin: 0 0 6px; }
+.spec-warn p:last-child { margin: 0; }
+.spec-warn ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.spec-warn li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.spec-warn li code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11.5px var(--mono); }
 .sl-tag { font: 600 11px/1 var(--mono); padding: 2px 5px; margin-left: 2px; border-radius: 5px; color: var(--warn); background: var(--warn-hatch), var(--warn-soft); white-space: nowrap; }
 .spec-state { margin-left: 6px; font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 5px; background: var(--bg-sunk); color: var(--text-2); text-transform: none; letter-spacing: 0; }
 .spec-state.st-linked { background: var(--accent-soft); color: var(--accent-ink); }

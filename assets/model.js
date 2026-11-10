@@ -460,6 +460,18 @@
     var k = (Array.isArray(specCfg().kinds) ? specCfg().kinds : []).filter(function (x) { return x && typeof x === 'object' && x.id === kind; })[0];
     return k || { id: kind };
   }
+  // How a kind reads, one and many: config.spec.kinds' label and plural, else the id capitalized. A
+  // few words have no plural ("Hardware", not "Hardwares").
+  var SPEC_PLURALS = { hardware: 'Hardware', software: 'Software', firmware: 'Firmware', power: 'Power' };
+  function specKindLabel(kind) {
+    var i = specKindInfo(kind);
+    return kind ? (typeof i.label === 'string' && i.label) || kind.charAt(0).toUpperCase() + kind.slice(1) : '';
+  }
+  function specKindPlural(kind) {
+    var i = specKindInfo(kind);
+    if (typeof i.plural === 'string' && i.plural) return i.plural;
+    return (!i.label && SPEC_PLURALS[kind]) || specKindLabel(kind) + 's';
+  }
   function specLinkWords() {
     var l = Array.isArray(specCfg().links) ? specCfg().links.filter(function (w) { return typeof w === 'string' && /^[A-Za-z][A-Za-z ]*$/.test(w); }) : [];
     return l.length ? l : ['Uses'];
@@ -479,15 +491,86 @@
     }).filter(function (x) { return x.name; });
   }
   function specLinkText(items) { return items.map(function (x) { return x.name + (x.label ? ' (' + x.label + ')' : ''); }).join(', '); }
-  var SPEC_SPAN = /\[([^\[\]\n]*)\]\{([^{}\n]*)\}/g;
   var SPEC_TAG = /(^|[^\w@])@req\b:?/i;
-  var SPEC_ABBR = /\b(e\.g|i\.e|etc|vs|approx|incl|min|max|no|fig|ref|rev|ver|v)\.$/i;
+  // Words that end in a full stop without ending the sentence. The strong ones never end one ("e.g.
+  // Linux"); the weak ones are often a sentence's last word ("above 22 V. The pump …", "etc. The"), so
+  // they hold the sentence together only before a lowercase word or a number ("No. 4", "rev. B",
+  // "ref. REQ-004").
+  var SPEC_ABBR_STRONG = /^(e\.g|i\.e|vs|cf|viz|approx|incl|al)$/i;
+  var SPEC_ABBR_WEAK = /^(etc|min|max|no|nos|fig|figs|ref|refs|rev|ver|v|esp|resp|ca|eq|sec|secs|typ|nom)$/i;
+  // The longest section body a review keeps (cleanSection) and an editor may save (specTooLong).
+  var SPEC_BODY_MAX = 100000;
+
+  // ── Marks: [words]{inner} ──
+  // The words may hold balanced brackets ("[It reads buf[0] first.]{std}") and `code`, whose
+  // brackets and braces never count. A backtick pair is code outside a mark too, so `cfg[i]{0}` in a
+  // sentence is never a mark. Marks don't cross lines. Returns [{ index, end, all, txt, inner }].
+  function specCodeEnd(text, i) {
+    var c = text.indexOf('`', i + 1), nl = text.indexOf('\n', i + 1);
+    return c > 0 && (nl < 0 || c < nl) ? c : -1;
+  }
+  function specSpanAt(text, i) {
+    var depth = 0, j = i, n = text.length;
+    for (; j < n; j++) {
+      var ch = text[j];
+      if (ch === '\n') return null;
+      if (ch === '`') { var c = specCodeEnd(text, j); if (c > 0) j = c; continue; }
+      if (ch === '[') depth++;
+      else if (ch === ']' && --depth === 0) break;
+    }
+    if (j >= n || text[j + 1] !== '{') return null;
+    var close = text.indexOf('}', j + 2), nl = text.indexOf('\n', j + 2);
+    if (close < 0 || (nl >= 0 && nl < close)) return null;
+    var inner = text.slice(j + 2, close);
+    if (inner.indexOf('{') >= 0) return null;
+    return { index: i, end: close + 1, all: text.slice(i, close + 1), txt: text.slice(i + 1, j), inner: inner };
+  }
+  function specSpans(text) {
+    text = String(text || '');
+    var out = [], i = 0, n = text.length;
+    while (i < n) {
+      var ch = text[i];
+      if (ch === '`') { var c = specCodeEnd(text, i); i = c > 0 ? c + 1 : i + 1; continue; }
+      if (ch === '[') { var m = specSpanAt(text, i); if (m) { out.push(m); i = m.end; continue; } }
+      i++;
+    }
+    return out;
+  }
+  // The text with each mark replaced by fn(all, txt, inner) (as String.replace with the old regex).
+  function specSpanReplace(text, fn) {
+    text = String(text || '');
+    var out = '', at = 0;
+    specSpans(text).forEach(function (m) { out += text.slice(at, m.index) + fn(m.all, m.txt, m.inner); at = m.end; });
+    return out + text.slice(at);
+  }
+  // A mark that didn't parse: "]{" left in the text outside marks and code ("[a]{std", "[x]{a{b}").
+  function specBrokenIn(plain) {
+    return /\]\{/.test(String(plain || '').replace(/`[^`\n]*`/g, ''));
+  }
+  // Editor text's marks that don't parse, outside code fences: [{ line (from 1), heading, text }], for
+  // the editors to list while writing.
+  function specBrokenMarks(text) {
+    var out = [], fence = false, heading = '';
+    String(text || '').replace(/\r\n?/g, '\n').split('\n').forEach(function (l, i) {
+      if (/^\s*```/.test(l)) { fence = !fence; return; }
+      if (fence) return;
+      var h = specHeading(l);
+      if (h) { heading = h.title; return; }
+      // Where it breaks: the first "]{" outside marks and code, shown from the "[" before it.
+      var blank = function (m) { return new Array(m.length + 1).join(' '); };
+      var at = specSpanReplace(l.replace(/`[^`\n]*`/g, blank), blank).indexOf(']{');
+      if (at < 0) return;
+      var from = Math.max(0, l.lastIndexOf('[', at)), to = Math.min(l.length, Math.max(at + 24, from + 80));
+      out.push({ line: i + 1, heading: heading, text: (from > 0 ? '…' : '') + l.slice(from, to).trim() + (to < l.length ? '…' : '') });
+    });
+    return out;
+  }
 
   function cleanSection(r) {
     var lv = parseInt(r.level, 10);
     return { id: String(r.id), order: typeof r.order === 'number' && isFinite(r.order) ? r.order : 0,
       level: lv >= 1 && lv <= 4 ? lv : 1, title: String(r.title == null ? '' : r.title).slice(0, 200),
-      kind: oneOf(specKinds(), r.kind, ''), body: String(r.body == null ? '' : r.body).slice(0, 40000),
+      kind: oneOf(specKinds(), r.kind, ''), body: String(r.body == null ? '' : r.body).slice(0, SPEC_BODY_MAX),
       createdAt: r.createdAt || '', updatedAt: r.updatedAt || '', updatedBy: r.updatedBy || '',
       conflictOf: typeof r.conflictOf === 'string' ? r.conflictOf.slice(0, 80) : '',
       // Where the block sits in the flow diagram, once someone has arranged it (else laid out).
@@ -568,20 +651,41 @@
     });
     return out;
   }
+  // A sentence as plain words: marks unwrapped, @req taken out. A space before punctuation goes only
+  // where the punctuation ends a word ("pulse @req." -> "pulse."), so "the .cfg file" keeps its space.
   function specPlain(raw) {
-    return String(raw || '').replace(SPEC_SPAN, '$1').replace(new RegExp(SPEC_TAG.source, 'ig'), '$1').replace(/[ \t]{2,}/g, ' ').replace(/\s+([.!?,;:])/g, '$1').trim();
+    return specSpanReplace(raw, function (all, txt) { return txt; }).replace(new RegExp(SPEC_TAG.source, 'ig'), '$1').replace(/[ \t]{2,}/g, ' ')
+      .replace(/\s+([.!?,;:])(?=$|[\s.!?,;:)"'’”\]])/g, '$1').trim();
   }
 
-  // Sentences in body[s, e): spans are never split, and "e.g." doesn't end a sentence.
+  // Does a full stop at body[i], followed by whitespace, end a sentence? next is the first character
+  // after the whitespace. Not after a strong abbreviation ("e.g."), and not after a weak one ("No.",
+  // "rev.", "V.") or dotted initials ("a.k.a.", "U.S.") or an ellipsis when a lowercase word or a
+  // number comes next; after a weak one, not before a single capital letter either ("rev. B"), except
+  // for units ("22 V. A fault …"). Anything else ends it, even before a lowercase word, so a sentence
+  // may start with an identifier ("kff is added …").
+  function specStopEnds(body, s, i, next) {
+    var before = body.slice(Math.max(s, i - 60), i).replace(/\]\{[^{}\n]*\}$/, '').replace(/[\])"'’”]+$/, '');
+    var word = (/([A-Za-z0-9.]+)$/.exec(before) || ['', ''])[1];
+    if (SPEC_ABBR_STRONG.test(word)) return false;
+    var low = /[a-z]/.test(next.charAt(0)), num = /[0-9]/.test(next.charAt(0));
+    var token = (/^[^\s,;:)]+/.exec(next) || [''])[0];
+    if (/^(?:[A-Za-z]\.)+[A-Za-z]$/.test(word) || /\.$/.test(word)) return !(low || num);
+    if (SPEC_ABBR_WEAK.test(word)) {
+      if (low || num || /\d/.test(token)) return false;
+      if (/^[A-Z]\.?$/.test(token) && !/^(v|min|max|sec|secs|ca|typ|nom|etc)$/i.test(word)) return false;
+    }
+    return true;
+  }
+
+  // Sentences in body[s, e): marks are never split, and a mark whose words end a sentence ("[… cable.]{std}
+  // it …") ends it at the closing brace. See specStopEnds for full stops.
   function specSentences(body, s, e) {
-    var guard = [], m, out = [], from = s;
-    SPEC_SPAN.lastIndex = 0;
-    var part = body.slice(s, e);
-    while ((m = SPEC_SPAN.exec(part))) guard.push([s + m.index, s + m.index + m[0].length]);
-    function inSpan(i) { for (var k = 0; k < guard.length; k++) if (i >= guard[k][0] && i < guard[k][1]) return true; return false; }
-    // A span whose text ends a sentence ("[… cable.]{std} It …") ends it at the closing brace.
+    var guard = [], out = [], from = s;
+    specSpans(body.slice(s, e)).forEach(function (m) { guard.push({ a: s + m.index, b: s + m.end, close: s + m.index + 1 + m.txt.length }); });
+    function inSpan(i) { for (var k = 0; k < guard.length; k++) if (i >= guard[k].a && i < guard[k].b) return true; return false; }
     function spanEnd(i) {
-      for (var k = 0; k < guard.length; k++) if (i === guard[k][1] - 1) { var close = body.lastIndexOf(']', i); return /[.!?]/.test(body[close - 1] || '') ? body[close - 1] : ''; }
+      for (var k = 0; k < guard.length; k++) if (i === guard[k].b - 1) { var c = body[guard[k].close - 1] || ''; return /[.!?]/.test(c) ? c : ''; }
       return '';
     }
     for (var i = s; i < e; i++) {
@@ -592,9 +696,10 @@
         while (j < e && /[)"'’”]/.test(body[j])) j++;
         if (j < e && !/\s/.test(body[j])) continue;
         var k2 = j; while (k2 < e && /\s/.test(body[k2])) k2++;
-        if (k2 < e && /[a-z]/.test(body[k2])) continue;
-        if (!se && ch === '.' && SPEC_ABBR.test(body.slice(Math.max(s, i - 8), i + 1))) continue;
-        if (!se && ch === '.' && /\d/.test(body[i - 1] || '') && /\d/.test(body[j] || '')) continue;
+        if (!se && ch === '.' && k2 < e && !specStopEnds(body, s, i, body.slice(k2, Math.min(e, k2 + 40)))) continue;
+        // A question or exclamation mark before a lowercase word is inside the sentence: a quoted
+        // string ('logs ("RELAY ON!") when …').
+        if (!se && ch !== '.' && k2 < e && /[a-z]/.test(body[k2])) continue;
         out.push([from, j]); from = j;
       }
     }
@@ -622,8 +727,9 @@
 
   // One sentence: its inline tokens and state.
   function specUnit(body, a, b, ctx) {
-    var raw = body.slice(a, b), tokens = [], reqs = [], missing = [], std = false, iface = false, last = 0, m;
+    var raw = body.slice(a, b), tokens = [], reqs = [], missing = [], std = false, iface = false, last = 0, plain = '';
     function text(t) {
+      plain += t;
       var re = new RegExp(SPEC_TAG.source, 'ig'), mm, at = 0;
       while ((mm = re.exec(t))) {
         var tagAt = mm.index + mm[1].length;
@@ -632,10 +738,9 @@
       }
       if (at < t.length) tokens.push({ t: 'text', text: t.slice(at) });
     }
-    SPEC_SPAN.lastIndex = 0;
-    while ((m = SPEC_SPAN.exec(raw))) {
+    specSpans(raw).forEach(function (m) {
       if (m.index > last) text(raw.slice(last, m.index));
-      var info = specSpanInfo(m[2]), ids = [], secs = [], gone = [];
+      var info = specSpanInfo(m.inner), ids = [], secs = [], gone = [];
       info.reqs.forEach(function (id) { if (ctx.reqs[id]) ids.push(id); else gone.push(id); });
       info.other.forEach(function (t) {
         var low = t.toLowerCase();
@@ -648,13 +753,14 @@
       if (info.std) std = true;
       ids.forEach(function (id) { if (reqs.indexOf(id) < 0) reqs.push(id); });
       gone.forEach(function (t) { missing.push(t); });
-      tokens.push({ t: 'span', text: m[1], reqs: ids, secs: secs, std: info.std, missing: gone });
-      last = m.index + m[0].length;
-    }
+      tokens.push({ t: 'span', text: m.txt, reqs: ids, secs: secs, std: info.std, missing: gone });
+      last = m.end;
+    });
     if (last < raw.length) text(raw.slice(last));
     var tag = SPEC_TAG.test(raw);
     var state = tag ? 'tag' : reqs.length || iface ? 'linked' : std ? 'std' : 'untraced';
-    return { start: a, end: b, raw: raw, tokens: tokens, reqs: reqs, missing: missing, std: std, tag: tag, state: state, text: specPlain(raw) };
+    // broken: a mark in it didn't parse, so its words read as typed (shown in the margin and Edit all).
+    return { start: a, end: b, raw: raw, tokens: tokens, reqs: reqs, missing: missing, std: std, tag: tag, state: state, text: specPlain(raw), broken: specBrokenIn(plain) };
   }
 
   // A section body as blocks: p and li (with sentence units), gist, uses, table, code.
@@ -778,14 +884,15 @@
       return '[' + m[1] + ']{' + inner + '}' + m[2];
     }
     function eachSpan(fn) {
-      return out.replace(SPEC_SPAN, function (all, txt, inner) {
+      return specSpanReplace(out, function (all, txt, inner) {
         var toks = inner.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
         toks = fn(toks);
         return toks === null ? all : toks.length ? '[' + txt + ']{' + toks.join(',') + '}' : txt;
       });
     }
-    var spanCount = (raw.match(SPEC_SPAN) || []).length;
-    var refSpan = spanCount && (raw.match(SPEC_SPAN) || []).some(function (sp) { return !/^\[[^\]]*\]\{\s*std\s*\}$/i.test(sp); });
+    // A sentence with a mark that didn't parse is left alone: wrapping it would make another.
+    if (op !== 'tag' && op !== 'unlink' && specBrokenIn(specSpanReplace(raw, function () { return ''; }))) return body;
+    var refSpan = specSpans(raw).some(function (sp) { return !/^\s*std\s*$/i.test(sp.inner); });
     if (op === 'link') {
       out = stripTag(out);
       if (refSpan) {
@@ -805,7 +912,7 @@
       out = eachSpan(function (toks) { return toks.filter(function (x) { return x.toLowerCase() !== 'std'; }); });
       if (arg) {
         out = stripTag(out);
-        if ((out.match(SPEC_SPAN) || []).length) { var once = false; out = eachSpan(function (toks) { if (once) return null; once = true; return toks.concat(['std']); }); }
+        if (specSpans(out).length) { var once = false; out = eachSpan(function (toks) { if (once) return null; once = true; return toks.concat(['std']); }); }
         else out = wrap(out, 'std');
       }
     } else if (op === 'phrase') {
@@ -813,7 +920,7 @@
       if (!want) return body;
       var hit = false;
       // Words that are a link's own text: add to that link.
-      out = out.replace(SPEC_SPAN, function (all, txt, inner) {
+      out = specSpanReplace(out, function (all, txt, inner) {
         if (hit || txt.replace(/\s+/g, ' ').trim() !== want) return all;
         hit = true;
         var toks = inner.split(',').map(function (x) { return x.trim(); }).filter(function (x) { return x && x.toLowerCase() !== 'std'; });
@@ -822,8 +929,7 @@
       });
       if (!hit) {
         // Else the first place outside every mark.
-        var guard = [], gm; SPEC_SPAN.lastIndex = 0;
-        while ((gm = SPEC_SPAN.exec(out))) guard.push([gm.index, gm.index + gm[0].length]);
+        var guard = specSpans(out).map(function (gm) { return [gm.index, gm.end]; });
         var from = 0, at = -1;
         while ((at = out.indexOf(want, from)) >= 0) {
           var a0 = at, b0 = at + want.length;
@@ -843,7 +949,7 @@
 
   // Bodies as the editor shows them (requirement refs and section titles) and back.
   function specToEditor(body, ctx) {
-    return String(body || '').replace(SPEC_SPAN, function (all, txt, inner) {
+    return specSpanReplace(body, function (all, txt, inner) {
       return '[' + txt + ']{' + inner.split(',').map(function (t) {
         t = t.trim();
         if (/^q:/.test(t) && ctx.reqs[t.slice(2)]) { var q = ctx.reqs[t.slice(2)], r = String(q.ref || ''); return r && ctx.refs[r.toLowerCase()] === q.id ? r : t; }
@@ -853,7 +959,7 @@
     });
   }
   function specFromEditor(text, ctx) {
-    return String(text || '').replace(SPEC_SPAN, function (all, txt, inner) {
+    return specSpanReplace(text, function (all, txt, inner) {
       return '[' + txt + ']{' + inner.split(',').map(function (t) {
         t = t.trim(); var low = t.toLowerCase();
         if (low === 'std' || /^[qs]:/.test(t)) return low === 'std' ? 'std' : t;
@@ -906,11 +1012,20 @@
       var mine = {}; recs.forEach(function (r) { mine[r.id] = 1; });
       secs.forEach(function (s) {
         if (mine[s.id]) return;
-        var b = specRenameUses(s.body, was, recs[0].title);
-        if (b !== s.body) recs.push(specStamp(Object.assign({}, project.spec[s.id], { body: b }), user));
+        var rawBody = specRawBody(project, s.id), b = specRenameUses(rawBody, was, recs[0].title);
+        if (b !== rawBody) recs.push(specStamp(Object.assign({}, project.spec[s.id], { body: b }), user));
       });
     }
     return recs;
+  }
+  // A section's body as stored, not cut to SPEC_BODY_MAX: what a rewrite of one line starts from, so
+  // renaming a block never shortens a long section that names it.
+  function specRawBody(project, id) { var r = (project.spec || {})[id]; return String(r && r.body != null ? r.body : ''); }
+  // Records an editor is about to write whose text is longer than a section may be (they'd be cut when
+  // read): [{ id, title, length }]. The editors refuse to save them.
+  function specTooLong(recs) {
+    return (recs || []).filter(function (r) { return r && !r.deleted && String(r.body || '').length > SPEC_BODY_MAX; })
+      .map(function (r) { return { id: r.id, title: String(r.title || 'Untitled'), length: String(r.body).length }; });
   }
 
   // The description as a Markdown document to share outside Signoff: headings with their kind,
@@ -920,7 +1035,7 @@
     var a = specAnalysis(project), m = project.meta || {}, out = [];
     var ref = function (id) { var q = a.ctx.reqs[id]; return q ? q.ref || '?' : ''; };
     function inline(raw) {
-      return String(raw || '').replace(SPEC_SPAN, function (all, txt, inner) {
+      return specSpanReplace(raw, function (all, txt, inner) {
         var info = specSpanInfo(inner), refs = info.reqs.map(ref).filter(Boolean).concat(info.other.filter(function (t) { return t.charAt(0) !== '#' && a.ctx.refs[t.toLowerCase()]; }));
         return txt + (refs.length ? ' [' + refs.join(', ') + ']' : '');
       });
@@ -1020,8 +1135,8 @@
     var out = [specStamp(Object.assign({}, cur, { title: title }), user)];
     liveSpec(project).forEach(function (s) {
       if (s.id === id) return;
-      var b = specRenameUses(s.body, from, title);
-      if (b !== s.body) out.push(specStamp(Object.assign({}, project.spec[s.id], { body: b }), user));
+      var rawBody = specRawBody(project, s.id), b = specRenameUses(rawBody, from, title);
+      if (b !== rawBody) out.push(specStamp(Object.assign({}, project.spec[s.id], { body: b }), user));
     });
     return out;
   }
@@ -1041,9 +1156,9 @@
     var rec = newSection({ order: (lo + hi) / 2, level: level, title: title, kind: kind, body: specSetLine('', 'gist', f.gist || '') }, user);
     var out = [rec];
     if (parent) {
-      var lword = specKindLink(parent.kind), items = specUsesItems(parent.body, lword);
+      var lword = specKindLink(parent.kind), pbody = specRawBody(project, parent.id), items = specUsesItems(pbody, lword);
       if (!items.some(function (x) { return x.name.toLowerCase() === title.toLowerCase(); })) {
-        out.push(specStamp(Object.assign({}, project.spec[parent.id], { body: specSetLine(parent.body, lword, specLinkText(items.concat([{ name: title, label: f.label || '' }]))) }), user));
+        out.push(specStamp(Object.assign({}, project.spec[parent.id], { body: specSetLine(pbody, lword, specLinkText(items.concat([{ name: title, label: f.label || '' }]))) }), user));
       }
     }
     return out;
@@ -1254,19 +1369,25 @@
   }
 
   // summary.spec: the top-level sections' gists (and the level under them when there's only one
-  // top section; `depth` 0 or 1) and the gaps, for Signoff PL. Left out while the description is
-  // empty, so other reviews keep their bytes.
+  // top section; `depth` 0 or 1) and the gaps, for Signoff PL. A heading with nothing written under
+  // it (a group like "## Interfaces") has no gist and is left out, except the single top section.
+  // At most SPEC_GISTS; `more` counts the ones past that (left out when none). Left out while the
+  // description is empty, so other reviews keep their bytes.
+  var SPEC_GISTS = 40;
   function specSummary(project) {
     if (!liveSpec(project).length || !specEnabled(project)) return null;
     var a = specAnalysis(project), top = Math.min.apply(null, a.sections.map(function (x) { return x.sec.level; }));
     var single = a.sections.filter(function (x) { return x.sec.level === top; }).length === 1;
     var cut = function (t, n) { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
-    return {
-      gists: a.sections.filter(function (x) { return x.sec.level === top || (single && x.sec.level === top + 1); }).slice(0, 12).map(function (x) {
+    var all = a.sections.filter(function (x) { return (x.sec.level === top && (single || x.gist)) || (single && x.sec.level === top + 1 && x.gist); });
+    var out = {
+      gists: all.slice(0, SPEC_GISTS).map(function (x) {
         return { title: cut(x.sec.title, 120), gist: cut(x.gist, 300), depth: x.sec.level - top };
       }),
       sections: a.totals.sections, untraced: a.totals.untraced, undescribed: a.undescribed.length, flagged: a.tags.length
     };
+    if (all.length > SPEC_GISTS) out.more = all.length - SPEC_GISTS;
+    return out;
   }
 
   // Item states whose ID is in no current template and isn't a custom item:
@@ -1857,7 +1978,7 @@
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
-    specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
+    specSpans: specSpans, specBrokenMarks: specBrokenMarks, SPEC_BODY_MAX: SPEC_BODY_MAX, specTooLong: specTooLong, specKindLabel: specKindLabel, specKindPlural: specKindPlural, specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
     specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specNest: specNest, specGroup: specGroup, specUngroup: specUngroup, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary, specTemplate: specTemplate,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,
     stableStringify: stableStringify, importLegacy: importLegacy, isLegacy: isLegacy,
