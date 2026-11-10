@@ -886,6 +886,11 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-table { font-size: 13px; }
 .spec-table thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-elev); white-space: nowrap; }
 .spec-table td { min-width: 10ch; }
+/* A row with a mark counts like a sentence: it opens its panel, and an unlinked one is underlined dotted. */
+.spec-table tr.su { cursor: pointer; }
+.spec-table tr.su.sel td { background: var(--accent-soft); }
+.spec-table tr.su-untraced td, .spec-table tr.su-broken td { text-decoration: underline dotted var(--text-3); text-underline-offset: 4px; }
+.spec-table tr.su-broken td { text-decoration: underline wavy var(--issue); }
 .spec-paper .spec-table-wrap { max-height: none; }
 @media print { .spec-table-wrap { max-height: none; overflow: visible; } }
 .spec-uses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: var(--text-3); }
@@ -903,6 +908,12 @@ button.req-link-main:hover { background: var(--hair-2); }
 .sl-sec { box-shadow: inset 0 -1.5px 0 color-mix(in srgb, var(--accent) 60%, transparent); border-radius: 0; }
 .sl-req.sl-sec { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 5px; }
 .sl-missing { box-shadow: inset 0 0 0 1px var(--issue); text-decoration: line-through wavy var(--issue); }
+/* A review note ("Check: …"): a boxed Check label and a quieter sentence, no underline; its count in
+   the margin is an outlined ring, apart from the hatched gap count. */
+.su-note { color: var(--text-2); }
+.sl-note { font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 5px; margin-right: 1px; border-radius: 5px; border: 1.5px double var(--text-3); color: var(--text-2); white-space: nowrap; vertical-align: 1px; }
+.spec-note-mark { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font: 600 11px/1 var(--sans); color: var(--text-2); border: 1.5px double var(--text-3); margin-left: 3px; }
+.spec-show-gaps .su:not(.su-untraced):not(.su-tag), .spec-show-notes .su:not(.su-note) { opacity: 0.4; }
 .su-broken { text-decoration: underline wavy var(--issue); text-decoration-thickness: 1px; text-underline-offset: 4px; }
 .sl-broken { font: 600 11px/1 var(--mono); padding: 2px 5px; margin-left: 4px; border-radius: 5px; color: var(--issue); background: var(--issue-hatch), var(--issue-soft); white-space: nowrap; }
 .spec-broken-note { margin: -4px 0 10px; color: var(--issue); }
@@ -943,6 +954,10 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-edge { fill: none; stroke: var(--text-3); stroke-width: 1.4; }
 .spec-edge.tree { stroke: var(--hair-2); stroke-dasharray: 2 4; }
 .spec-edge.iface { stroke: var(--accent); stroke-dasharray: 6 4; stroke-width: 1.6; }
+/* Pointing at a block (or selecting it) brings its own lines forward and fades the rest: by weight and
+   opacity, never a new color. */
+.spec-map.focus .spec-edge, .spec-map.hovering .spec-edge { opacity: 0.14; transition: opacity 0.12s; }
+.spec-map.focus:not(.hovering) .spec-edge.on, .spec-map.hovering .spec-edge.hov { opacity: 1; stroke-width: 2.6; }
 .spec-edge-label { cursor: pointer; }
 .spec-edge-label rect { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1; }
 .spec-edge-label text { font-size: 11px; fill: var(--accent-ink); }
