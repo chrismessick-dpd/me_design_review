@@ -154,10 +154,10 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Export and print',
-        text: '{Export} writes the description as Markdown (requirement links become “words [REQ-004]”, with a table of where each requirement is described) or opens it on paper to print or save as a PDF.',
-        do: 'Click {Export}, then {Print or save as PDF}. {Close} returns here.',
+        text: 'The menu’s export writes the description as Markdown (requirement links become “words [REQ-004]”, with a table of where each requirement is described) or opens it on paper to print or save as a PDF.',
+        do: 'Open the menu (☰) beside {Add section}, then {Print or save as PDF}. {Close} returns here.',
         setup: function () { A().open('doc', 3); },
-        spot: function () { return ['[data-act="spec-export"]']; } },
+        spot: function () { return ['[data-act="spec-more"]']; } },
       { title: 'Working together',
         text: 'Signed in, the description syncs with the review. Sections merge one by one; when two people edit the same section at once, the newer edit wins and the other is kept as a conflict copy under {Edited in two places}. Signoff PL shows the top-level gists as {What it does} on the firmware Part.',
         setup: function () { A().open('doc', 1); } }
@@ -165,7 +165,7 @@
     { title: 'Done', steps: [
       { title: 'You’re set',
         text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Heading kind} sets a kind, {Add to Uses…} adds a link, and {Writing guide} lists every mark. In the document, select words to link just those.',
-        do: 'Open this guide again from {Guide} in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
+        do: 'Open this guide again from the menu (☰) in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
         setup: function () { A().open('doc', 3); },
         last: true }
     ] }
@@ -282,10 +282,10 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Export and print',
-        text: '{Export} writes the description as Markdown (requirement links become “words [REQ-001]”, link and Parts lines are kept, and a table shows where each requirement is described) or opens it on paper to print or save as a PDF.',
-        do: 'Click {Export}, then {Print or save as PDF}. {Close} returns here.',
+        text: 'The menu’s export writes the description as Markdown (requirement links become “words [REQ-001]”, link and Parts lines are kept, and a table shows where each requirement is described) or opens it on paper to print or save as a PDF.',
+        do: 'Open the menu (☰) beside {Add section}, then {Print or save as PDF}. {Close} returns here.',
         setup: function () { A().open('doc', 3); },
-        spot: function () { return ['[data-act="spec-export"]']; } },
+        spot: function () { return ['[data-act="spec-more"]']; } },
       { title: 'Working together',
         text: 'Signed in, the description syncs with the review. Subcircuits merge one by one; when two people edit the same one at once, the newer edit wins and the other is kept as a conflict copy under {Edited in two places}. Signoff PL shows the top-level gists as {What it does} on the board’s Part.',
         setup: function () { A().open('doc', 1); } }
@@ -293,7 +293,7 @@
     { title: 'Done', steps: [
       { title: 'You’re set',
         text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} and {Add to Supplies…} add links, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box around blocks to make a section, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
-        do: 'Open this guide again from {Guide} in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
+        do: 'Open this guide again from the menu (☰) in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
         setup: function () { A().open('doc', 3); },
         last: true }
     ] }

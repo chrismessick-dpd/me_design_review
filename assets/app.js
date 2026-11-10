@@ -287,6 +287,7 @@
   function projectTemplates(p) { return TEMPLATES.filter(function (t) { return p.meta.checklists.indexOf(t.id) >= 0; }); }
 
   function touch(p) {
+    if (specHists[p.id]) specHistNote(p);
     dirty[p.id] = M.now();
     persist();
     renderSidebar();
@@ -1763,7 +1764,7 @@
   function linkItemText(it) { return it.name + (it.label ? ' · ' + it.label : ''); }
   // Untraced is "Unlinked" on screen (Chris, 2026-11-09), beside Linked; data keys stay 'untraced'.
   var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Unlinked', note: 'Review note' };
-  var specEditing = null, specDraft = '', specPhrase = '';
+  var specEditing = null, specDraft = '', specPhrase = '', specNewAfter = '';
   function specOn(p) { return !!SPEC && !!p && M.specEnabled(p); }
   function specSelKey(sec, start) { return 'spec|' + sec + '|' + start; }
   function specSel() {
@@ -2070,6 +2071,7 @@
 
   function specPage(p) {
     var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth || 3, view = ui.specView === 'map' ? 'map' : 'doc';
+    specHistOf(p); specHistNote(p);
     // Gaps or Notes shows only the sections that have them, in full, with the other sentences dimmed.
     var show = ui.specShow === 'gaps' || ui.specShow === 'notes' ? ui.specShow : '';
     if (show) depth = 3;
@@ -2081,9 +2083,11 @@
       (t.note ? '<span class="sep">·</span><span>' + plural(t.note, 'review note') + '</span>' : '') +
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
       (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
-      '<div class="spec-tools">' + (specEditing === 'all' ? '' : (specGuideId() && window.SignoffSpecGuide ? '<button class="btn" data-act="spec-guide-start" title="A walk through ' + esc(SPEC_LABEL) + ', on the demo">Guide</button>' : '') +
+      // One row: back and forward, Edit all, Add section, and a menu for the rest (Chris, 2026-11-09).
+      '<div class="spec-tools">' + (specEditing === 'all' ? '' : specHistHtml(p) +
       (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
-      '<button class="btn" data-act="spec-paste">Paste text</button>' + (t.sections ? '<button class="btn" data-act="spec-export">Export</button>' : '') + '<button class="btn btn-primary" data-act="spec-add">Add section</button>') + '</div></div>';
+      '<button class="btn btn-primary" data-act="spec-add">Add section</button>' +
+      '<button class="icon-btn spec-more" data-act="spec-more" title="Guide, paste text, and export" aria-label="More" aria-haspopup="menu">' + ICON_MENU + '</button>') + '</div></div>';
     // Editing the whole description: the text, with its outline read live beside it.
     if (specEditing === 'all') {
       return html + '<div class="spec-wrap depth-3"><nav class="spec-outline" id="spec-live-outline" aria-label="Outline of the text">' + specLiveOutline() + '</nav>' +
@@ -2114,10 +2118,12 @@
       var hn = 'h' + Math.min(5, s.level + 1);
       return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '"><div class="spec-h"><' + hn + '>' + esc(s.title || 'Untitled') + '</' + hn + '>' +
         (s.kind ? '<span class="chip spec-kind">' + esc(s.kind) + '</span>' : '') + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) +
+        '<button class="icon-btn spec-edit spec-add-after" data-act="spec-add-after" data-id="' + esc(s.id) + '" title="Add a section below this one" aria-label="Add a section below ' + esc(s.title) + '">' + ICON_PLUS + '</button>' +
         '<button class="icon-btn spec-edit" data-act="spec-edit" data-id="' + esc(s.id) + '" title="Edit this section" aria-label="Edit ' + esc(s.title) + '">' + ICON.pencil + '</button></div>' +
         (depth === 2 && x.gist ? '<p class="spec-gist">' + esc(x.gist) + '</p>' : '') +
-        (depth === 3 ? (x.blocks.length ? specBlocksHtml(p, a, x) : group ? '' : '<p class="note">Nothing written yet.</p>') : '') + '</section>';
-    }).join('') + (specEditing === 'new' ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
+        (depth === 3 ? (x.blocks.length ? specBlocksHtml(p, a, x) : group ? '' : '<p class="note">Nothing written yet.</p>') : '') + '</section>' +
+        (specEditing === 'new' && specNewAfter === s.id ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
+    }).join('') + (specEditing === 'new' && !specNewAt(p) ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
     if (show && !a.sections.some(shown)) doc = '<p class="note">' + (show === 'gaps' ? 'No gaps: every sentence is linked, standard, or a review note.' : 'No review notes.') + '</p>';
     return html + '<div class="spec-wrap depth-' + depth + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
   }
@@ -2655,6 +2661,230 @@
     recs.forEach(function (r) { p.spec[r.id] = r; });
     touch(p); renderPage(); renderInspector(); renderToolbar(); syncSoon();
   }
+  var ICON_MENU = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg>';
+  var ICON_PLUS = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
+  var ICON_REDO = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4.5L16.5 8 13 11.5"/><path d="M16.5 8H8a4.5 4.5 0 000 9h4"/></svg>';
+  // Where a section added with + on a heading goes: between that section and the next, at the level
+  // of the next when it's a subsection, else at the heading's own level.
+  function specNewAt(p) {
+    if (!specNewAfter || !p) return null;
+    var secs = M.liveSpec(p);
+    for (var i = 0; i < secs.length; i++) if (secs[i].id === specNewAfter) {
+      var nx = secs[i + 1];
+      return { lo: secs[i].order, hi: nx ? nx.order : secs[i].order + 1, level: nx && nx.level > secs[i].level ? nx.level : secs[i].level };
+    }
+    return null;
+  }
+
+  // ── Back and forward (Chris, 2026-11-09) ──
+  // Every Scribe edit made in this page (a sentence, a section, a move, the diagram) can be taken back
+  // and redone. A step writes the earlier text as a new edit, stamped now, so it syncs like any other
+  // and auto-sync carries on. A step is refused when its sections changed since (a sync brought
+  // someone's newer edit), so it never overwrites that. Kept per review while the page is open.
+  var specHists = {}, specHistOff = false;
+  function specRecKey(r) { return r ? (r.updatedAt || '') + '|' + (r.updatedBy || '') : ''; }
+  function specHistOf(p) {
+    if (!specHists[p.id]) {
+      var seen = {};
+      Object.keys(p.spec || {}).forEach(function (id) { seen[id] = p.spec[id]; });
+      specHists[p.id] = { seen: seen, undo: [], redo: [] };
+    }
+    return specHists[p.id];
+  }
+  // From touch (and as Scribe draws): sections whose stamp changed since last seen. Fresh ones stamped
+  // by this person are this page's edit; older ones came in from a sync and are only noted.
+  function specHistNote(p) {
+    var h = specHists[p.id]; if (!h) return;
+    var spec = p.spec || {}, now = Date.now(), old = {}, cur = {}, any = false, who = me();
+    Object.keys(spec).forEach(function (id) {
+      var r = spec[id], was = h.seen[id];
+      if (!r || specRecKey(r) === specRecKey(was)) return;
+      h.seen[id] = r;
+      if (specHistOff || r.updatedBy !== who || !(Date.parse(r.updatedAt || '') > now - 10000)) return;
+      old[id] = was || null; cur[id] = r; any = true;
+    });
+    if (!any) return;
+    var last = h.undo[h.undo.length - 1];
+    if (last && now - last.at < 600) Object.keys(cur).forEach(function (id) { if (!(id in last.old)) last.old[id] = old[id]; last.cur[id] = cur[id]; });
+    else { h.undo.push({ old: old, cur: cur, at: now }); if (h.undo.length > 100) h.undo.shift(); }
+    last = h.undo[h.undo.length - 1]; last.label = specHistLabel(last);
+    h.redo = [];
+  }
+  function specHistLabel(e) {
+    var ids = Object.keys(e.cur);
+    var title = function (id) { var r = e.cur[id], o = e.old[id]; return (r && r.title) || (o && o.title) || 'Untitled'; };
+    var moved = function (id) { var r = e.cur[id], o = e.old[id]; return !!(o && r && !r.deleted && (o.order !== r.order || o.level !== r.level) && o.body === r.body && o.title === r.title); };
+    if (ids.every(moved)) return 'moving ' + title(ids[0]);
+    if (ids.length === 1) {
+      var r = e.cur[ids[0]], o = e.old[ids[0]];
+      if (!o) return 'adding ' + title(ids[0]);
+      if (r.deleted && !o.deleted) return 'deleting ' + title(ids[0]);
+      if (o.title !== r.title && o.body === r.body) return 'renaming ' + (o.title || 'Untitled') + ' to ' + title(ids[0]);
+      return 'the change to ' + title(ids[0]);
+    }
+    var added = ids.filter(function (k) { return !e.old[k]; }).length;
+    return added === ids.length ? 'adding ' + plural(ids.length, 'section') : 'the change to ' + title(ids[0]) + ' and ' + plural(ids.length - 1, 'other section');
+  }
+  function specHistHtml(p) {
+    var h = specHistOf(p), u = h.undo[h.undo.length - 1], r = h.redo[h.redo.length - 1], mod = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘' : 'Ctrl+';
+    return '<span class="spec-hist">' +
+      '<button class="icon-btn" data-act="spec-undo"' + (u ? ' title="' + esc('Back: undo ' + u.label + ' (' + mod + 'Z)') + '"' : ' disabled title="Nothing to undo yet"') + ' aria-label="Undo">' + ICON.undo + '</button>' +
+      '<button class="icon-btn" data-act="spec-redo"' + (r ? ' title="' + esc('Forward: redo ' + r.label + ' (' + mod + 'Shift+Z)') + '"' : ' disabled title="Nothing to redo"') + ' aria-label="Redo">' + ICON_REDO + '</button></span>';
+  }
+  function specHistStep(back) {
+    var p = current(); if (!p) return;
+    if (specEditing) { toast('Save or cancel the edit first'); return; }
+    var h = specHistOf(p), from = back ? h.undo : h.redo, to = back ? h.redo : h.undo, e = from[from.length - 1];
+    if (!e) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; }
+    var spec = p.spec || {}, ids = Object.keys(e.cur);
+    if (ids.some(function (id) { return specRecKey(spec[id]) !== specRecKey(e.cur[id]); })) {
+      from.length = 0;
+      toast('Can’t ' + (back ? 'undo ' : 'redo ') + e.label + ': it changed since, in an edit that came in from a sync', null, 6000);
+      renderPage(); return;
+    }
+    from.pop();
+    // The earlier text, stamped as a successor of what's there now, so a merge sees a plain newer edit.
+    var recs = ids.map(function (id) {
+      var c = spec[id], o = e.old[id];
+      var r = o ? Object.assign({}, o) : Object.assign({}, c, { deleted: true });
+      r.updatedAt = c.updatedAt; r.updatedBy = c.updatedBy; r.hist = c.hist;
+      return M.specStamp(r, me());
+    });
+    var now = {}, was = {};
+    recs.forEach(function (r) { now[r.id] = r; was[r.id] = e.cur[r.id]; });
+    specHistOff = true;
+    try { specPutAll(p, recs); } finally { specHistOff = false; }
+    to.push({ old: was, cur: now, at: 0, label: e.label });
+    renderPage();
+    toast((back ? 'Undone: ' : 'Redone: ') + e.label, { label: back ? 'Redo' : 'Undo', run: function () { specHistStep(!back); } });
+    // Show where it happened.
+    var live = recs.filter(function (r) { return !r.deleted; })[0];
+    if (live && ui.specView !== 'map') {
+      var el = document.getElementById('spec-' + live.id);
+      if (el) { specScrollTo(el, 'start'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    }
+  }
+
+  // ── Dragging sections in the Document (Chris, 2026-11-09) ──
+  // Drag a heading in the text, or a name in the outline, to move that section with its subsections.
+  // The line shows where it lands: before the section under the pointer, at that section's level; in
+  // the gap after a subsection, toward the right keeps it a subsection there. The page (or the outline)
+  // scrolls while the pointer is near or past its top or bottom edge, faster the further out it is.
+  var docDrag = null, docDragJust = false;
+  var DOC_DRAG_SEL = { doc: '.spec-doc > .spec-sec[id^="spec-"]', outline: '.spec-outline [data-act="spec-goto"]' };
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0 || e.pointerType === 'touch' || specEditing || ui.view !== 'spec' || ui.specView === 'map') return;
+    var h = e.target.closest && e.target.closest('.spec-doc .spec-h > h2, .spec-doc .spec-h > h3, .spec-doc .spec-h > h4, .spec-doc .spec-h > h5, .spec-outline [data-act="spec-goto"]');
+    if (!h) return;
+    var outline = !!h.closest('.spec-outline'), sec = !outline && h.closest('.spec-sec');
+    var id = outline ? h.dataset.id : sec && sec.id.slice(5);
+    if (!id) return;
+    docDrag = { id: id, outline: outline, el: h, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, pointer: e.pointerId, on: false };
+  });
+  document.addEventListener('pointermove', function (e) {
+    var d = docDrag; if (!d || e.pointerId !== d.pointer) return;
+    d.px = e.clientX; d.py = e.clientY;
+    if (!d.on) {
+      if (Math.abs(d.px - d.x) + Math.abs(d.py - d.y) < 7) return;
+      if (!docDragBegin(d)) { docDrag = null; return; }
+    }
+    e.preventDefault();
+    d.ghost.style.left = (d.px + 14) + 'px'; d.ghost.style.top = (d.py + 10) + 'px';
+  });
+  function docDragBegin(d) {
+    var p = current(); if (!p) return false;
+    var secs = M.liveSpec(p), i = -1, k;
+    for (k = 0; k < secs.length; k++) if (secs[k].id === d.id) i = k;
+    if (i < 0) return false;
+    d.tree = {}; d.levels = {};
+    secs.forEach(function (s) { d.levels[s.id] = s.level; });
+    for (k = i; k < secs.length && (k === i || secs[k].level > secs[i].level); k++) d.tree[secs[k].id] = 1;
+    d.on = true; d.level = secs[i].level; d.title = secs[i].title || 'Untitled';
+    try { window.getSelection().removeAllRanges(); } catch (err) { /* nothing selected */ }
+    try { d.el.setPointerCapture(d.pointer); } catch (err) { /* old browsers */ }
+    document.body.classList.add('spec-dragging');
+    d.ghost = document.createElement('div'); d.ghost.className = 'spec-drag-ghost';
+    var n = Object.keys(d.tree).length - 1;
+    d.ghost.textContent = d.title + (n ? ' + ' + plural(n, 'subsection') : '');
+    d.line = document.createElement('div'); d.line.className = 'spec-drop-line'; d.line.style.display = 'none';
+    document.body.appendChild(d.ghost); document.body.appendChild(d.line);
+    d.box = d.outline ? d.el.closest('.spec-outline') : d.el.closest('.spec-doc');
+    var main = d.el.closest('.main') || document.scrollingElement;
+    d.scrollers = d.outline ? [d.box, main] : [main];
+    Array.prototype.forEach.call(document.querySelectorAll(d.outline ? DOC_DRAG_SEL.outline : DOC_DRAG_SEL.doc), function (el) {
+      if (d.tree[d.outline ? el.dataset.id : el.id.slice(5)]) el.classList.add('spec-dragged');
+    });
+    d.raf = requestAnimationFrame(docDragTick);
+    return true;
+  }
+  function docDragTick() {
+    var d = docDrag; if (!d || !d.on) return;
+    // Speed in px per 16 ms frame, scaled by the real frame time so a slow page still scrolls on.
+    var t = performance.now(), dt = Math.min(64, d.t ? t - d.t : 16) / 16, y = d.py, vh = window.innerHeight;
+    d.t = t;
+    for (var i = 0; i < d.scrollers.length; i++) {
+      var s = d.scrollers[i]; if (!s) continue;
+      var r = s === document.scrollingElement ? { top: 0, bottom: vh } : s.getBoundingClientRect();
+      var top = Math.max(0, r.top), bot = Math.min(vh, r.bottom), zone = Math.min(64, (bot - top) / 4), v = 0;
+      if (y < top + zone) v = -(4 + 36 * Math.min(1, (top + zone - y) / (2 * zone)));
+      else if (y > bot - zone) v = 4 + 36 * Math.min(1, (y - bot + zone) / (2 * zone));
+      if (!v) continue;
+      var room = v < 0 ? s.scrollTop : s.scrollHeight - s.clientHeight - s.scrollTop;
+      if (room > 0) { s.scrollBy({ top: Math.round(v * dt), behavior: 'instant' }); break; }
+    }
+    docDragFind();
+    d.raf = requestAnimationFrame(docDragTick);
+  }
+  // Where a drop at the pointer would put the section: { f: specMoveBlock's place, level, y }.
+  function docDragFind() {
+    var d = docDrag; if (!d) return;
+    var list = Array.prototype.map.call(document.querySelectorAll(d.outline ? DOC_DRAG_SEL.outline : DOC_DRAG_SEL.doc), function (el) {
+      var id = d.outline ? el.dataset.id : el.id.slice(5);
+      return { id: id, el: el, r: el.getBoundingClientRect(), level: d.levels[id] || 1 };
+    }).filter(function (t) { return t.id && !d.tree[t.id] && d.levels[t.id]; });
+    var box = d.box.getBoundingClientRect(), at = list.length, i;
+    var indent = function (lv) { return d.outline ? (lv - 1) * 12 : Math.max(0, lv - 2) * 18; };   // as .lv-N indents
+    for (i = 0; i < list.length; i++) if (list[i].r.top + list[i].r.height / 2 > d.py) { at = i; break; }
+    var next = list[at], prev = list[at - 1], t = null;
+    if (prev && (!next || prev.level > next.level) && d.px - box.left > (d.outline ? 40 : 90)) t = { f: { after: prev.id }, level: prev.level, y: prev.r.bottom };
+    else if (next) t = { f: { before: next.id }, level: next.level, y: next.r.top };
+    else if (prev) {
+      // The end of the text: after the last section at this one's level or above, keeping its level.
+      var end = null;
+      for (i = list.length - 1; i >= 0 && !end; i--) if (list[i].level <= d.level) end = list[i];
+      end = end || prev;
+      t = { f: { after: end.id }, level: end.level, y: prev.r.bottom };
+    }
+    d.target = t;
+    if (!t) { d.line.style.display = 'none'; return; }
+    var left = box.left + indent(t.level);
+    d.line.style.display = ''; d.line.style.left = left + 'px'; d.line.style.width = Math.max(40, box.right - left) + 'px';
+    d.line.style.top = Math.round(t.y - (d.outline ? 1 : 4)) + 'px';
+  }
+  function docDragEnd(drop) {
+    var d = docDrag; docDrag = null;
+    if (!d || !d.on) return;
+    cancelAnimationFrame(d.raf);
+    d.ghost.remove(); d.line.remove(); document.body.classList.remove('spec-dragging');
+    document.querySelectorAll('.spec-dragged').forEach(function (el) { el.classList.remove('spec-dragged'); });
+    docDragJust = true; setTimeout(function () { docDragJust = false; }, 0);
+    var p = current(); if (!drop || !p || !d.target) return;
+    var recs = M.specMoveBlock(p, d.id, d.target.f, me());
+    // Nothing to write when it lands where it was.
+    var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) });
+    var shape = function (q) { return M.liveSpec(q).map(function (s) { return s.id + ':' + s.level; }).join(','); };
+    recs.forEach(function (r) { view.spec[r.id] = r; });
+    if (!recs.length || shape(view) === shape(p)) return;
+    specPutAll(p, recs);
+    toast('Moved ' + d.title, { label: 'Undo', run: function () { specHistStep(true); } });
+    var el = document.getElementById('spec-' + d.id);
+    if (el) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+  }
+  document.addEventListener('pointerup', function (e) { if (docDrag && e.pointerId === docDrag.pointer) docDragEnd(true); });
+  document.addEventListener('pointercancel', function (e) { if (docDrag && e.pointerId === docDrag.pointer) docDragEnd(false); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && docDrag && docDrag.on) { e.stopPropagation(); docDragEnd(false); } }, true);
+  // The click that ends a drag doesn't also jump to the section.
+  document.addEventListener('click', function (e) { if (docDragJust) { e.stopPropagation(); e.preventDefault(); docDragJust = false; } }, true);
   function renderSpecBlockInspector(p) {
     var el = $('#inspector'), id = specBlockSel(), a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0];
     if (!x) { closeInspector(); return; }
@@ -3206,9 +3436,15 @@
     var recs = M.specSave(p, id, specDraft, me());
     if (specRefuseLong(recs)) return;
     p.spec = p.spec || {};
+    // From + on a heading: the new sections go right under that one, not at the end.
+    var at = id ? null : specNewAt(p);
+    if (at) {
+      var fresh = recs.filter(function (r) { return !p.spec[r.id]; });
+      fresh.forEach(function (r, i) { r.order = at.lo + (at.hi - at.lo) * (i + 1) / (fresh.length + 1); });
+    }
     recs.forEach(function (r) { p.spec[r.id] = r; });
     var note = specBrokenNote(specDraft);
-    specEditing = null; specDraft = '';
+    specEditing = null; specDraft = ''; specNewAfter = '';
     if (recs.length) touch(p);
     renderPage(); syncSoon();
     if (note) toast('Saved' + note);
@@ -4351,8 +4587,32 @@
         specEditing = 'all'; specDraft = M.specToText(ea); closeInspector(); selected = null; renderPage(); specFocusEditor(); break;
       }
       case 'spec-add':
-        ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+        ui.view = 'spec'; ui.specView = 'doc'; saveUi(); specNewAfter = '';
         specEditing = 'new'; specDraft = '## New section' + String.fromCharCode(10); closeInspector(); renderPage(); specFocusEditor(); break;
+      case 'spec-add-after': {
+        // + on a heading: a new section right under it, at the level of what follows it (its first
+        // subsection when it has some, else beside it).
+        var aa = current(); if (!aa) break;
+        specNewAfter = id;
+        var na = specNewAt(aa); if (!na) { specNewAfter = ''; break; }
+        specEditing = 'new'; specDraft = new Array(na.level + 1).join('#') + ' New section' + String.fromCharCode(10);
+        closeInspector(); selected = null; renderPage(); specFocusEditor(); break;
+      }
+      case 'spec-undo': specHistStep(true); break;
+      case 'spec-redo': specHistStep(false); break;
+      case 'spec-more': {
+        var mp = current(); if (!mp) break;
+        var has = M.liveSpec(mp).length, guide = specGuideId() && window.SignoffSpecGuide;
+        menu(el, (guide ? [['guide', 'Guide: a walk through ' + SPEC_LABEL]] : []).concat([['writing', 'Writing guide'], '-', ['paste', 'Paste text…']])
+          .concat(has ? ['-', ['md', 'Export as Markdown (.md)'], ['print', 'Print or save as PDF']] : [])).then(function (ch) {
+          if (ch === 'guide') { closeSheet(); window.SignoffSpecGuide.start(); }
+          else if (ch === 'writing') specGuideSheet();
+          else if (ch === 'paste') specPasteSheet();
+          else if (ch === 'md') download(mp.slug + '-description.md', M.specMarkdown(mp), 'text/markdown');
+          else if (ch === 'print') specPrint(mp);
+        });
+        break;
+      }
       case 'spec-save': specSaveEdit(); break;
       case 'spec-guide': specGuideSheet(); break;
       case 'spec-guide-start': closeSheet(); if (window.SignoffSpecGuide) window.SignoffSpecGuide.start(); break;
@@ -4521,6 +4781,10 @@
       if (!$('#report').hidden) { $('#report').hidden = true; return; }
       if (inField) { document.activeElement.blur(); return; }
       if ($('#inspector').classList.contains('open')) { closePanel(); return; }
+    }
+    // Back and forward in Scribe: Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y.
+    if (!inField && ui.view === 'spec' && (e.ctrlKey || e.metaKey) && !e.altKey && /^[zy]$/i.test(e.key) && !$('#sheet') && current()) {
+      e.preventDefault(); specHistStep(e.key.toLowerCase() === 'z' && !e.shiftKey); return;
     }
     if (inField || e.ctrlKey || e.metaKey || e.altKey || $('#sheet') || (PEOPLE && PEOPLE.isOpen())) return;
     var ids = visibleItemIds();
