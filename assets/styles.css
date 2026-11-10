@@ -854,7 +854,10 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-more { width: 34px; height: 34px; border-radius: 980px; background: var(--bg-sunk); }
 @media (max-width: 600px) { .spec-page > .cl-head { flex-wrap: wrap; } .spec-tools { flex-wrap: wrap; } }
 /* Dragging a section by its heading or its outline name. */
-.spec-doc .spec-h > h2, .spec-doc .spec-h > h3, .spec-doc .spec-h > h4, .spec-doc .spec-h > h5, .spec-outline [data-act="spec-goto"] { cursor: grab; }
+.spec-doc .spec-h > h2, .spec-doc .spec-h > h3, .spec-doc .spec-h > h4, .spec-doc .spec-h > h5 { cursor: grab; }
+/* The outline's names are links first: a pointer, and the closed hand only while held (Chris, 2026-11-09). */
+.spec-outline [data-act="spec-goto"] { cursor: pointer; }
+.spec-outline [data-act="spec-goto"]:active { cursor: grabbing; }
 body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 .spec-dragged { opacity: 0.4; }
 .spec-drop-line { position: fixed; z-index: 90; height: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
