@@ -958,12 +958,24 @@
     else if ($('#inspector').classList.contains('open')) renderInspector();
   }
   function closeInspector() { $('#inspector').classList.remove('open'); }
+  // Closing the pane by hand (×, Esc, a blank click) also lets go of a Scribe diagram block, so it
+  // doesn't stay ringed with its lines forward after its panel has gone (Chris, 2026-11-09).
+  function closePanel() {
+    closeInspector();
+    if (specBlockSel() || specEdgeSel()) { selected = null; renderPage(); }
+  }
   // A click on blank space in the main area (nothing to click or type in there, no text being
   // selected) closes an open details pane, as × and Esc do.
   var LIVE = 'a, button, input, select, textarea, label, summary, [contenteditable], [role="button"], [tabindex], .item, canvas, svg';
   function blankClick(e) {
     return $('#inspector').classList.contains('open') && !!e.target.closest('#main') && !e.target.closest(LIVE) &&
       !String(window.getSelection ? window.getSelection() : '');
+  }
+  // In a Scribe diagram, empty canvas counts as blank too: anything that isn't a block, section, line,
+  // label, flag, or + (those carry data-act, so they never get here), and not the end of a drag.
+  function specBlankClick(e) {
+    return !!e.target.closest('svg.spec-map') && !e.target.closest('.spec-handle') && !specDragJustEnded &&
+      ($('#inspector').classList.contains('open') || !!specBlockSel() || !!specEdgeSel());
   }
   // Show a check in its checklist (even if its section is collapsed or set aside) and open it.
   function gotoItem(id) {
@@ -1419,6 +1431,7 @@
     if (rq) return renderReqInspector(p, rq);
     if (specSel()) return renderSpecInspector(p);
     if (specBlockSel()) return renderSpecBlockInspector(p);
+    if (specEdgeSel()) return renderSpecEdgeInspector(p);
     var d = itemDef(p, selected);
     var st = p.items[selected] || {};
     var row = null;
@@ -2229,7 +2242,7 @@
       return { d: 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my + ' ' + x2 + ' ' + my + ' ' + x2 + ' ' + y2, mx: (x1 + x2) / 2, my: my };
     }
     // data-bands: each layer's top and bottom, for dragging a block into it (specMoveMove).
-    var svg = '<svg class="spec-map' + (selBlock && pos[selBlock] ? ' focus' : '') + '" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-bands="' + rows.map(function (r) { return Math.round(r.y - (RH - BH) / 2) + ':' + Math.round(r.y + r.h - (RH - BH) / 2); }).join(',') + '" data-bh="' + BH + '">' +
+    var svg = '<svg class="spec-map' + ((selBlock && pos[selBlock]) || specEdgeSel() ? ' focus' : '') + '" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-bands="' + rows.map(function (r) { return Math.round(r.y - (RH - BH) / 2) + ':' + Math.round(r.y + r.h - (RH - BH) / 2); }).join(',') + '" data-bh="' + BH + '">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern></defs>';
     rows.forEach(function (r, ri) {
       var y = r.y + (r.lines - 1) * LINE / 2;
@@ -2241,9 +2254,9 @@
     });
     edges.forEach(function (e) {
       if (!e.a || !e.b || !pos[e.a] || !pos[e.b]) return;
-      var pth = path(e), on = selBlock && (e.a === selBlock || e.b === selBlock);
-      svg += '<path class="spec-edge ' + e.cls + (on ? ' on' : '') + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + pth.d + '"/>';
-      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(M.specLinkWords()[0]) + '" d="' + (pth.hit || pth.d) + '"><title>' + esc(byId[e.a].sec.title + ' ' + linkVerb(M.specLinkWords()[0]) + ' ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
+      var pth = path(e), edgeOn = e.cls === 'uses' && specEdgeIs(e.a, e.b), on = (selBlock && (e.a === selBlock || e.b === selBlock)) || edgeOn;
+      svg += '<path class="spec-edge ' + e.cls + (on ? ' on' : '') + (edgeOn ? ' sel' : '') + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + pth.d + '"/>' + (e.cls === 'tree' ? '' : specPulse(pth.d));
+      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(M.specLinkWords()[0]) + '" d="' + (pth.hit || pth.d) + '"><title>' + esc(byId[e.a].sec.title + ' ' + linkVerb(M.specLinkWords()[0]) + ' ' + byId[e.b].sec.title + ' (click for its panel)') + '</title></path>';
       if (e.label) {
         var lw = Math.min(180, 12 + e.label.length * 6.4);
         svg += '<g class="spec-edge-label" data-act="spec-block" data-id="' + esc(e.link) + '"><title>' + esc(e.label) + '</title><rect x="' + (pth.mx - lw / 2) + '" y="' + (pth.my - 10) + '" width="' + lw + '" height="20" rx="10"/>' +
@@ -2262,7 +2275,7 @@
       });
     });
     svg += '</svg>';
-    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line to remove it (Undo in the message brings it back). Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines join each interface to the blocks that use it. Lines from one block to several share a trunk, and pointing at a block brings its own lines forward. Dotted blocks have unlinked or flagged sentences.</p>';
+    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line for its panel, where Delete removes it (Undo in the message brings it back). Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines join each interface to the blocks that use it. Lines from one block to several share a trunk, and pointing at a block brings its own lines forward. Dotted blocks have unlinked or flagged sentences.</p>';
   }
   // A block's name on one line, or two (broken at a space) when it's too long for one; the second is
   // cut if it still doesn't fit.
@@ -2304,6 +2317,9 @@
     return { d: 'M' + x1 + ' ' + y1 + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + x2 + ' ' + y2,
       mx: bez(x1, c1x, c2x, x2, 0.7), my: bez(y1, c1y, c2y, y2, 0.7) };
   }
+  // Current along a line: beads that run its length while its block is selected or pointed at, after
+  // Loom's pulse on a selected wire. Drawn right after its .spec-edge, which CSS keys on.
+  function specPulse(d) { return '<path class="spec-pulse" d="' + d + '" pathLength="1"/>'; }
   function specFlowHtml(p, a) {
     var T = specFlowTree(a), sel = specBlockSel(), show = ui.specBoxes !== false, head = show ? SPEC_HEAD : 0, pad = show ? SPEC_PAD : 0;
     var supWord = (M.specLinkWord('supplies') || '').toLowerCase();
@@ -2370,7 +2386,10 @@
     var maxX = Math.max.apply(null, rects.map(function (r) { return r.x + r.w; })) + 24, maxY = Math.max.apply(null, rects.map(function (r) { return r.y + r.h; })) + 40;
     var VW = Math.max(980, maxX - minX), VH = maxY - minY;
     if (maxX - minX < VW) minX -= (VW - (maxX - minX)) / 2;
-    var svg = '<svg class="spec-map spec-flow" viewBox="' + minX + ' ' + minY + ' ' + VW + ' ' + VH + '" role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
+    // A selected block brings its own lines forward, as in the layered map (CSS .focus, .on).
+    // So does a selected line.
+    function on(e) { return specEdgeIs(e.a, e.b, e.word) ? ' on sel' : isBlock[sel] && (e.a === sel || e.b === sel) ? ' on' : ''; }
+    var svg = '<svg class="spec-map spec-flow' + (isBlock[sel] || specEdgeSel() ? ' focus' : '') + '" viewBox="' + minX + ' ' + minY + ' ' + VW + ' ' + VH + '" role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern>' +
       '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker></defs>' +
       '<rect class="spec-flow-bg" x="' + minX + '" y="' + minY + '" width="' + VW + '" height="' + VH + '"/>';
@@ -2390,7 +2409,7 @@
       return '<g class="spec-edge-label"><rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g>';
     }
     function hit(e, d) {
-      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(T.byId[e.a].sec.title + ' ' + linkVerb(e.word) + ' ' + T.byId[e.b].sec.title + (e.label ? ' (' + e.label + ')' : '') + ', click to remove') + '</title></path>';
+      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(T.byId[e.a].sec.title + ' ' + linkVerb(e.word) + ' ' + T.byId[e.b].sec.title + (e.label ? ' (' + e.label + ')' : '') + ', click for its panel') + '</title></path>';
     }
     // Supplies between neighbors in one section draw as arrows; every other supply is a power flag.
     var flagged = [];
@@ -2398,13 +2417,13 @@
       var A = R[e.a], B = R[e.b];
       if (T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) {
         var rt = specRoute(A, B);
-        svg += '<path class="spec-edge supply" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+        svg += '<path class="spec-edge supply' + on(e) + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d) + hit(e, rt.d);
         if (e.label) svg += pill((A.x + A.w + B.x) / 2, Math.min(A.y, B.y) + SPEC_BH / 2 - 14, e.label);
       } else flagged.push(e);
     });
     conn.forEach(function (e) {
       var rt = specRoute(R[e.a], R[e.b]);
-      svg += '<path class="spec-edge uses" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+      svg += '<path class="spec-edge uses' + on(e) + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d) + hit(e, rt.d);
       if (e.label) svg += pill(rt.mx, rt.my, e.label);
     });
     blocks.forEach(function (x) {
@@ -2427,7 +2446,7 @@
       });
     });
     svg += '</svg>';
-    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line to remove it (Undo in the message brings it back).</p>' +
+    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
@@ -2749,6 +2768,57 @@
       if (!cur || cur.updatedAt !== rec.updatedAt) { toast('It has changed since; add the link again'); return; }
       specPutAll(q, [M.specStamp(Object.assign({}, cur, { body: before }), me())]);
     } });
+  }
+  // ── Lines (links between blocks) ──
+  // A click on a line opens its own panel (Chris, 2026-11-09: a click used to remove it at once):
+  // the two ends, its signal or rail, and Delete. selected is 'specedge|' + JSON [from, to, word].
+  function specEdgeSel() {
+    var m = /^specedge\|(.+)$/.exec(selected || ''); if (!m) return null;
+    try { var v = JSON.parse(m[1]); return { a: v[0], b: v[1], word: v[2] }; } catch (err) { return null; }
+  }
+  function specEdgeIs(a, b, word) {
+    var s = specEdgeSel();
+    return !!s && s.a === a && s.b === b && (!word || String(s.word).toLowerCase() === String(word).toLowerCase());
+  }
+  function specOpenEdge(a, b, word) {
+    selected = 'specedge|' + JSON.stringify([a, b, word]);
+    $('#inspector').classList.add('open');
+    renderPage(); renderInspector();
+  }
+  // The link's entry in its from-block's Uses / Connects / Supplies line, or null once it's gone.
+  function specEdgeItem(p) {
+    var s = specEdgeSel(), a = s && p && (p.spec || {})[s.a], b = s && p && (p.spec || {})[s.b];
+    if (!a || !b || a.deleted || b.deleted) return null;
+    var word = M.specLinkWord(s.word) || M.specLinkWords()[0], items = M.specUsesItems(a.body, word);
+    var it = items.filter(function (n) { return M.specUseIs(n, b.title); })[0];
+    return it ? { s: s, from: a, to: b, word: word, items: items, it: it } : null;
+  }
+  function renderSpecEdgeInspector(p) {
+    var el = $('#inspector'), L = specEdgeItem(p);
+    if (!L) { selected = null; closeInspector(); renderPage(); return; }
+    var words = M.specLinkWords();
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › Line</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<h2 class="spec-edge-title">' + esc(L.from.title || 'Untitled') + ' <span>' + esc(linkVerb(L.word)) + '</span> ' + esc(L.to.title || 'Untitled') + '</h2>' +
+      '<div class="field"><span class="field-label">From</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.a) + '">' + esc(L.from.title || 'Untitled') + '</button></div></div>' +
+      '<div class="field"><span class="field-label">To</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.b) + '">' + esc(L.to.title || 'Untitled') + '</button></div></div>' +
+      (words.length > 1 ? '<div class="field"><label for="spec-edge-label">Signal, bus, or rail</label><input class="input" id="spec-edge-label" value="' + esc(L.it.label || '') + '" placeholder="' + (M.specLinkWord('supplies') && L.word.toLowerCase() === M.specLinkWord('supplies').toLowerCase() ? '3V3' : 'I2C') + '"></div>' : '') +
+      '<p class="note">It’s the <code>' + esc(L.word) + ':</code> line in ' + esc(L.from.title || 'its block') + '’s text.</p>' +
+      '<div class="spec-acts"><button class="btn" data-act="spec-goto" data-id="' + esc(L.s.a) + '">Show in document</button>' +
+      '<button class="btn btn-danger" data-act="spec-edge-delete">Delete line</button></div></div>';
+    el.dataset.item = selected;
+  }
+  function specEdgeLabel(value) {
+    var p = current(), L = specEdgeItem(p); if (!L) return;
+    var v = String(value || '').replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (v === (L.it.label || '')) return;
+    L.it.label = v;
+    specPutAll(p, [M.specStamp(Object.assign({}, L.from, { body: M.specSetLine(L.from.body, L.word, M.specLinkText(L.items)) }), me())]);
+  }
+  function specEdgeDelete() {
+    var p = current(), L = specEdgeItem(p); if (!L) return;
+    selected = null; closeInspector();
+    specUnlinkName(L.s.a, L.word, L.it.name);
   }
   // A link's signal or rail name, from the block panel.
   function specLinkLabel(word, name) {
@@ -4201,7 +4271,7 @@
     var popWasOpen = !!$('#menu.sync-pop');
     if (!e.target.closest('#menu')) closeMenu();
     var el = e.target.closest('[data-act]');
-    if (!el) { if (blankClick(e)) closeInspector(); return; }
+    if (!el) { if (blankClick(e) || specBlankClick(e)) closePanel(); return; }
     var act = el.dataset.act, id = el.dataset.id;
     switch (act) {
       case 'sync-details': if (popWasOpen) closeMenu(); else syncDetails(el); break;
@@ -4257,14 +4327,14 @@
       }
       case 'set': e.stopPropagation(); setStatus(id, el.dataset.status); select(id, el.closest('.inspector') ? true : false); break;
       case 'item-field': { var f = {}; f[el.dataset.key] = el.dataset.val; setItem(selected, f); break; }
-      case 'close-insp': closeInspector(); break;
+      case 'close-insp': closePanel(); break;
       case 'post-comment': { var ta = $('#comment-input'); addComment(selected, ta.value); var t2 = $('#comment-input'); if (t2) { t2.value = ''; t2.focus(); } break; }
       case 'del-comment': if (confirm('Delete this comment?')) deleteComment(id); break;
       case 'req-add': addReq(); break;
       case 'spec-view':
         // A block's panel belongs to the diagram and a sentence's to the document: switching closes them
         // (on a narrow screen the panel is a sheet over the depth buttons, which took the first click).
-        if (ui.specView !== el.dataset.view && /^spec(block)?\|/.test(selected || '')) { selected = null; closeInspector(); }
+        if (ui.specView !== el.dataset.view && /^spec(block|edge)?\|/.test(selected || '')) { selected = null; closeInspector(); }
         ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
       case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; ui.specShow = ''; saveUi(); renderPage(); break;
       case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
@@ -4289,7 +4359,8 @@
       case 'spec-kind-set': specKindSet(el.dataset.kind); break;
       case 'spec-uses-add': specUsesAdd(el, el.dataset.word); break;
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
-      case 'spec-edge': specDisconnect(el.dataset.a, el.dataset.b, el.dataset.word); break;
+      case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
+      case 'spec-edge-delete': specEdgeDelete(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
       case 'spec-auto-layout': specAutoLayout(); break;
       case 'spec-new-section': specNewSectionSheet(); break;
@@ -4449,7 +4520,7 @@
       if ($('#sheet')) { closeSheet(); applyTheme(settings.theme); return; }
       if (!$('#report').hidden) { $('#report').hidden = true; return; }
       if (inField) { document.activeElement.blur(); return; }
-      if ($('#inspector').classList.contains('open')) { closeInspector(); return; }
+      if ($('#inspector').classList.contains('open')) { closePanel(); return; }
     }
     if (inField || e.ctrlKey || e.metaKey || e.altKey || $('#sheet') || (PEOPLE && PEOPLE.isOpen())) return;
     var ids = visibleItemIds();
@@ -4517,6 +4588,7 @@
       if (uc) specBlockField('link', M.specLinkText(M.specUsesItems(uc.body, uw).concat([{ name: e.target.value, label: '' }])), uw);
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
+    if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
   });
   document.addEventListener('keydown', function (e) {
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {

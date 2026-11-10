@@ -958,6 +958,13 @@ button.req-link-main:hover { background: var(--hair-2); }
    opacity, never a new color. */
 .spec-map.focus .spec-edge, .spec-map.hovering .spec-edge { opacity: 0.14; transition: opacity 0.12s; }
 .spec-map.focus:not(.hovering) .spec-edge.on, .spec-map.hovering .spec-edge.hov { opacity: 1; stroke-width: 2.6; }
+/* Current along a selected block's lines (after Loom's wire pulse): two soft beads per line, shown
+   only on the lines brought forward; never for a pointer that's only passing over another block. */
+.spec-pulse { display: none; fill: none; stroke: var(--accent); stroke-width: 3.4; stroke-linecap: round; stroke-dasharray: 0.03 0.47; stroke-opacity: 0.75; pointer-events: none; filter: drop-shadow(0 0 2px var(--accent-soft)); animation: spec-pulse 2.4s linear infinite; }
+.spec-map.focus:not(.hovering) .spec-edge.on + .spec-pulse, .spec-map.hovering .spec-edge.on.hov + .spec-pulse { display: inline; }
+.spec-map.moving .spec-pulse, .spec-map.dragging .spec-pulse { display: none !important; }
+@keyframes spec-pulse { from { stroke-dashoffset: 0.5; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .spec-pulse { animation: none; display: none !important; } }
 .spec-edge-label { cursor: pointer; }
 .spec-edge-label rect { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1; }
 .spec-edge-label text { font-size: 11px; fill: var(--accent-ink); }
@@ -1017,7 +1024,11 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-map.dragging { cursor: crosshair; user-select: none; }
 .spec-node.drop rect:first-of-type { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
 .spec-edge-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: pointer; pointer-events: stroke; }
-.spec-edge-hit:hover + .spec-edge, .spec-edge-hit:hover { stroke: color-mix(in srgb, var(--issue) 35%, transparent); }
+.spec-edge-hit:hover { stroke: color-mix(in srgb, var(--accent) 30%, transparent); }
+/* A selected line (its panel open): accent, thicker, with its pulse (the rules above). */
+.spec-map.focus:not(.hovering) .spec-edge.sel, .spec-map.hovering .spec-edge.sel { opacity: 1; stroke: var(--accent); stroke-width: 3; }
+.spec-edge-title { margin: 0 0 14px; font-size: 16px; line-height: 1.35; }
+.spec-edge-title span { font-weight: 400; color: var(--text-3); }
 .spec-phrase { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; margin: -4px 0 12px; border-radius: 9px; background: var(--accent-soft); font-size: 13px; }
 .spec-map:not(.moving) .spec-node { cursor: grab; }
 .spec-map.moving, .spec-map.moving * { cursor: grabbing; user-select: none; }
