@@ -578,6 +578,38 @@ test('push refuses a review that was shared away since the pull', async () => {
   ok(/now lives in/.test(r.err), r.err);
 });
 
+test('status: a Check: line is a review note, not unlinked text, and a mark that doesn’t parse is found by line', async () => {
+  const dir = path.join(TMP, 'notes');
+  eq((await sh(['pull', fixture.id, dir])).code, 0);
+  fs.appendFileSync(path.join(dir, 'scribe.md'), '\n## Notes check\nCheck: the code and its comment disagree about the period.\nThe [timer runs]{REQ-001 at 1 kHz.\n');
+  const st = (await sh(['status', dir, '--json'])).json(), lst = st.now.scribe.lists;
+  ok(lst.notes.some((x) => /comment disagree/.test(x.text)), 'note listed');
+  ok(!lst.untraced.some((x) => /comment disagree/.test(x.text)), 'a note counted as unlinked');
+  eq(st.now.scribe.notes, lst.notes.length);
+  const lines = fs.readFileSync(path.join(dir, 'scribe.md'), 'utf8').split('\n');
+  ok(lst.marks.some((m) => /timer runs/.test(lines[m.line - 1])), 'broken mark: ' + JSON.stringify(lst.marks));
+  ok(/Review notes \(Check:\)/.test(fs.readFileSync(path.join(dir, 'status.md'), 'utf8')), 'status.md lists notes');
+});
+
+test('skill prints the Claude Code skill, and --install writes it once', async () => {
+  let r = await sh(['skill']);
+  eq(r.code, 0, r.err);
+  ok(/^---\nname: signoff\ndescription: /.test(r.out), r.out.slice(0, 80));
+  ok(r.out.indexOf(cli.TOOL_ROOT.replace(/\\/g, '/') + '/tools/signoff.js') >= 0, 'this tool’s command');
+  ok(r.out.indexOf('ID,Requirement,Type,Discipline,Category,Source,Verification method,Status') >= 0, 'the CSV header');
+  ok(r.out.indexOf(TOKEN) < 0, 'token in the skill');
+  const where = path.join(TMP, 'proj'), file = path.join(where, '.claude', 'skills', 'signoff', 'SKILL.md');
+  r = await sh(['skill', '--install', where]);
+  eq(r.code, 0, r.err);
+  eq(fs.readFileSync(file, 'utf8'), (await sh(['skill'])).out);
+  eq((await sh(['skill', '--install', where])).code, 0, 'the same text again');
+  fs.writeFileSync(file, 'someone’s own version\n');
+  r = await sh(['skill', '--install', where]);
+  eq(r.code, 2);
+  eq(fs.readFileSync(file, 'utf8'), 'someone’s own version\n');
+  eq((await sh(['skill', '--install', where, '--force'])).code, 0);
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {

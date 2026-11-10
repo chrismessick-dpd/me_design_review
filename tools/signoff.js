@@ -14,6 +14,8 @@
      node tools/signoff.js push [dir] --confirm <code>
      node tools/signoff.js open [dir|review] [--req REQ-004] [--item <check id>]
      node tools/signoff.js export [dir|review] [--out file.md]
+     node tools/signoff.js skill [--install <folder>]  the Claude Code skill for this command line:
+                                                    printed, or written to <folder>/.claude/skills/signoff/
 
    <review> is a review's id, slug, or name (or enough of it to be unique). Options: --json for
    machine-readable output, --config <file>, --token-file <file>, and --force (pull over local edits).
@@ -57,6 +59,7 @@ const USAGE = [
   '  node tools/signoff.js push [dir] --dry-run, then push [dir] --confirm <code>',
   '  node tools/signoff.js open [dir|review] [--req REQ-004] [--item <check id>]',
   '  node tools/signoff.js export [dir|review] [--out file.md]',
+  '  node tools/signoff.js skill [--install <folder>]',
   '',
   'Options: --json, --config <file>, --token-file <file>.',
   ''
@@ -347,10 +350,11 @@ function buildLocal(eng, base, files, user) {
   return { doc, records: { reqs: reqRecords, spec: specRecords }, changes: { reqs, spec } };
 }
 
-// What the Scribe tab and Requirements tab would show for `doc`.
-function analyze(eng, doc) {
+// What the Scribe tab and Requirements tab would show for `doc`. `text`, the checkout's scribe.md,
+// adds the marks that don't parse, by line. Data keys say untraced; the tab says Unlinked.
+function analyze(eng, doc, text) {
   const { M, T } = eng;
-  const a = M.specAnalysis(doc), lists = { untraced: [], flagged: [], broken: [], unknownUses: [] };
+  const a = M.specAnalysis(doc), lists = { untraced: [], flagged: [], notes: [], broken: [], unknownUses: [], marks: [] };
   a.sections.forEach((x) => {
     const section = x.sec.title || 'Untitled';
     x.blocks.forEach((bk) => {
@@ -358,17 +362,19 @@ function analyze(eng, doc) {
       (bk.units || []).forEach((u) => {
         if (u.state === 'untraced') lists.untraced.push({ section, text: u.text });
         if (u.state === 'tag') lists.flagged.push({ section, text: u.text });
+        if (u.state === 'note') lists.notes.push({ section, text: u.text });
         if (u.missing && u.missing.length) lists.broken.push({ section, text: u.text, links: u.missing.slice() });
       });
     });
   });
+  if (text != null && M.specBrokenMarks) lists.marks = M.specBrokenMarks(text).map((b) => ({ line: b.line, section: b.heading || '', text: b.text }));
   const reqStats = M.reqStats(doc);
   let summary = null;
   try { summary = M.projectSummary(doc, T); } catch (e) { summary = null; }
   return {
     scribe: {
       on: M.specEnabled(doc), sections: a.totals.sections, sentences: a.totals.units, linked: a.totals.linked,
-      standard: a.totals.std, flagged: a.totals.tag, untraced: a.totals.untraced,
+      standard: a.totals.std, flagged: a.totals.tag, untraced: a.totals.untraced, notes: a.totals.note || 0,
       lists: Object.assign(lists, { undescribed: a.undescribed.map((id) => ({ ref: a.ctx.reqs[id].ref || id, text: a.ctx.reqs[id].text })) })
     },
     reqs: { on: M.reqsEnabled(doc), total: reqStats.total, deprecated: reqStats.deprecated, draft: reqStats.draft || 0, approved: reqStats.approved || 0,
@@ -464,7 +470,7 @@ function statusData(ctx, co) {
       '). This review doesn’t round-trip through scribe.md and reqs.csv, so don’t push it; fix the cause in the browser first (for example, two requirements with one ID).' : '',
     edited: co.edited, missing: co.missing,
     changes: built.changes,
-    now: analyze(ctx.eng, built.doc)
+    now: analyze(ctx.eng, built.doc, co.files['scribe.md'])
   };
 }
 
@@ -487,7 +493,7 @@ function statusLines(ctx, st, markdown, cap) {
   li([ctx.eng.C.product, st.review.project, st.review.stage].filter(Boolean).join(' · '));
   li('From ' + st.review.repo + ', pulled ' + String(st.review.pulledAt || '').replace('T', ' ').slice(0, 16) + ' UTC');
 
-  if (st.warning) L.push((markdown ? '\n**Warning:** ' : '\n! Warning: ') + st.warning);
+  if (st.warning) L.push((markdown ? '\n**Warning:** ' : '\nWarning: ') + st.warning);
   h('Local edits');
   if (!st.edited.length) li('None: scribe.md and reqs.csv are as pulled.');
   else {
@@ -504,12 +510,15 @@ function statusLines(ctx, st, markdown, cap) {
 
   h(ctx.eng.C.spec && ctx.eng.C.spec.label || 'Scribe');
   if (!sc.on) li('Not ticked for this review, so the browser hides it.');
-  li(plural(sc.sections, 'section') + ', ' + plural(sc.sentences, 'sentence') + ': ' + sc.linked + ' linked, ' + sc.standard + ' standard, ' + sc.flagged + ' @req, ' + sc.untraced + ' untraced');
+  li(plural(sc.sections, 'section') + ', ' + plural(sc.sentences, 'sentence') + ': ' + sc.linked + ' linked, ' + sc.standard + ' standard, ' + sc.flagged + ' @req, ' +
+    plural(sc.notes, 'review note') + ', ' + sc.untraced + ' unlinked');
   const lst = sc.lists;
-  [['Untraced', lst.untraced, (x) => x.section + ': ' + x.text],
-    ['Flagged @req', lst.flagged, (x) => x.section + ': ' + x.text],
+  [['Marks that don’t parse', lst.marks, (x) => 'line ' + x.line + (x.section ? ' (' + x.section + ')' : '') + ': ' + x.text],
     ['Broken links', lst.broken, (x) => x.section + ': {' + x.links.join(', ') + '} in “' + x.text + '”'],
-    ['Uses names with no section', lst.unknownUses, (x) => x.section + ': ' + x.name],
+    [ctx.eng.M.specLinkWords().join(' or ') + ' names with no section', lst.unknownUses, (x) => x.section + ': ' + x.name],
+    ['Unlinked', lst.untraced, (x) => x.section + ': ' + x.text],
+    ['Flagged @req', lst.flagged, (x) => x.section + ': ' + x.text],
+    ['Review notes (Check:)', lst.notes, (x) => x.section + ': ' + x.text],
     ['Requirements not described', lst.undescribed, (x) => x.ref + ': ' + x.text]].forEach(([title, items, fmt]) => {
     if (!items.length) return;
     li(title + ' (' + items.length + '):');
@@ -559,7 +568,7 @@ async function cmdList(ctx) {
     const a = analyze(ctx.eng, r.doc);
     return { id: r.doc.id, slug: r.doc.slug || '', name: r.doc.meta.name || '', project: r.doc.meta.project || '', stage: r.doc.meta.stage || '',
       archived: !!r.doc.meta.archived, repo: r.repo, checks: s && s.total ? s.pct + '%' : '–', reqs: a.reqs.total,
-      scribe: !a.scribe.on ? 'off' : !a.scribe.sections ? 'empty' : plural(a.scribe.sections, 'section') + ', ' + a.scribe.untraced + ' untraced, ' + a.scribe.flagged + ' @req, ' + a.scribe.lists.undescribed.length + ' not described' };
+      scribe: !a.scribe.on ? 'off' : !a.scribe.sections ? 'empty' : plural(a.scribe.sections, 'section') + ', ' + a.scribe.untraced + ' unlinked, ' + a.scribe.flagged + ' @req, ' + a.scribe.notes + ' notes, ' + a.scribe.lists.undescribed.length + ' not described' };
   }).sort((a, b) => a.project.localeCompare(b.project) || a.name.localeCompare(b.name));
   if (ctx.opts.json) return out(ctx, { fte: g.fte, reviews: rows, errors: g.errors });
   const units = (C.words && C.words.units) || 'reviews';
@@ -601,7 +610,7 @@ async function cmdPull(ctx, args) {
   const sc = st.now.scribe;
   out(ctx, [
     'Pulled ' + st.review.name + ' into ' + dir,
-    '  scribe.md   ' + plural(sc.sections, 'section') + ' (' + sc.untraced + ' untraced sentences)',
+    '  scribe.md   ' + plural(sc.sections, 'section') + ' (' + sc.untraced + ' unlinked sentences, ' + plural(sc.notes, 'review note') + ')',
     '  reqs.csv    ' + plural(st.now.reqs.total, 'requirement'),
     '  status.md   what the tabs would show; `status` refreshes it',
     '  review.json the review as stored: the base for status and push. Don’t edit it.'
@@ -769,7 +778,7 @@ async function planPush(ctx, co) {
 function summaryLine(s) {
   const parts = [];
   if (s.reqs) parts.push(plural(s.reqs.total, 'requirement'));
-  if (s.spec) parts.push('Scribe ' + plural(s.spec.sections, 'section') + ', ' + s.spec.untraced + ' untraced, ' + s.spec.flagged + ' @req, ' + s.spec.undescribed + ' not described');
+  if (s.spec) parts.push('Scribe ' + plural(s.spec.sections, 'section') + ', ' + s.spec.untraced + ' unlinked, ' + s.spec.flagged + ' @req, ' + (s.spec.notes || 0) + ' notes, ' + s.spec.undescribed + ' not described');
   if (s.total) parts.push(s.pct + '% of checks reviewed');
   return parts.join('; ') || 'nothing';
 }
@@ -790,7 +799,7 @@ function planLines(ctx, co, p, dir) {
   L.push('  Everything else in the file stays exactly as it is on GitHub.');
   if (!ctx.opts.confirm) {
     L.push('Nothing was pushed. To push exactly this, run:');
-    L.push('  node tools/signoff.js push ' + (dir === path.resolve(ctx.io.cwd) ? '' : '"' + dir + '" ') + '--confirm ' + p.code);
+    L.push('  "' + slash(ctx.io.nodePath || process.execPath) + '" "' + slash(__filename) + '" push "' + slash(dir) + '" --confirm ' + p.code);
   }
   return L;
 }
@@ -849,10 +858,158 @@ async function cmdPush(ctx, args) {
   ]).join('\n'));
 }
 
+// ── The Claude Code skill ──────────────────────────────────
+// `skill` writes the guide an assistant (Claude Code) needs to use this command line well: the
+// loop, the file formats in each tool's own words, and the rules. It's generated, so its paths are
+// this machine's (node, and each Signoff tool beside this one) and its marks are each tool's.
+
+// The Signoff review tools next to this one that have this command line, with their config.
+function siblingTools() {
+  const suite = path.dirname(TOOL_ROOT), out = [];
+  ['fw_design_review', 'ee_design_review', 'me_design_review'].forEach((name) => {
+    const root = name === path.basename(TOOL_ROOT) ? TOOL_ROOT : path.join(suite, name);
+    const cli = path.join(root, 'tools', 'signoff.js'), cfgFile = path.join(root, 'assets', 'config.js');
+    if (!fs.existsSync(cli) || !fs.existsSync(cfgFile)) return;
+    let cfg = null;
+    try {
+      const text = fs.readFileSync(cfgFile, 'utf8');
+      cfg = JSON.parse(text.slice(text.indexOf('=', text.indexOf('SIGNOFF_CONFIG')) + 1).trim().replace(/;\s*$/, ''));
+    } catch (e) { return; }
+    out.push({ root, cli, cfg });
+  });
+  if (!out.some((t) => t.root === TOOL_ROOT)) out.unshift({ root: TOOL_ROOT, cli: path.join(TOOL_ROOT, 'tools', 'signoff.js'), cfg: ENGINE.C });
+  return out;
+}
+
+const slash = (p) => String(p).replace(/\\/g, '/');
+
+function skillText(ctx) {
+  const tools = siblingTools(), node = slash(ctx.io.nodePath || process.execPath);
+  const run = (t) => '"' + node + '" "' + slash(t.cli) + '"';
+  const checkouts = ctx.config.checkouts ? slash(path.resolve(ctx.config.checkouts)) : '';
+  const L = [];
+  L.push('---');
+  L.push('name: signoff');
+  L.push('description: Work with Signoff design reviews (' + joinAnd(tools.map((t) => t.cfg.product)) + ') from the terminal. List reviews, pull a review\'s Scribe description and requirements into plain files, see what is unlinked or broken, and push edits back after the user approves a dry run. Use whenever a task reads or changes a Signoff review\'s Scribe text or requirements, such as describing firmware from its code or keeping requirements in step with it.');
+  L.push('---');
+  L.push('');
+  L.push('# Signoff reviews from the terminal');
+  L.push('');
+  L.push('Each Signoff review (a board in Signoff EE, a part in Signoff ME, a firmware target in Signoff FW) is a JSON file in a private GitHub repo, merged record by record whenever anyone syncs. Never read or write those files, or call the GitHub API for review data, any other way than this command line. It runs the tools\' own code, so what it writes is exactly what the browser would write, and it checks every write.');
+  L.push('');
+  L.push('## Running it');
+  L.push('');
+  L.push('Node may not be on PATH, so use the full commands below (in PowerShell, start the line with `& `). Use the tool the review belongs to: a checkout works only with the tool it came from.');
+  L.push('');
+  L.push('| Tool | A review is | Command |');
+  L.push('| --- | --- | --- |');
+  tools.forEach((t) => L.push('| ' + t.cfg.product + ' | a ' + ((t.cfg.words && t.cfg.words.unit) || 'review') + ' | `' + run(t) + '` |'));
+  L.push('');
+  L.push('Below, `signoff` stands for the command in that table.');
+  L.push('');
+  L.push('| Command | Does |');
+  L.push('| --- | --- |');
+  L.push('| `signoff whoami` | The GitHub login, the name edits are stamped with, and whether the token opens the data repo |');
+  L.push('| `signoff list [--project P] [--all]` | Every review the token reaches: id, name, project, stage, progress, and Scribe gaps |');
+  L.push('| `signoff pull <review> [dir]` | A checkout of one review' + (checkouts ? ' (by default in `' + checkouts + '/<tool>/<review>`)' : '') + '. `<review>` is an id, a slug, or a name |');
+  L.push('| `signoff status [dir]` | Offline: what the edits would change, and every gap. Rewrites `status.md` |');
+  L.push('| `signoff push [dir] --dry-run` | Exactly what a push would change, and a confirm code |');
+  L.push('| `signoff push [dir] --confirm <code>` | Commits that change. Only after the user approves the dry run |');
+  L.push('| `signoff open [dir or review] [--req REQ-004]` | A link to the review, or one requirement, in the browser |');
+  L.push('| `signoff export [dir or review] [--out file.md]` | The description as Markdown, with the checkout\'s edits |');
+  L.push('');
+  L.push('Every command takes `--json`. `[dir]` defaults to the current folder. The tab and the text output say *unlinked*; `--json` and the stored data say `untraced` for the same thing.');
+  L.push('');
+  L.push('## The loop');
+  L.push('');
+  L.push('1. `signoff list`, then `signoff pull <review>`. Note the checkout folder it prints.');
+  L.push('2. Read `status.md`, `scribe.md`, and `reqs.csv` there.');
+  L.push('3. Edit only `scribe.md` and `reqs.csv`. Never edit `review.json` or `.signoff.json`.');
+  L.push('4. Run `signoff status` after each round of edits. It counts what the Scribe tab shows (sections, linked, standard, `@req`, review notes, and unlinked sentences) and lists every gap. Before going on, fix every broken link, mark that doesn\'t parse, and link name with no section. If it prints a line starting `Warning:` (two requirements with one ID cause one), stop and tell the user: that review can\'t be pushed from a checkout.');
+  L.push('5. Run `signoff push --dry-run` and show the user its whole output. Its Summary line is the summary stored on GitHub, then the one the push writes. After a tool update the counts can differ in places nobody edited, because they\'re recomputed; that\'s expected, but say so.');
+  L.push('6. Only after the user approves that dry run, run the confirm command it printed (`push … --confirm <code>`). An edit after the dry run makes the code stale: dry-run again and show the user again.');
+  L.push('7. Give the user the `signoff open` link, so they can look at it in the browser.');
+  L.push('8. When the work is pushed, or dropped, delete the checkout folder: it holds a client\'s design. Ask first if it has edits that weren\'t pushed.');
+  L.push('');
+  L.push('If a push refuses, report what it said. Never work around it.');
+  L.push('');
+  L.push('## scribe.md: the description');
+  L.push('');
+  L.push('It\'s the same text as the browser\'s Edit all: one document, cut into sections at its headings. Put each heading on its own line, with a blank line before it. Within a section:');
+  L.push('');
+  L.push('| Write | Means |');
+  L.push('| --- | --- |');
+  L.push('| `# Title`, `## Title`, `### Title`, `#### Title` | A section, levels 1 to 4. Sections keep their identity by title, so rename a heading only on purpose |');
+  L.push('| `[words]{REQ-004}` | Links those words, and so their sentence, to a requirement by its ID. Several: `{REQ-004, REQ-007}`. A run: `{REQ-044..REQ-063}`, written out as each ID when saved |');
+  L.push('| `[words]{std}` | Standard text: background that needs no requirement |');
+  L.push('| `[words]{#Section title}` | Points at another section |');
+  L.push('| `@req` in a sentence | Flags it to become a requirement (the user\'s inbox, Write as requirements) |');
+  L.push('| `Check: …` starting a sentence or list item | A review note: a question or doubt for the review. Not a gap; the user resolves it |');
+  L.push('| `> words` under a heading | The section\'s gist (else its first sentence) |');
+  L.push('| `- item`; lines starting with a vertical bar; three backticks | A list (each item counts like a sentence); a table (a row with a mark counts like a sentence); code |');
+  L.push('');
+  tools.filter((t) => t.cfg.spec).forEach((t) => {
+    const sp = t.cfg.spec, kinds = Array.isArray(sp.kinds) ? sp.kinds : ['product', 'task', 'module', 'driver', 'hardware', 'interface'];
+    const links = Array.isArray(sp.links) && sp.links.length ? sp.links : ['Uses'];
+    const or = (list) => list.length < 3 ? list.join(' or ') : list.slice(0, -1).join(', ') + ', or ' + list[list.length - 1];
+    L.push('In ' + t.cfg.product + ':');
+    L.push('');
+    if (kinds.length) L.push('- A heading can end with its kind, as in `## Name * ' + (kinds[1] || kinds[0]) + '`: ' + or(kinds.map((k) => '`' + k + '`')) + '. The kind places the section in the diagram.');
+    else L.push('- Headings have no kinds. The diagram is drawn from the outline.');
+    L.push('- ' + or(links.map((w) => '`' + w + ':`')) + ' starts a line naming other sections by their titles, as in `' + links[0] + ': Name A, Name B`. A name can carry a label: `Name (label)`.');
+    if (sp.parts) L.push('- `Parts: U7, L1, C1–C3` names the reference designators a section covers.');
+    L.push('');
+  });
+  L.push('Every sentence and list item is linked, standard, flagged (`@req`), a review note (`Check:`), or unlinked, and `status` lists the unlinked ones. The aim: every statement of what the design does is linked to a requirement, background is standard, and every doubt is a `Check:` note.');
+  L.push('');
+  L.push('## reqs.csv: the requirements');
+  L.push('');
+  L.push('CSV with this header, one row per requirement. Quote a cell that holds a comma, a quote (doubled: `""`), or a line break.');
+  L.push('');
+  L.push('```');
+  L.push(REQ_HEAD.join(','));
+  L.push('```');
+  L.push('');
+  L.push('- **ID** is unique: `REQ-001`, `REQ-002`, and on. Give a new requirement the next free ID yourself, so `scribe.md` can link it before it\'s pushed. Never reuse or renumber an ID.');
+  L.push('- **Requirement** is one testable statement: "The firmware shall …".');
+  L.push('- **Type** is `shall` or `should`. **Verification method** is `inspection`, `analysis`, `demonstration`, or `test`.');
+  L.push('- **Status** is `draft`, `approved`, `changed`, or `deprecated`. New ones are `draft`; the user approves them. Changing the words of an approved one makes it `changed`.');
+  L.push('- **Discipline** is `sys`, `ee`, `me`, `fw`, or `other` (blank means the tool\'s own). **Category** groups them. **Source** says where it came from: a file and line, a document, or a meeting.');
+  L.push('- A row left out is kept, never deleted. Retire a requirement with Status `deprecated`. Deleting one, and its Verified state and evidence, are done in the browser.');
+  L.push('');
+  L.push('## Rules');
+  L.push('');
+  L.push('- **Review data is private.** A checkout holds a client\'s design. Never copy it, or text from it, into a public repo, a commit message, an issue, or anything sent outside this machine, and never create a checkout inside a Signoff tool folder (`pull` refuses).');
+  L.push('- **Never handle the token.** Don’t read, print, or pass the GitHub token; the command line finds it, and `whoami` says where.');
+  L.push('- **Nothing is pushed without the user.** Never run `push --confirm` unless the user approved that dry run in this conversation. Never pass `--force` to `pull` without asking: it discards the checkout\'s edits.');
+  L.push('- **One writer per review.** If someone may be editing the same review in the browser, say so before pushing. The dry run says whether the review changed on GitHub since the pull, and push merges such changes, but it refuses to overwrite a requirement edited there.');
+  L.push('- **Say what is uncertain.** When describing existing code or a design, write what it does, not what it should do. Put doubts and contradictions in `Check:` notes, with file and line, rather than guessing.');
+  L.push('');
+  L.push('## If something goes wrong');
+  L.push('');
+  L.push('- "No GitHub token": run `signoff whoami`, and ask the user to set `SIGNOFF_TOKEN`, sign in with `gh auth login`, or set `tokenFile` in `~/.signoff/config.json`.');
+  L.push('- "Not a checkout": pass the checkout folder, or `cd` into it.');
+  L.push('- "review.json isn\'t the file that was pulled": it was edited. Ask the user before pulling again with `--force`.');
+  L.push('- A dry run that would change sections nobody edited: stop and tell the user.');
+  return L.join('\n') + '\n';
+}
+
+async function cmdSkill(ctx) {
+  const text = skillText(ctx);
+  if (!ctx.opts.install) { ctx.io.out(text); return; }
+  const file = path.join(path.resolve(ctx.io.cwd, ctx.opts.install), '.claude', 'skills', 'signoff', 'SKILL.md');
+  if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') !== text && !ctx.opts.force) {
+    throw new CliError(file + ' is already there and differs. Pass --force to replace it.', 2);
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+  out(ctx, ctx.opts.json ? { file } : 'Wrote ' + file + '. Claude Code sessions started in ' + path.resolve(ctx.io.cwd, ctx.opts.install) + ' (or under it) can now use it.');
+}
+
 // ── Main ───────────────────────────────────────────────────
 function out(ctx, v) { ctx.io.out((typeof v === 'string' ? v : JSON.stringify(v, null, 2)) + '\n'); }
 
-const VALUE_OPTS = ['project', 'req', 'item', 'out', 'config', 'token-file', 'assets', 'confirm'];
+const VALUE_OPTS = ['project', 'req', 'item', 'out', 'config', 'token-file', 'assets', 'confirm', 'install'];
 function parseArgs(argv) {
   const args = [], opts = {};
   for (let i = 0; i < argv.length; i++) {
@@ -869,7 +1026,7 @@ function parseArgs(argv) {
   return { cmd: args.shift(), args, opts };
 }
 
-const COMMANDS = { whoami: cmdWhoami, list: cmdList, pull: cmdPull, status: cmdStatus, push: cmdPush, open: cmdOpen, export: cmdExport };
+const COMMANDS = { whoami: cmdWhoami, list: cmdList, pull: cmdPull, status: cmdStatus, push: cmdPush, open: cmdOpen, export: cmdExport, skill: cmdSkill };
 
 // io: { env, cwd, home, out(text), err(text), fetch, gh: false to skip `gh auth token` } (tests pass their own).
 async function run(argv, io) {
@@ -889,6 +1046,6 @@ async function run(argv, io) {
   }
 }
 
-module.exports = { run, loadEngine, buildLocal, analyze, pristine, keepOrders, checkoutAllowed, parseArgs, gitBlobSha, TOOL_ROOT };
+module.exports = { run, loadEngine, buildLocal, analyze, pristine, keepOrders, checkoutAllowed, parseArgs, gitBlobSha, skillText, TOOL_ROOT };
 
 if (require.main === module) run(process.argv.slice(2)).then((code) => { process.exitCode = code; });
