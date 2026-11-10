@@ -11,7 +11,8 @@ or commit messages naming clients.
 
 - **Never edit the engine files here.** These are `assets/model.js`, `github.js`,
   `workspace.js`, `app.js`, `demo.js`, `styles.css` and `tools/build.py`, `package.py`,
-  `validate_templates.py`. Fix them in EE, then run `python tools/sync_engine.py` here.
+  `validate_templates.py`, `signoff.js` (the command line, `../ee_design_review/docs/cli.md`),
+  `signoff_test.js`. Fix them in EE, then run `python tools/sync_engine.py` here.
   `build.py` fails while the copies differ.
 - **What belongs to ME:**
   - `assets/config.js`: names, repos, the `review-me-` prefix, 21 profile tags, stages, demo data
