@@ -710,6 +710,12 @@
 
   function overviewPage(p) {
     var st = M.projectStats(p, TEMPLATES);
+    // A review with no checks (only Requirements, or Requirements and Scribe) shows its requirements on
+    // the ring and in the counts: how many are verified (Chris, 2026-11-09; it read "100% reviewed, 0 to
+    // review"). Its pct, the sidebar's ring, and the summary stay 100%: nothing to review.
+    var rq = !st.total && reqsOn(p) ? M.reqStats(p, checkIdx(p)) : null;
+    if (rq && !rq.total) rq = null;
+    var rqPct = rq ? Math.round(100 * (rq.pass || 0) / rq.total) : 0;
     var tpls = projectTemplates(p);
     var people = {};
     M.liveComments(p).forEach(function (c) { people[c.author] = 1; });
@@ -726,10 +732,11 @@
       (isFte() ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="edit-project">Edit profile</button>' : '') + '</div>' +
       (!DEMO && isFte() ? '<p class="note" style="margin-top:10px">' + (M.sharedRepo(roster, p.id) ? 'Shared through ' + esc(M.sharedRepo(roster, p.id)) + (assignedContractors(p.id).length ? ' with ' + assignedContractors(p.id).map(function (u) { return esc(u.name || u.login); }).join(', ') : '') : 'Internal \u2014 FTEs only') + '</p>' : '') + '</div>' +
       '<div class="head-visual"><div class="head-pic" data-pic="' + esc(p.id) + '">' + picHtml(p) + '</div>' +
-      '<div class="head-ring">' + ring(st.pct, 132, 11, st.pct + '%', 'reviewed') + revisionLine(p) + '</div></div></div>' +
+      '<div class="head-ring">' + (rq ? ring(rqPct, 132, 11, rqPct + '%', 'requirements verified') : ring(st.pct, 132, 11, st.pct + '%', 'reviewed')) + revisionLine(p) + '</div></div></div>' +
       '<div class="grid grid-4">' +
+      (rq ? stat(rq.pass || 0, 'Verified', 'pass', 'reqs') + stat(rq.fail || 0, 'Failing', 'issue', 'reqs') + stat(rq.open || 0, 'Not verified', '', 'reqs') + stat(rq.total, plural(rq.total, 'Requirement').replace(/^\d+ /, ''), '', 'reqs') :
       stat(st.pass, 'Passed', 'pass') + stat(st.issue, plural(st.issue, 'Issue').replace(/^\d+ /, '') + (st.issuesOpen ? ' · ' + st.issuesOpen + ' open' : ''), 'issue', 'findings') +
-      stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '') + '</div>' +
+      stat(st.open, 'To review', '') + stat(st.na, 'Not applicable', '')) + '</div>' +
       (st.outside ? '<p class="note" style="margin-top:10px">' + plural(st.outside, 'check') + ' outside this ' + W.thing + '’s profile ' + (st.outside === 1 ? 'is' : 'are') + ' set aside and not counted.</p>' : '') +
       '<div class="section-title">Checklists</div><div class="grid grid-3">' + (reqsOn(p) ? reqsCard(p) : '') +
       tpls.map(function (t) {
@@ -907,7 +914,7 @@
   function referenceHtml(p, refs, counts) {
     if (!refs.length) return '';
     return '<div class="section-title">Waived in Fabcheck</div><p class="note" style="margin:-6px 0 10px">Kept for reference: these aren’t issues and aren’t counted anywhere.</p>' +
-      '<div class="card table-scroll" style="overflow:hidden"><table class="table ref-table"><tbody>' +
+      '<div class="card table-scroll"><table class="table ref-table"><tbody>' +
       refs.map(function (x) {
         var r = x.row;
         return '<tr data-act="goto-item" data-id="' + esc(r.id) + '"><td style="width:1%"><span class="ref-dot" aria-hidden="true">i</span></td>' +
@@ -926,7 +933,7 @@
       '<div class="page-sub"><span>' + plural(f.length, 'issue') + '</span><span class="sep">·</span><span>' + open + ' open</span></div></div>' +
       '<button class="btn" data-act="export-csv">Export CSV</button></div>';
     if (!f.length) return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No issues raised</h2><p>Mark a check as an Issue to add it here, with its severity, owner, and resolution.</p></div>' + referenceHtml(p, refs, counts) + '</div>';
-    html += '<div class="card table-scroll" style="overflow:hidden"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
+    html += '<div class="card table-scroll"><table class="table"><thead><tr><th>Severity</th><th>Check</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>' +
       f.map(function (x) {
         var r = x.row, res = r.resolution;
         var last = M.liveComments(p, r.id).slice(-1)[0];
@@ -1584,7 +1591,7 @@
       return '<button class="' + ((ui.reqFilter || 'all') === f[0] ? 'on' : '') + '" data-act="req-filter" data-filter="' + f[0] + '">' + f[1] + ' <span class="count">' + f[2] + '</span></button>';
     }).join('') + '</div><div class="search">' + ICON.search + '<input id="req-search" type="search" placeholder="Filter requirements" value="' + esc(ui.reqQuery || '') + '" autocomplete="off"></div></div>';
     if (!list.length) return html + '<div class="empty"><h2>Nothing here</h2><p>No requirements match this filter.</p></div></div>';
-    html += '<div class="card table-scroll" style="overflow:hidden"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
+    html += '<div class="card table-scroll"><table class="table reqs"><thead><tr><th>ID</th><th>Requirement</th><th>Verify by</th><th>Status</th><th>Verified</th><th>Trace</th></tr></thead><tbody>' +
       list.map(function (q) {
         var n = M.liveComments(p, q.id).length;
         var cls = [selected === q.id ? 'sel' : '', q.status === 'deprecated' ? 'deprecated' : ''].filter(Boolean).join(' ');
@@ -1732,8 +1739,8 @@
   var SPEC_LABEL = (SPEC && SPEC.label) || 'Scribe';
   // Kinds and link words are the tool's (config.spec.kinds, .links; model.specKinds): FW's layers and
   // Uses by default, EE's subcircuit kinds with Connects and Supplies.
-  function kindLabel(k) { var i = M.specKindInfo(k); return k ? i.label || k.charAt(0).toUpperCase() + k.slice(1) : 'None'; }
-  function kindPlural(k) { var i = M.specKindInfo(k); return i.plural || kindLabel(k) + 's'; }
+  function kindLabel(k) { return k ? M.specKindLabel(k) : 'None'; }
+  function kindPlural(k) { return M.specKindPlural(k); }
   // The diagram's layers (layers layout), top to bottom; interfaces draw as lines, not a layer.
   function specRows() { return M.specKinds().filter(function (k) { return k !== 'interface'; }).map(function (k) { return [k, kindPlural(k)]; }); }
   var SPEC_FLOW = !!(SPEC && SPEC.layout === 'flow');
@@ -1741,7 +1748,8 @@
   function linkFrom(word) { return { uses: 'Used by', connects: 'Connected from', supplies: 'Supplied by' }[String(word).toLowerCase()] || word + ' from'; }
   function linkVerb(word) { return { uses: 'uses', connects: 'connects to', supplies: 'supplies' }[String(word).toLowerCase()] || String(word).toLowerCase(); }
   function linkItemText(it) { return it.name + (it.label ? ' · ' + it.label : ''); }
-  var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Untraced' };
+  // Untraced is "Unlinked" on screen (Chris, 2026-11-09), beside Linked; data keys stay 'untraced'.
+  var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Unlinked', note: 'Review note' };
   var specEditing = null, specDraft = '', specPhrase = '';
   function specOn(p) { return !!SPEC && !!p && M.specEnabled(p); }
   function specSelKey(sec, start) { return 'spec|' + sec + '|' + start; }
@@ -1763,7 +1771,9 @@
   function specUnitEdit(p, sec, start, op, arg) {
     var a = M.specAnalysis(p), f = specFind(a, sec, start);
     if (!f) return false;
-    specPut(p, sec, { body: M.specEdit(f.x.sec.body, f.u.start, f.u.end, op, arg) });
+    var body = M.specEdit(f.x.sec.body, f.u.start, f.u.end, op, arg);
+    if (body === f.x.sec.body) { if (f.u.broken) toast('A mark in this sentence didn’t parse. Fix it with Edit section first.'); return false; }
+    specPut(p, sec, { body: body });
     return true;
   }
   function reqLabel(q) { return (q.ref || '?') + (q.text ? ': ' + q.text : ''); }
@@ -1771,15 +1781,43 @@
   function specUnitHtml(p, a, x, u) {
     var sel = specSel(), on = sel && sel.sec === x.sec.id && sel.start === u.start;
     var tip = u.reqs.map(function (id) { return reqLabel(a.ctx.reqs[id]); }).concat(u.missing.map(function (t) { return t + ': not found'; })).join('\n');
-    var inner = u.tokens.map(function (t) {
+    var inner = u.tokens.map(function (t, i) {
       if (t.t === 'tag') return '<span class="sl-tag" title="Flagged to become a requirement">@req</span>';
+      if (t.t === 'text' && i === 0 && u.note) {
+        var nm = /^(\s*)(check:)\s*/i.exec(t.text);
+        if (nm) return esc(nm[1]) + '<span class="sl-note" title="A review note: resolve it in its panel">Check</span> ' + esc(t.text.slice(nm[0].length));
+      }
       if (t.t === 'text') return esc(t.text);
-      var cls = 'sl' + (t.reqs.length ? ' sl-req' : '') + (t.secs.length ? ' sl-sec' : '') + (t.std ? ' sl-std' : '') + (t.missing.length ? ' sl-missing' : '');
-      return '<span class="' + cls + '">' + esc(t.text) + '</span>';
+      return specSpanHtml(t);
     }).join('');
-    return '<span class="su su-' + u.state + (on ? ' sel' : '') + '" data-act="spec-unit" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"' +
+    if (u.row) inner = specRowCells(u).join(' <span class="muted">·</span> ');
+    if (u.broken) { inner += '<span class="sl-broken" title="' + esc(BROKEN_TIP) + '">mark?</span>'; tip = (tip ? tip + '\n' : '') + BROKEN_TIP; }
+    return '<span class="su su-' + u.state + (u.broken ? ' su-broken' : '') + (on ? ' sel' : '') + '" data-act="spec-unit" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"' +
       (tip ? ' title="' + esc(tip) + '"' : ' title="' + STATE_LABEL[u.state] + '"') + '>' + inner + '</span>';
   }
+  // A mark's words, drawn as in a sentence.
+  function specSpanHtml(t) {
+    return '<span class="sl' + (t.reqs.length ? ' sl-req' : '') + (t.secs.length ? ' sl-sec' : '') + (t.std ? ' sl-std' : '') + (t.missing.length ? ' sl-missing' : '') + '">' + esc(t.text) + '</span>';
+  }
+  // A table row unit's cells, with its marks drawn: its text split at bars that aren't escaped, without
+  // the empty cells outside the first and last bar.
+  function specRowCells(u) {
+    var cells = [''];
+    u.tokens.forEach(function (t) {
+      if (t.t === 'span') { cells[cells.length - 1] += specSpanHtml(t); return; }
+      if (t.t === 'tag') { cells[cells.length - 1] += '<span class="sl-tag">@req</span>'; return; }
+      for (var i = 0; i < t.text.length; i++) {
+        if (t.text[i] === '\\' && t.text[i + 1] === '|') { cells[cells.length - 1] += '|'; i++; }
+        else if (t.text[i] === '|') cells.push('');
+        else cells[cells.length - 1] += esc(t.text[i]);
+      }
+    });
+    cells = cells.map(function (c) { return c.trim(); });
+    if (cells.length > 1 && cells[0] === '') cells.shift();
+    if (cells.length > 1 && cells[cells.length - 1] === '') cells.pop();
+    return cells;
+  }
+  var BROKEN_TIP = 'A mark in this sentence didn’t parse, so its words show as typed. A mark is [words]{…} on one line; brackets inside the words go in pairs, or in `code`.';
   function specBlocksHtml(p, a, x) {
     var html = '', list = false;
     x.blocks.forEach(function (b) {
@@ -1790,14 +1828,19 @@
       else if (b.type === 'code') html += '<pre class="spec-code">' + esc(b.text) + '</pre>';
       else if (b.type === 'uses') {
         html += '<div class="spec-uses"><span>' + esc(b.word || 'Uses') + '</span>' + b.items.map(function (it) {
-          var id = a.ctx.titles[it.name.toLowerCase()];
+          var id = M.specUseId(a.ctx, it);
           return id ? '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(linkItemText(it)) + '</button>' : '<span class="chip spec-chip-missing" title="No section has this title">' + esc(linkItemText(it)) + '</span>';
         }).join('') + '</div>';
       } else if (b.type === 'parts') {
         html += '<div class="spec-uses spec-parts"><span>Parts</span>' + b.items.map(function (n) { return '<span class="chip spec-part">' + esc(n) + '</span>'; }).join('') + '</div>';
       } else if (b.type === 'table' && b.rows.length) {
-        html += '<div class="table-scroll spec-table-wrap"><table class="table spec-table"><thead><tr>' + b.rows[0].map(function (c) { return '<th>' + esc(M.specPlain(c)) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-          b.rows.slice(1).map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(M.specPlain(c)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+        var units = b.rowUnits || [], cells = function (r, i) { return units[i] ? specRowCells(units[i]) : r.map(function (c) { return esc(M.specPlain(c)); }); };
+        html += '<div class="table-scroll spec-table-wrap"><table class="table spec-table"><thead><tr>' + cells(b.rows[0], 0).map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          b.rows.slice(1).map(function (r, i) {
+            var u = units[i + 1], sel = u && specSel(), on = u && sel && sel.sec === x.sec.id && sel.start === u.start;
+            return (u ? '<tr class="su su-' + u.state + (u.broken ? ' su-broken' : '') + (on ? ' sel' : '') + '" data-act="spec-unit" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '" title="' + esc(STATE_LABEL[u.state] + (u.reqs.length ? ': ' + u.reqs.map(function (id) { return a.ctx.reqs[id].ref; }).join(', ') : '')) + '">' : '<tr>') +
+              cells(r, i + 1).map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>';
+          }).join('') + '</tbody></table></div>';
       }
     });
     if (list) html += '</ul>';
@@ -1812,11 +1855,20 @@
     if (!gaps.length) return '';
     return '<div class="field"><span class="field-label">Gaps</span>' + gaps.map(function (u) {
       return '<div class="req-link"><button class="req-link-main" data-act="spec-open" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"><span><span class="req-link-text">' + esc(u.text) + '</span><span class="muted">' +
-        (u.state === 'tag' ? 'Flagged to become a requirement' : 'Untraced: link a requirement, make one, or mark it standard') + '</span></span></button></div>';
+        (u.broken ? 'A mark in it didn’t parse: fix it in Edit its text' : u.state === 'tag' ? 'Flagged to become a requirement' : 'Unlinked: link a requirement, make one, or mark it standard') + '</span></span></button></div>';
     }).join('') + '</div>';
   }
   function specGapTitle(x) {
-    return [x.counts.untraced ? plural(x.counts.untraced, 'untraced sentence') : '', x.counts.tag ? x.counts.tag + ' flagged for a requirement' : ''].filter(Boolean).join(', ');
+    return [x.counts.untraced ? plural(x.counts.untraced, 'unlinked sentence') : '', x.counts.tag ? x.counts.tag + ' flagged for a requirement' : ''].filter(Boolean).join(', ');
+  }
+  // A section's review notes ("Check: …"): a count in the margin, drawn apart from the gap count (an
+  // outline, not the warning hatch), and a list in a block's panel.
+  function noteMark(x) { var n = x.notes.length; return n ? '<span class="spec-note-mark" title="' + esc(plural(n, 'review note')) + '">' + n + '</span>' : ''; }
+  function specNoteList(x) {
+    if (!x.notes.length) return '';
+    return '<div class="field"><span class="field-label">Review notes</span>' + x.notes.map(function (u) {
+      return '<div class="req-link"><button class="req-link-main" data-act="spec-open" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"><span><span class="req-link-text">' + esc(u.text) + '</span><span class="muted">Answer it in the text, then resolve it in its panel</span></span></button></div>';
+    }).join('') + '</div>';
   }
   // The bar over the editor: the kinds left to right, as the diagram's layers run top to bottom. The
   // one lit is the kind of the heading the cursor is under; a click sets it. Add to Uses… adds a
@@ -1888,18 +1940,43 @@
       var hh = specCursorHeading(t2), end = hh.lines.length;
       for (var i = hh.at + 1; i < hh.lines.length; i++) if (M.specHeading(hh.lines[i])) { end = i; break; }
       var body = hh.lines.slice(hh.at + 1, end).join('\n'), items = M.specUsesItems(body, word);
-      if (items.some(function (n) { return n.name.toLowerCase() === title.toLowerCase(); })) { toast(title + ' is already in ' + word); return; }
+      if (items.some(function (n) { return M.specUseIs(n, title); })) { toast(title + ' is already in ' + word); return; }
       var nb = M.specSetLine(body, word, M.specLinkText(items.concat([{ name: title, label: '' }]))).split('\n');
       var tail = hh.lines.slice(end), lines = hh.lines.slice(0, hh.at + 1).concat(nb, end < hh.lines.length ? [''] : [], tail);
       specEditorReplace(t2, lines, lines.slice(0, hh.at + 1 + nb.length).join('\n').length);
       toast('Added ' + title + ' to ' + word);
     });
   }
+  // Under the editor, while writing: marks that don't parse (their words would show as typed) and
+  // sections too long to save. Each line number puts the cursor there.
+  function specDraftWarnHtml() {
+    var broken = M.specBrokenMarks(specDraft), long = M.specSplit(specDraft).filter(function (c) { return c.body.length > M.SPEC_BODY_MAX; });
+    if (!broken.length && !long.length) return '';
+    return '<div class="spec-warn">' + long.map(function (c) {
+      return '<p><b>' + esc((c.heading && c.heading.title) || 'The text') + '</b> is ' + c.body.length.toLocaleString('en-US') + ' characters, and a section holds ' + M.SPEC_BODY_MAX.toLocaleString('en-US') + '. Split it with a heading to save.</p>';
+    }).join('') + (broken.length ? '<p><b>' + (broken.length === 1 ? 'A mark doesn’t parse' : plural(broken.length, 'mark') + ' don’t parse') + '</b>, so ' + (broken.length === 1 ? 'its' : 'their') + ' words will show as typed. A mark is <code>[words]{…}</code> on one line; brackets inside the words go in pairs, or in <code>`code`</code>.</p><ul>' + broken.slice(0, 8).map(function (b) {
+      return '<li><button type="button" class="btn btn-sm" data-act="spec-editor-line" data-line="' + b.line + '">Line ' + b.line + '</button>' + (b.heading ? ' <span class="muted">' + esc(b.heading) + '</span>' : '') + ' <code>' + esc(cutText(b.text, 90)) + '</code></li>';
+    }).join('') + (broken.length > 8 ? '<li class="muted">and ' + (broken.length - 8) + ' more</li>' : '') + '</ul>' : '') + '</div>';
+  }
+  // Put the editor's cursor at the start of a line and bring it into view (the Edit all text grows
+  // with its content, so the page scrolls, not the box).
+  function specEditorLine(n) {
+    var ta = $('#spec-editor'); if (!ta) return;
+    var lines = ta.value.split('\n'), at = lines.slice(0, Math.max(0, n - 1)).join('\n').length + (n > 1 ? 1 : 0);
+    ta.focus(); ta.setSelectionRange(at, at + (lines[n - 1] || '').length);
+    var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20, y = (n - 1) * lh;
+    if (ta.scrollHeight > ta.clientHeight + 4) ta.scrollTop = Math.max(0, y - ta.clientHeight / 3);
+    else {
+      var dy = ta.getBoundingClientRect().top + y - window.innerHeight / 3, m = $('#main');
+      if (m && m.scrollHeight > m.clientHeight + 4) m.scrollBy({ top: dy, behavior: 'smooth' }); else window.scrollBy({ top: dy, behavior: 'smooth' });
+    }
+  }
   function specEditorHtml(id, all) {
     var lines = specDraft.split('\n').length;
     return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() +
       '<textarea class="input" id="spec-editor" data-sec="' + esc(id || '') + '" rows="' + (all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) + '" spellcheck="true">' + esc(specDraft) + '</textarea>' +
-      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section</div>' +
+      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section · review note: <code>Check: …</code></div>' +
+      '<div id="spec-editor-warn" aria-live="polite">' + specDraftWarnHtml() + '</div>' +
       '<div class="spec-editor-foot"><button class="btn" data-act="spec-guide" title="How to write headings, links, lists, and tables">Writing guide</button>' +
       (id ? '<button class="btn btn-danger" data-act="spec-delete" data-id="' + esc(id) + '">Delete section</button>' : '') +
       '<span class="spacer"></span><button class="btn" data-act="spec-cancel">Cancel</button><button class="btn btn-primary" data-act="spec-save">Save <span class="kbd">Ctrl+Enter</span></button></div></div>';
@@ -1956,8 +2033,15 @@
       : '## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays';
     var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>' + esc(SPEC_LABEL) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
       '<div class="sheet-body spec-guide">' + structure +
-      '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, or untraced. Untraced sentences get a dotted underline until you do one of these.</p>' + rows(tie) +
+      '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, a review note, or unlinked. Unlinked sentences get a dotted underline until you do one of these.</p>' + rows(tie) +
       '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you. Select a few words first to link just those.</p>' +
+      '<h3>Marks and sentences</h3>' + rows([
+        [board ? '[It reads ADC[0] first.]{std}' : '[It reads buf[0] first.]{std}', 'Brackets inside a mark’s words are fine in pairs. Anything else goes in backticks: <code>`buf[0`</code>. A mark stays on one line.'],
+        ['[It reads x.]{std', 'A mark that doesn’t parse shows its words as typed, with <b>mark?</b> after the sentence; the editor lists it under the text while you write.'],
+        [board ? 'Check: is the ripple measured at 1.5 A?' : 'Check: is the off time 100 ms or 200 ms?', 'A review note: a doubt or question for the review. It’s counted on its own, not as unlinked, and isn’t a gap in the diagram; <b>Notes</b> above the text shows only the sections with notes. <b>Resolve</b> in its panel takes it out once it’s answered. A line that starts <b>Check:</b> starts its own paragraph, and a list item works too.'],
+        [board ? '[The rail stays within ±3%]{REQ-006}. Check: at 1.5 A?' : '[Relays go off on reset]{REQ-003}. Check: is it 100 ms?', 'A note is its own sentence. Words in the same sentence as a link count as linked, so end the sentence before the note with a full stop. A link inside a note doesn’t describe its requirement.']
+      ]) +
+      '<p class="note">A sentence ends at a full stop and a space, even when the next word starts in lowercase (<code>kff is added after.</code>), and at a question or exclamation mark before a capital. It doesn’t end after e.g., i.e., vs., or cf., inside a number (0.5), or after No., Fig., rev., or ref. before a number, letter, or ref (<code>rev. B</code>, <code>ref. REQ-004</code>). Units end it: <code>above 22 V. The pump stops.</code></p>' +
       '<h3>Paragraphs, lists, and tables</h3>' + rows([
         ['First paragraph.\n\nSecond paragraph.', 'A blank line starts a new paragraph. Lines without a blank between them run together.'],
         [board ? '- Line voltage\n- Neutral' : '- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing.'],
@@ -1973,10 +2057,15 @@
 
   function specPage(p) {
     var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth || 3, view = ui.specView === 'map' ? 'map' : 'doc';
+    // Gaps or Notes shows only the sections that have them, in full, with the other sentences dimmed.
+    var show = ui.specShow === 'gaps' || ui.specShow === 'notes' ? ui.specShow : '';
+    if (show) depth = 3;
+    var shown = function (x) { return !show || (show === 'gaps' ? x.gaps : x.notes.length); };
     var html = '<div class="page spec-page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">' + esc(SPEC_LABEL) + '</h1>' +
       '<div class="page-sub"><span>' + plural(t.sections, 'section') + '</span>' +
       (t.units ? '<span class="sep">·</span><span>' + t.linked + ' linked</span><span class="sep">·</span><span>' + t.std + ' standard</span>' : '') +
-      (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' untraced</span>' : '') +
+      (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' unlinked</span>' : '') +
+      (t.note ? '<span class="sep">·</span><span>' + plural(t.note, 'review note') + '</span>' : '') +
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
       (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
       '<div class="spec-tools">' + (specEditing === 'all' ? '' : (specGuideId() && window.SignoffSpecGuide ? '<button class="btn" data-act="spec-guide-start" title="A walk through ' + esc(SPEC_LABEL) + ', on the demo">Guide</button>' : '') +
@@ -1995,24 +2084,29 @@
     }
     html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button></div>' +
       (view === 'doc' ? '<div class="seg" title="How much to show">' + [[1, 'Headings'], [2, 'Gists'], [3, 'Full text']].map(function (d) {
-        return '<button class="' + (depth === d[0] ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
+        return '<button class="' + (depth === d[0] && !show ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
+      }).join('') + '</div>' : '') +
+      (view === 'doc' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
+        return '<button class="' + (show === f[0] ? 'on' : '') + '" data-act="spec-show" data-show="' + f[0] + '">' + f[1] + (f[0] ? ' <span class="count">' + f[2] + '</span>' : '') + '</button>';
       }).join('') + '</div>' : '') + '</div>';
     html += specNeedsHtml(p, a);
     if (view === 'map') return html + specMapHtml(p, a) + '</div>';
-    var outline = '<nav class="spec-outline" aria-label="Outline">' + a.sections.map(function (x) {
-      return '<button class="lv-' + x.sec.level + '" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(x.sec.title || 'Untitled') + '</span>' + gapMark(x.gaps, specGapTitle(x)) + '</button>';
+    var outline = '<nav class="spec-outline" aria-label="Outline">' + a.sections.filter(shown).map(function (x) {
+      return '<button class="lv-' + x.sec.level + '" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(x.sec.title || 'Untitled') + '</span>' + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) + '</button>';
     }).join('') + '</nav>';
     var doc = a.sections.map(function (x, i) {
+      if (!shown(x) && specEditing !== x.sec.id) return '';
       var s = x.sec, next = a.sections[i + 1], group = next && next.sec.level > s.level;
       if (specEditing === s.id) return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '">' + specEditorHtml(s.id) + '</section>';
       var hn = 'h' + Math.min(5, s.level + 1);
       return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '"><div class="spec-h"><' + hn + '>' + esc(s.title || 'Untitled') + '</' + hn + '>' +
-        (s.kind ? '<span class="chip spec-kind">' + esc(s.kind) + '</span>' : '') + gapMark(x.gaps, specGapTitle(x)) +
+        (s.kind ? '<span class="chip spec-kind">' + esc(s.kind) + '</span>' : '') + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) +
         '<button class="icon-btn spec-edit" data-act="spec-edit" data-id="' + esc(s.id) + '" title="Edit this section" aria-label="Edit ' + esc(s.title) + '">' + ICON.pencil + '</button></div>' +
         (depth === 2 && x.gist ? '<p class="spec-gist">' + esc(x.gist) + '</p>' : '') +
         (depth === 3 ? (x.blocks.length ? specBlocksHtml(p, a, x) : group ? '' : '<p class="note">Nothing written yet.</p>') : '') + '</section>';
     }).join('') + (specEditing === 'new' ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
-    return html + '<div class="spec-wrap depth-' + depth + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
+    if (show && !a.sections.some(shown)) doc = '<p class="note">' + (show === 'gaps' ? 'No gaps: every sentence is linked, standard, or a review note.' : 'No review notes.') + '</p>';
+    return html + '<div class="spec-wrap depth-' + depth + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
   }
 
   // The two lists that need someone: flagged sentences and requirements nothing describes.
@@ -2065,22 +2159,31 @@
   // Uses (or to the nearest section above it in the outline), interfaces as labeled dashed lines.
   function specMapHtml(p, a) {
     if (SPEC_FLOW) return specFlowHtml(p, a);
-    var byId = {}, rows = [], MW = 1000, LBL = 124, GAP = 16, BH = 54, RH = 112, TOP = 24;
+    // A crowded layer wraps onto more lines rather than shrink its blocks below MINW (names were cut to a
+    // few letters at 9–12 blocks in a row); LINE is the pitch of a layer's lines.
+    var byId = {}, rows = [], MW = 1000, LBL = 124, GAP = 16, BH = 54, RH = 112, TOP = 24, MINW = 150, LINE = BH + 22;
     a.sections.forEach(function (x) { byId[x.sec.id] = x; });
     var ifaces = a.sections.filter(function (x) { return x.sec.kind === 'interface'; });
-    var looseIf = ifaces.filter(function (x) { return x.uses.filter(function (id) { return byId[id] && byId[id].sec.kind && byId[id].sec.kind !== 'interface'; }).length < 2; });
+    // Every interface is a block in the Interfaces layer (Chris, 2026-11-09): one used by two blocks was
+    // a pill on the line between them, with its name cut short.
+    var looseIf = ifaces;
     // Every layer is drawn, empty ones too, so a design can be built here from nothing.
     specRows().concat(M.specKinds().indexOf('interface') >= 0 ? [['interface', 'Interfaces']] : []).forEach(function (r) {
       var xs = r[0] === 'interface' ? looseIf : a.sections.filter(function (x) { return x.sec.kind === r[0]; });
       rows.push({ kind: r[0], label: r[1], xs: xs });
     });
-    var pos = {}, selBlock = specBlockSel();
+    var pos = {}, selBlock = specBlockSel(), per = Math.max(1, Math.floor((MW - LBL - GAP) / (MINW + GAP))), y0 = TOP, gl = 0;
     rows.forEach(function (r, ri) {
-      if (!r.xs.length) return;
-      var n = r.xs.length, bw = Math.min(210, (MW - LBL - GAP * (n + 1)) / n), span = n * bw + (n - 1) * GAP, x0 = LBL + (MW - LBL - span) / 2;
-      r.xs.forEach(function (x, i) { pos[x.sec.id] = { x: x0 + i * (bw + GAP), y: TOP + ri * RH, w: bw, h: BH, row: ri }; });
+      var n = r.xs.length, lines = Math.max(1, Math.ceil(n / per)), cols = Math.ceil(n / lines) || 1;
+      var bw = Math.min(210, (MW - LBL - GAP * (cols + 1)) / cols);
+      r.y = y0; r.lines = lines; r.h = RH + (lines - 1) * LINE;
+      r.xs.forEach(function (x, i) {
+        var li = Math.floor(i / cols), ci = i % cols, inLine = Math.min(cols, n - li * cols), span = inLine * bw + (inLine - 1) * GAP, x0 = LBL + (MW - LBL - span) / 2;
+        pos[x.sec.id] = { x: x0 + ci * (bw + GAP), y: y0 + li * LINE, w: bw, h: BH, row: ri, gl: gl + li };
+      });
+      gl += lines; y0 += r.h;
     });
-    var H = TOP + rows.length * RH - (RH - BH) + 24;
+    var H = y0 - (RH - BH) + 24;
     function inMap(id) { return !!pos[id]; }
     // An ancestor in the outline that's on the map, for sections without Uses.
     function mapParent(x) { for (var id = x.parent; id; id = byId[id] && byId[id].parent) if (inMap(id)) return id; return ''; }
@@ -2096,35 +2199,51 @@
       if (par) edges.push({ a: par, b: x.sec.id, cls: 'tree' });
     });
     ifaces.forEach(function (x) {
-      if (inMap(x.sec.id)) { x.uses.filter(inMap).forEach(function (id) { edges.push({ a: id, b: x.sec.id, cls: 'iface', link: x.sec.id }); }); return; }
-      var ends = x.uses.filter(inMap);
-      edges.push({ a: ends[0], b: ends[1], cls: 'iface', label: x.sec.title, link: x.sec.id });
+      x.uses.filter(inMap).forEach(function (id) { edges.push({ a: id, b: x.sec.id, cls: 'iface', link: x.sec.id }); });
+    });
+    // E: lines from one block to three or more on one line below share a trunk down to a split point
+    // just above that line, then fan out to each (the fan-out is what a click removes); hovering or
+    // selecting a block brings its own lines forward and fades the rest (CSS, specHoverMap).
+    var fan = {};
+    edges.forEach(function (e) {
+      if (!e.a || !e.b || !pos[e.a] || !pos[e.b] || pos[e.a].gl === pos[e.b].gl) return;
+      e.up = pos[e.a].gl < pos[e.b].gl ? e.a : e.b; e.lo = e.up === e.a ? e.b : e.a;
+      e.fan = e.up + '|' + pos[e.lo].gl + '|' + e.cls;
+      (fan[e.fan] = fan[e.fan] || []).push(e.lo);
     });
     function path(e) {
       var A = pos[e.a], B = pos[e.b];
-      if (A.row > B.row) { var t = A; A = B; B = t; }
-      if (A.row === B.row) {
+      if (e.fan && fan[e.fan].length >= 3) {
+        var U = pos[e.up], L = pos[e.lo], xs = fan[e.fan].map(function (id) { return pos[id].x + pos[id].w / 2; });
+        var sx = xs.reduce(function (t, v) { return t + v; }, 0) / xs.length, x1 = U.x + U.w / 2, y1 = U.y + U.h, x2 = L.x + L.w / 2, y2 = L.y;
+        var sy = y2 - Math.min(26, (y2 - y1) * 0.45), my1 = (y1 + sy) / 2;
+        var out = 'M' + sx + ' ' + sy + ' C' + (sx + (x2 - sx) / 2) + ' ' + sy + ' ' + x2 + ' ' + (sy + (y2 - sy) * 0.3) + ' ' + x2 + ' ' + y2;
+        return { d: 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my1 + ' ' + sx + ' ' + my1 + ' ' + sx + ' ' + sy + ' ' + out.slice(out.indexOf('C')), hit: out, mx: (sx + x2) / 2, my: sy };
+      }
+      if (A.gl > B.gl) { var t = A; A = B; B = t; }
+      if (A.gl === B.gl) {
         var l = A.x < B.x ? A : B, r2 = A.x < B.x ? B : A, y = A.y + A.h, dy = 34;
         return { d: 'M' + (l.x + l.w / 2) + ' ' + y + ' C' + (l.x + l.w / 2) + ' ' + (y + dy) + ' ' + (r2.x + r2.w / 2) + ' ' + (y + dy) + ' ' + (r2.x + r2.w / 2) + ' ' + y, mx: (l.x + l.w / 2 + r2.x + r2.w / 2) / 2, my: y + dy * 0.75 };
       }
       var x1 = A.x + A.w / 2, y1 = A.y + A.h, x2 = B.x + B.w / 2, y2 = B.y, my = (y1 + y2) / 2;
       return { d: 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my + ' ' + x2 + ' ' + my + ' ' + x2 + ' ' + y2, mx: (x1 + x2) / 2, my: my };
     }
-    var svg = '<svg class="spec-map" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-top="' + TOP + '" data-rh="' + RH + '" data-bh="' + BH + '">' +
+    // data-bands: each layer's top and bottom, for dragging a block into it (specMoveMove).
+    var svg = '<svg class="spec-map' + (selBlock && pos[selBlock] ? ' focus' : '') + '" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-bands="' + rows.map(function (r) { return Math.round(r.y - (RH - BH) / 2) + ':' + Math.round(r.y + r.h - (RH - BH) / 2); }).join(',') + '" data-bh="' + BH + '">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern></defs>';
     rows.forEach(function (r, ri) {
-      var y = TOP + ri * RH;
+      var y = r.y + (r.lines - 1) * LINE / 2;
       svg += '<text class="spec-row-label" x="8" y="' + (y + BH / 2 + 4) + '">' + esc(r.label) + '</text>' +
         '<g class="spec-row-add" data-act="spec-add-block" data-kind="' + r.kind + '"><title>Add a ' + esc(kindLabel(r.kind).toLowerCase()) + '</title>' +
         '<circle cx="' + (LBL - 10) + '" cy="' + (y + BH / 2) + '" r="10"/><path d="M' + (LBL - 14) + ' ' + (y + BH / 2) + 'h8M' + (LBL - 10) + ' ' + (y + BH / 2 - 4) + 'v8"/></g>' +
         (r.xs.length ? '' : '<text class="spec-row-empty" x="' + (LBL + 14) + '" y="' + (y + BH / 2 + 4) + '">No ' + esc(r.label.toLowerCase()) + ' yet</text>');
-      if (ri) svg += '<line class="spec-row-line" x1="8" x2="' + MW + '" y1="' + (y - (RH - BH) / 2) + '" y2="' + (y - (RH - BH) / 2) + '"/>';
+      if (ri) svg += '<line class="spec-row-line" x1="8" x2="' + MW + '" y1="' + (r.y - (RH - BH) / 2) + '" y2="' + (r.y - (RH - BH) / 2) + '"/>';
     });
     edges.forEach(function (e) {
       if (!e.a || !e.b || !pos[e.a] || !pos[e.b]) return;
-      var pth = path(e);
-      svg += '<path class="spec-edge ' + e.cls + '" d="' + pth.d + '"/>';
-      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(M.specLinkWords()[0]) + '" d="' + pth.d + '"><title>' + esc(byId[e.a].sec.title + ' ' + linkVerb(M.specLinkWords()[0]) + ' ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
+      var pth = path(e), on = selBlock && (e.a === selBlock || e.b === selBlock);
+      svg += '<path class="spec-edge ' + e.cls + (on ? ' on' : '') + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + pth.d + '"/>';
+      if (e.cls === 'uses') svg += '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(M.specLinkWords()[0]) + '" d="' + (pth.hit || pth.d) + '"><title>' + esc(byId[e.a].sec.title + ' ' + linkVerb(M.specLinkWords()[0]) + ' ' + byId[e.b].sec.title + ' (click to remove)') + '</title></path>';
       if (e.label) {
         var lw = Math.min(180, 12 + e.label.length * 6.4);
         svg += '<g class="spec-edge-label" data-act="spec-block" data-id="' + esc(e.link) + '"><title>' + esc(e.label) + '</title><rect x="' + (pth.mx - lw / 2) + '" y="' + (pth.my - 10) + '" width="' + lw + '" height="20" rx="10"/>' +
@@ -2133,17 +2252,26 @@
     });
     rows.forEach(function (r) {
       r.xs.forEach(function (x) {
-        var b = pos[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
-        svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (x.sec.kind === 'interface' ? ' iface' : '') + (selBlock === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-row="' + esc(r.kind) + '" data-cx="' + (b.x + b.w / 2) + '"><title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '')) + '</title>' +
+        var b = pos[x.sec.id], chars = Math.floor((b.w - 16) / 7.2), tl = specTitleLines(x.sec.title || 'Untitled', chars), two = tl.length > 1;
+        svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (x.sec.kind === 'interface' ? ' iface' : '') + (selBlock === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-row="' + esc(r.kind) + '" data-cx="' + (b.x + b.w / 2) + '" data-y="' + b.y + '"><title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '')) + '</title>' +
           '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="' + (x.sec.kind === 'interface' ? b.h / 2 : 10) + '"/>' +
           (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="' + (x.sec.kind === 'interface' ? b.h / 2 : 10) + '"/>' : '') +
-          '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 23) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', chars)) + '</text>' +
-          '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 40) + '" text-anchor="middle">' + esc(x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.links.length ? plural(x.links.length, 'requirement') : x.sec.kind) + '</text>' +
+          tl.map(function (t, i) { return '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + (two ? 17 + i * 14 : 23)) + '" text-anchor="middle">' + esc(t) + '</text>'; }).join('') +
+          '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + (two ? 46 : 40)) + '" text-anchor="middle">' + esc(x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.notes.length ? plural(x.notes.length, 'note') : x.links.length ? plural(x.links.length, 'requirement') : x.sec.kind) + '</text>' +
           '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w / 2) + '" cy="' + (b.y + b.h) + '" r="7"><title>Drag to a block this one uses</title></circle></g>';
       });
     });
     svg += '</svg>';
-    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line to remove it. Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines are interfaces. Dotted blocks have untraced or flagged sentences.</p>';
+    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line to remove it (Undo in the message brings it back). Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines join each interface to the blocks that use it. Lines from one block to several share a trunk, and pointing at a block brings its own lines forward. Dotted blocks have unlinked or flagged sentences.</p>';
+  }
+  // A block's name on one line, or two (broken at a space) when it's too long for one; the second is
+  // cut if it still doesn't fit.
+  function specTitleLines(t, chars) {
+    t = String(t || '');
+    if (t.length <= chars) return [t];
+    var cut = t.lastIndexOf(' ', chars);
+    if (cut < Math.floor(chars / 3)) cut = chars;
+    return [t.slice(0, cut).trim(), cutText(t.slice(cut).trim(), chars)];
   }
   // The flow diagram (config.spec.layout 'flow', EE): a block diagram of the board. The outline is the
   // hierarchy (model.specNest): a heading with headings under it is a section, drawn as a box around
@@ -2270,13 +2398,13 @@
       var A = R[e.a], B = R[e.b];
       if (T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) {
         var rt = specRoute(A, B);
-        svg += '<path class="spec-edge supply" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+        svg += '<path class="spec-edge supply" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
         if (e.label) svg += pill((A.x + A.w + B.x) / 2, Math.min(A.y, B.y) + SPEC_BH / 2 - 14, e.label);
       } else flagged.push(e);
     });
     conn.forEach(function (e) {
       var rt = specRoute(R[e.a], R[e.b]);
-      svg += '<path class="spec-edge uses" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
+      svg += '<path class="spec-edge uses" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + hit(e, rt.d);
       if (e.label) svg += pill(rt.mx, rt.my, e.label);
     });
     blocks.forEach(function (x) {
@@ -2299,7 +2427,7 @@
       });
     });
     svg += '</svg>';
-    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line to remove it.</p>' +
+    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line to remove it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
@@ -2537,10 +2665,10 @@
     var groups = specRows().concat(M.specKinds().indexOf('interface') >= 0 ? [['interface', 'Interfaces']] : [], [['', 'Other sections']]);
     // One field per link word: its names (with signal or rail), remove, rename the signal, add more.
     var linkFields = words.map(function (w) {
-      var items = M.specUsesItems(s.body, w), have = items.map(function (n) { return n.name.toLowerCase(); });
+      var items = M.specUsesItems(s.body, w), have = items.map(function (n) { return (M.specUseId(a.ctx, n) && a.ctx.secs[M.specUseId(a.ctx, n)].title || n.name).toLowerCase(); });
       var opts = a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && have.indexOf(y.sec.title.toLowerCase()) < 0; });
       return '<div class="field"><span class="field-label">' + esc(w) + '</span><div class="chips">' + (items.length ? items.map(function (it) {
-        var tid = byTitle[it.name.toLowerCase()];
+        var tid = M.specUseId(a.ctx, it);
         return '<span class="chip spec-use-chip' + (tid ? '' : ' spec-chip-missing') + '">' + (tid ? '<button data-act="spec-block" data-id="' + esc(tid) + '">' + esc(it.name) + '</button>' : esc(it.name)) +
           (words.length > 1 ? '<button class="spec-use-label" data-act="spec-block-label" data-word="' + esc(w) + '" data-name="' + esc(it.name) + '" title="Name the signal or rail">' + (it.label ? esc(it.label) : '+ name') + '</button>' : '') +
           '<button class="spec-use-x" data-act="spec-block-unuse" data-word="' + esc(w) + '" data-name="' + esc(it.name) + '" aria-label="Remove ' + esc(it.name) + '">×</button></span>';
@@ -2566,8 +2694,8 @@
       '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
       linkFields + fromFields +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
-      '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : ''].filter(Boolean).join(' · ')) + '</p></div>' +
-      specGapList(x) +
+      '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced + x.counts.note, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : '', x.notes.length ? plural(x.notes.length, 'review note') : ''].filter(Boolean).join(' · ')) + '</p></div>' +
+      specGapList(x) + specNoteList(x) +
       '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Edit its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Show in document</button>' +
       (lower ? '<button class="btn" data-act="spec-add-block" data-kind="' + lower + '" data-parent="' + esc(id) + '">Add a ' + lower + ' it uses</button>' : '') +
       '<button class="btn btn-danger" data-act="spec-block-delete" data-id="' + esc(id) + '">Delete</button></div>' +
@@ -2598,16 +2726,29 @@
     var word = M.specKindLink(M.oneOf(M.specKinds(), a.kind, ''));
     if (!M.specKinds().length && M.specLinkWord('supplies') && M.specUsesItems(a.body, 'supplies').length) word = M.specLinkWord('supplies');
     var items = M.specUsesItems(a.body, word), t = M.liveSpec(p).filter(function (s) { return s.id === to; })[0].title;
-    if (items.some(function (n) { return n.name.toLowerCase() === t.toLowerCase(); })) { toast((a.title || 'It') + ' already ' + linkVerb(word) + ' ' + t); return; }
+    if (items.some(function (n) { return M.specUseIs(n, t); })) { toast((a.title || 'It') + ' already ' + linkVerb(word) + ' ' + t); return; }
     specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, word, M.specLinkText(items.concat([{ name: t, label: '' }]))) }), me())]);
     toast((a.title || 'It') + ' ' + linkVerb(word) + ' ' + t + (M.specLinkWords().length > 1 ? '. Name the signal in its panel.' : ''));
   }
+  // Removing a link (a click on its line, or × in the block panel) happens at once, with Undo in the
+  // toast: Undo puts the section's text back as it was, unless it has changed since.
   function specDisconnect(from, to, word) {
     var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to]; if (!a || !b) return;
+    specUnlinkName(from, word, b.title);
+  }
+  function specUnlinkName(from, word, name) {
+    var p = current(), a = p && (p.spec || {})[from]; if (!a) return;
     word = M.specLinkWord(word) || M.specLinkWords()[0];
-    var t = String(b.title || '').toLowerCase();
-    if (!confirm('Remove “' + (a.title || 'this block') + ' ' + linkVerb(word) + ' ' + (b.title || 'that block') + '”?')) return;
-    specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, word, M.specLinkText(M.specUsesItems(a.body, word).filter(function (n) { return n.name.toLowerCase() !== t; }))) }), me())]);
+    var t = String(name || '').toLowerCase(), before = a.body;
+    var after = M.specSetLine(a.body, word, M.specLinkText(M.specUsesItems(a.body, word).filter(function (n) { return !M.specUseIs(n, t); })));
+    if (after === before) return;
+    var rec = M.specStamp(Object.assign({}, a, { body: after }), me());
+    specPutAll(p, [rec]);
+    toast('Removed: ' + (a.title || 'It') + ' ' + linkVerb(word) + ' ' + name, { label: 'Undo', run: function () {
+      var q = current(), cur = q && (q.spec || {})[from];
+      if (!cur || cur.updatedAt !== rec.updatedAt) { toast('It has changed since; add the link again'); return; }
+      specPutAll(q, [M.specStamp(Object.assign({}, cur, { body: before }), me())]);
+    } });
   }
   // A link's signal or rail name, from the block panel.
   function specLinkLabel(word, name) {
@@ -2674,15 +2815,20 @@
       d.mark = document.createElementNS('http://www.w3.org/2000/svg', 'line'); d.mark.setAttribute('class', 'spec-drop-mark'); d.svg.appendChild(d.mark);
     }
     e.preventDefault();
-    var q = d.local(e), rows = d.svg.dataset.rows.split(','), top = +d.svg.dataset.top, rh = +d.svg.dataset.rh, bh = +d.svg.dataset.bh;
+    var q = d.local(e), rows = d.svg.dataset.rows.split(','), bh = +d.svg.dataset.bh;
+    var bands = d.svg.dataset.bands.split(',').map(function (b) { return b.split(':').map(Number); });
     d.ghost.setAttribute('transform', 'translate(' + (q.x - d.start.x) + ' ' + (q.y - d.start.y) + ')');
-    var ri = Math.max(0, Math.min(rows.length - 1, Math.floor((q.y - top + (rh - bh) / 2) / rh)));
+    var ri = 0; bands.forEach(function (b, i) { if (q.y >= b[0]) ri = i; });
     d.kind = rows[ri];
-    d.band.setAttribute('y', top + ri * rh - (rh - bh) / 2); d.band.setAttribute('height', rh);
-    // The nearest blocks in that layer (not this one): sit before the first whose middle is right of the pointer.
+    d.band.setAttribute('y', bands[ri][0]); d.band.setAttribute('height', bands[ri][1] - bands[ri][0]);
+    // The blocks in that layer (not this one) in reading order, line by line: sit before the first
+    // after the pointer on its line, or on a later line.
     var others = Array.prototype.filter.call(d.svg.querySelectorAll('.spec-node[data-row="' + d.kind + '"]'), function (g) { return g !== d.node && !g.classList.contains('ghost'); })
-      .sort(function (a, b) { return a.dataset.cx - b.dataset.cx; });
-    var next = others.filter(function (g) { return +g.dataset.cx > q.x; })[0], prev = others.filter(function (g) { return +g.dataset.cx <= q.x; }).pop();
+      .sort(function (a, b) { return a.dataset.y - b.dataset.y || a.dataset.cx - b.dataset.cx; });
+    var lineY = others.length ? others.map(function (g) { return +g.dataset.y; }).reduce(function (best, y) { return Math.abs(q.y - (y + bh / 2)) < Math.abs(q.y - (best + bh / 2)) ? y : best; }) : 0;
+    var after = function (g) { return +g.dataset.y > lineY || (+g.dataset.y === lineY && +g.dataset.cx > q.x); };
+    var next = others.filter(after)[0], prev = others.filter(function (g) { return !after(g); }).pop();
+    if (next && prev && +next.dataset.y !== lineY && +prev.dataset.y === lineY) next = null;
     d.before = next ? next.dataset.id : ''; d.after = !next && prev ? prev.dataset.id : '';
     var ref = next || prev;
     if (ref) {
@@ -2768,22 +2914,39 @@
       '<div class="insp-body">' +
       '<div class="field"><span class="field-label">Sentence <span class="spec-state st-' + u.state + '">' + STATE_LABEL[u.state] + '</span></span>' +
       '<div class="spec-quote">' + specUnitHtml(p, a, f.x, u).replace(' data-act="spec-unit"', '') + '</div></div>' +
+      (u.broken ? '<p class="note spec-broken-note">' + esc(BROKEN_TIP) + ' Fix it with <b>Edit section</b>; until then the buttons here leave the sentence alone.</p>' : '') +
       (specPhrase ? '<div class="spec-phrase"><span>Linking just <b>“' + esc(specPhrase) + '”</b></span><button class="btn btn-sm" data-act="spec-phrase-clear">Whole sentence</button></div>' :
         '<p class="note" style="margin:-6px 0 10px">Select words in the sentence to link just those.</p>') +
       '<div class="field"><span class="field-label">Requirements</span>' + (links || '<p class="note" style="margin:0 0 8px">' + (u.state === 'std' ? 'Standard text: description that needs no requirement.' : 'Not linked to a requirement yet.') + '</p>') +
       '<input class="input" id="spec-link-search" placeholder="Search requirements to link…" value="' + esc(query) + '" autocomplete="off">' +
       '<div id="spec-link-results">' + specLinkResults(p, u, query) + '</div></div>' +
       (secLinks.length ? '<div class="field"><span class="field-label">Points at</span><div class="chips">' + secLinks.map(function (id) { return '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(a.ctx.secs[id].title) + '</button>'; }).join('') + '</div></div>' : '') +
+      (u.state === 'note' ? '<p class="note">A review note: a question for the review, counted on its own and not a gap. Answer it in the text, then resolve it.</p>' : '') +
       '<div class="spec-acts">' +
-      '<button class="btn btn-primary" data-act="spec-make" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '">Make requirement</button>' +
+      (u.note ? '<button class="btn btn-primary" data-act="spec-resolve" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '" title="Take the note out of the text">Resolve</button>' :
+      '<button class="btn btn-primary" data-act="spec-make" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '">Make requirement</button>') +
       (u.tag ? f.x.links.filter(function (id) { return u.reqs.indexOf(id) < 0; }).slice(0, 3).map(function (id) {
         return '<button class="btn" data-act="spec-change" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '" data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
       }).join('') : '') +
-      (u.std ? '<button class="btn" data-act="spec-std" data-on="">Not standard</button>' : !u.reqs.length ? '<button class="btn" data-act="spec-std" data-on="1" title="Description that needs no requirement">Mark standard</button>' : '') +
-      (u.tag ? '<button class="btn" data-act="spec-tag" data-on="">Remove @req flag</button>' : '<button class="btn" data-act="spec-tag" data-on="1" title="Flag it to turn into a requirement later">Flag @req</button>') +
+      (u.note ? '' : u.std ? '<button class="btn" data-act="spec-std" data-on="">Not standard</button>' : !u.reqs.length ? '<button class="btn" data-act="spec-std" data-on="1" title="Description that needs no requirement">Mark standard</button>' : '') +
+      (u.tag ? '<button class="btn" data-act="spec-tag" data-on="">Remove @req flag</button>' : u.row ? '' : '<button class="btn" data-act="spec-tag" data-on="1" title="Flag it to turn into a requirement later">Flag @req</button>') +
       '<button class="btn" data-act="spec-edit" data-id="' + esc(f.x.sec.id) + '">Edit section</button></div>' +
       '<p class="note">Last changed ' + (f.x.sec.updatedBy ? 'by ' + esc(f.x.sec.updatedBy) + ', ' : '') + relTime(f.x.sec.updatedAt) + '.</p></div>';
     el.dataset.item = selected;
+  }
+  // Resolving a review note takes it out of the text (its line, when it has one to itself), with Undo.
+  function specResolve(sec, start) {
+    var p = current(), a = p && M.specAnalysis(p), f = a && specFind(a, sec, start); if (!f || !f.u.note) return;
+    var cur = p.spec[sec], before = String(cur.body || ''), after = M.specRemoveUnit(before, f.u.start, f.u.end);
+    if (after === before) return;
+    selected = null; closeInspector();
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: after }), me())]);
+    var rec = p.spec[sec];
+    toast('Resolved: ' + cutText(f.u.text, 60), { label: 'Undo', run: function () {
+      var q = current(), now = q && (q.spec || {})[sec];
+      if (!now || now.updatedAt !== rec.updatedAt) { toast('The section has changed since; type the note again'); return; }
+      specPutAll(q, [M.specStamp(Object.assign({}, now, { body: before }), me())]);
+    } });
   }
   function specLinkResults(p, u, query) {
     query = (query || '').trim().toLowerCase();
@@ -2809,7 +2972,9 @@
     selected = specSelKey(sec, start);
     $('#inspector').classList.add('open');
     renderPage(); renderInspector();
-    var el = document.querySelector('.su.sel'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    var el = document.querySelector('.su.sel');
+    if (!el && specUnfilter()) el = document.querySelector('.su.sel');
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   // ── The Scribe guide's way in (assets/specguide.js) ──
   // The guide runs on the demo review named by config.spec.guide (a demo seed) and drives the page
@@ -2822,6 +2987,7 @@
     ui.view = view === 'reqs' ? 'reqs' : 'spec';
     if (view === 'doc' || view === 'map') ui.specView = view;
     if (depth) ui.specDepth = depth;
+    ui.specShow = '';
     specEditing = null; specDraft = ''; selected = null; closeInspector(); saveUi(); render();
     return true;
   }
@@ -2880,13 +3046,42 @@
     ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
     selected = null; closeInspector(); renderPage();
     var el = document.querySelector('.su[data-sec="' + CSS.escape(sec) + '"][data-u="' + start + '"]');
-    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    if (!el && specUnfilter()) el = document.querySelector('.su[data-sec="' + CSS.escape(sec) + '"][data-u="' + start + '"]');
+    if (el) { specScrollTo(el, 'center'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   }
 
+  // Scroll a section or sentence into view smoothly, then, once the scroll ends, check where it landed
+  // and put it right: the first jump after opening the tab sometimes stopped a section or two short,
+  // while the page above was still settling (its own scroll back to the top, fonts).
+  function specScrollTo(el, block) {
+    var main = $('#main'), done = false;
+    el.scrollIntoView({ block: block, behavior: 'smooth' });
+    // Someone scrolling by hand meanwhile wins.
+    function mine() { done = true; off(); }
+    function off() { main.removeEventListener('scrollend', check); ['wheel', 'touchstart', 'keydown'].forEach(function (t) { main.removeEventListener(t, mine); }); }
+    ['wheel', 'touchstart', 'keydown'].forEach(function (t) { main.addEventListener(t, mine, { passive: true }); });
+    function check() {
+      if (done) return; done = true; off();
+      if (!el.isConnected) return;
+      var r = el.getBoundingClientRect(), m = main.getBoundingClientRect(), margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      var want = block === 'center' ? m.top + (m.height - r.height) / 2 : m.top + margin;
+      if (Math.abs(r.top - want) > 24) el.scrollIntoView({ block: block, behavior: 'instant' });
+    }
+    main.addEventListener('scrollend', check);
+    setTimeout(check, 1500);
+  }
+  // A jump to a section or sentence the Gaps or Notes filter hides turns the filter off first (it's kept
+  // across reloads, so a link from elsewhere may land while it's on). True when it did, after a redraw.
+  function specUnfilter() {
+    if (!ui.specShow) return false;
+    ui.specShow = ''; saveUi(); renderPage();
+    return true;
+  }
   function specGoto(id) {
     if (ui.view !== 'spec' || ui.specView === 'map') { ui.view = 'spec'; ui.specView = 'doc'; saveUi(); renderPage(); }
     var el = document.getElementById('spec-' + id);
-    if (el) { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    if (!el && specUnfilter()) el = document.getElementById('spec-' + id);
+    if (el) { specScrollTo(el, 'start'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   }
   function specStartEdit(id) {
     var p = current(); if (!p) return;
@@ -2909,17 +3104,29 @@
     return heads.map(function (h) { return '<button class="lv-' + h.level + '" tabindex="-1"><span>' + esc(h.title || 'Untitled') + '</span>' + (h.kind ? '<span class="chip spec-kind">' + esc(h.kind) + '</span>' : '') + '</button>'; }).join('') ||
       '<p class="note">Headings (# Title) make the outline.</p>';
   }
+  // Sections longer than a review keeps (model.SPEC_BODY_MAX) would be cut when read: say so and save
+  // nothing. Returns true when it refused.
+  function specRefuseLong(recs) {
+    var long = M.specTooLong(recs);
+    if (!long.length) return false;
+    toast('Not saved: ' + long.map(function (x) { return x.title + ' is ' + x.length.toLocaleString('en-US') + ' characters'; }).join(', ') + '. A section holds ' + M.SPEC_BODY_MAX.toLocaleString('en-US') + '; split it with a heading.', null, 8000);
+    return true;
+  }
+  // After a save: marks in the saved text that didn't parse are flagged in the document.
+  function specBrokenNote(text) { var n = M.specBrokenMarks(text).length; return n ? '; ' + plural(n, 'mark') + ' didn’t parse and ' + (n === 1 ? 'is' : 'are') + ' flagged in the text' : ''; }
   function specSaveAll() {
     var p = current(); if (!p) return;
     var recs = M.specSaveAll(p, specDraft, me());
+    if (specRefuseLong(recs)) return;
     var gone = recs.filter(function (r) { return r.deleted; });
     if (gone.length && !confirm('Saving removes ' + plural(gone.length, 'section') + ': ' + gone.map(function (r) { return r.title || 'Untitled'; }).join(', ') + '. Links to them stop working. Save anyway?')) return;
     p.spec = p.spec || {};
     recs.forEach(function (r) { p.spec[r.id] = r; });
+    var note = specBrokenNote(specDraft);
     specEditing = null; specDraft = '';
     if (recs.length) touch(p);
     renderPage(); renderToolbar(); syncSoon();
-    toast(recs.length ? 'Saved: ' + plural(recs.length - gone.length, 'section') + ' changed or added' + (gone.length ? ', ' + gone.length + ' removed' : '') : 'No changes');
+    toast((recs.length ? 'Saved: ' + plural(recs.length - gone.length, 'section') + ' changed or added' + (gone.length ? ', ' + gone.length + ' removed' : '') : 'No changes') + note);
   }
   function specSaveEdit() {
     var p = current(); if (!p || !specEditing) return;
@@ -2927,11 +3134,14 @@
     var id = specEditing === 'new' ? null : specEditing;
     if (id && !specDraft.trim() && !confirm('Delete this section?')) return;
     var recs = M.specSave(p, id, specDraft, me());
+    if (specRefuseLong(recs)) return;
     p.spec = p.spec || {};
     recs.forEach(function (r) { p.spec[r.id] = r; });
+    var note = specBrokenNote(specDraft);
     specEditing = null; specDraft = '';
     if (recs.length) touch(p);
     renderPage(); syncSoon();
+    if (note) toast('Saved' + note);
   }
   function specPasteSheet() {
     var p = current(); if (!p) return;
@@ -2946,6 +3156,7 @@
       var chunks = M.specSplit(text);
       if (chunks.length && !chunks[0].heading) text = '# Overview\n' + text;
       var recs = M.specSave(p, null, text, me());
+      if (specRefuseLong(recs)) return;
       p.spec = p.spec || {};
       recs.forEach(function (r) { p.spec[r.id] = r; });
       touch(p); closeSheet();
@@ -2974,6 +3185,7 @@
       if (!t.trim()) { toast('Nothing to add'); return; }
       if (M.specSplit(t).length && !M.specSplit(t)[0].heading) t = '# Overview\n' + t;
       var recs = M.specSave(p, null, t, me());
+      if (specRefuseLong(recs)) return;
       p.spec = p.spec || {};
       recs.forEach(function (r) { p.spec[r.id] = r; });
       touch(p); closeSheet();
@@ -2986,6 +3198,7 @@
   function specMakeReq(sec, start) {
     var p = current(); if (!p) return;
     var a = M.specAnalysis(p), f = specFind(a, sec, start); if (!f) return;
+    if (f.u.broken) { toast('A mark in this sentence didn’t parse. Fix it with Edit section first.'); return; }
     p.reqs = p.reqs || {};
     var q = M.newReq(p, { text: f.u.text, source: SPEC_LABEL + ': ' + (f.x.sec.title || 'Untitled') + ', ' + M.now().slice(0, 10) }, me());
     p.reqs[q.id] = q;
@@ -3000,6 +3213,7 @@
   function specChangeReq(sec, start, reqId) {
     var p = current(); if (!p) return;
     var a = M.specAnalysis(p), f = specFind(a, sec, start), q = reqOf(p, reqId); if (!f || !q) return;
+    if (f.u.broken) { toast('A mark in this sentence didn’t parse. Fix it with Edit section first.'); return; }
     var text = f.u.text;
     specUnitEdit(p, sec, start, 'link', reqId);
     if (q.status === 'approved') p.reqs[reqId] = M.stamp(Object.assign({}, q, { status: 'changed' }), me());
@@ -3467,7 +3681,7 @@
       html += '<div class="card" style="padding:18px 20px;margin-bottom:14px"><b>No one is listed yet.</b> Add yourself and the other FTEs first, then clients and contractors.' +
         (settings.login ? ' <button class="btn btn-plain" data-act="add-self">Add me (' + esc(settings.login) + ') as FTE</button>' : '') + '</div>';
     } else {
-      html += '<div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
+      html += '<div class="card table-scroll"><table class="table people"><thead><tr><th>Person</th><th>Role</th><th>' + cap(UNITS) + '</th><th>GitHub access</th><th></th></tr></thead><tbody>' +
         people.map(function (u) {
           var projs = u.role === 'fte' ? '<span class="muted">All ' + UNITS + '</span>' :
             ((u.projects || []).map(function (id) { return byId[id] ? '<span class="chip">' + esc(byId[id].meta.name) + '</span>' : ''; }).join(' ') || '<span class="muted">None yet</span>') +
@@ -3483,7 +3697,7 @@
     }
     var sharedIds = Object.keys(roster.shared || {}).filter(function (id) { return M.sharedRepo(roster, id); });
     if (sharedIds.length) {
-      html += '<div class="section-title">Shared review repositories</div><div class="card table-scroll" style="overflow:hidden"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Clients and contractors</th></tr></thead><tbody>' +
+      html += '<div class="section-title">Shared review repositories</div><div class="card table-scroll"><table class="table people"><thead><tr><th>' + cap(UNIT) + '</th><th>Repository</th><th>Clients and contractors</th></tr></thead><tbody>' +
         sharedIds.map(function (id) {
           var repo = M.sharedRepo(roster, id), p = byId[id];
           var names = assignedContractors(id).map(function (u) { return esc(u.name || u.login); }).join(', ') || '<span class="muted">None</span>';
@@ -3896,11 +4110,19 @@
   }
   function closeMenu() { var m = $('#menu'); if (m) m.remove(); }
 
-  function toast(text) {
+  // A short message at the bottom. action { label, run } adds a button (Undo), and the toast stays
+  // longer; ms sets how long it stays.
+  function toast(text, action, ms) {
     var t = document.createElement('div');
     t.className = 'toast'; t.textContent = text;
+    if (action) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+      b.addEventListener('click', function () { t.remove(); action.run(); });
+      t.appendChild(b);
+    }
     $('#toasts').appendChild(t);
-    setTimeout(function () { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 320); }, 3200);
+    setTimeout(function () { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; setTimeout(function () { t.remove(); }, 320); }, ms || (action ? 8000 : 3200));
   }
 
   var darkQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
@@ -4039,8 +4261,14 @@
       case 'post-comment': { var ta = $('#comment-input'); addComment(selected, ta.value); var t2 = $('#comment-input'); if (t2) { t2.value = ''; t2.focus(); } break; }
       case 'del-comment': if (confirm('Delete this comment?')) deleteComment(id); break;
       case 'req-add': addReq(); break;
-      case 'spec-view': ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
-      case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; saveUi(); renderPage(); break;
+      case 'spec-view':
+        // A block's panel belongs to the diagram and a sentence's to the document: switching closes them
+        // (on a narrow screen the panel is a sheet over the depth buttons, which took the first click).
+        if (ui.specView !== el.dataset.view && /^spec(block)?\|/.test(selected || '')) { selected = null; closeInspector(); }
+        ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
+      case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; ui.specShow = ''; saveUi(); renderPage(); break;
+      case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
+      case 'spec-resolve': specResolve(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-goto': specGoto(id); break;
       case 'spec-jump': specJumpUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-unit': case 'spec-open':
@@ -4096,11 +4324,8 @@
       }
       case 'spec-add-block': specAddBlockSheet(el.dataset.kind, el.dataset.parent || (SPEC_FLOW ? '' : specBlockSel()), el.dataset.section || ''); break;
       case 'spec-block-kind': specBlockField('kind', el.dataset.kind); break;
-      case 'spec-block-unuse': {
-        var bp = current(), bc = bp && (bp.spec || {})[specBlockSel()];
-        if (bc) specBlockField('link', M.specLinkText(M.specUsesItems(bc.body, el.dataset.word).filter(function (n) { return n.name !== el.dataset.name; })), el.dataset.word);
-        break;
-      }
+      case 'spec-block-unuse': specUnlinkName(specBlockSel(), el.dataset.word, el.dataset.name); break;
+      case 'spec-editor-line': specEditorLine(parseInt(el.dataset.line, 10) || 1); break;
       case 'spec-block-delete': {
         var dp = current(), dc = dp && (dp.spec || {})[id];
         if (dc && confirm('Delete ' + (dc.title || 'this block') + ' and its text?')) { selected = null; closeInspector(); specPutAll(dp, [M.specStamp(Object.assign({}, dc, { deleted: true }), me())]); }
@@ -4262,6 +4487,7 @@
     if (e.target.id === 'spec-editor') {
       specDraft = e.target.value;
       if (specEditing === 'all') { var lo = $('#spec-live-outline'); if (lo) lo.innerHTML = specLiveOutline(); }
+      var wn = $('#spec-editor-warn'); if (wn) wn.innerHTML = specDraftWarnHtml();
       specBarRefresh();
     }
     if (e.target.id === 'spec-link-search') {
@@ -4335,6 +4561,22 @@
     if (n && e.pointerType !== 'touch') specMoveDown(e, n);
   });
   document.addEventListener('pointermove', function (e) { if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); else if (flowDrag) flowMove(e); });
+  // Pointing at a block in a diagram brings its own lines forward and fades the others (fan-outs).
+  var specHover = null;
+  function specHoverMap(n) {
+    if (specHover === n) return;
+    if (specHover) { var old = specHover.ownerSVGElement; if (old) { old.classList.remove('hovering'); old.querySelectorAll('.spec-edge.hov').forEach(function (x) { x.classList.remove('hov'); }); } }
+    specHover = n;
+    if (!n || !n.ownerSVGElement) return;
+    var id = n.dataset.id, svg = n.ownerSVGElement;
+    svg.classList.add('hovering');
+    svg.querySelectorAll('.spec-edge').forEach(function (x) { if (x.dataset.a === id || x.dataset.b === id) x.classList.add('hov'); });
+  }
+  document.addEventListener('pointerover', function (e) {
+    if (specDrag || specMove || flowDrag) return;
+    var n = e.target.closest && e.target.closest('.spec-map .spec-node');
+    specHoverMap(n && n.dataset.id ? n : null);
+  });
   document.addEventListener('pointerup', function (e) { if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); else if (flowDrag) flowUp(e); });
   document.addEventListener('pointercancel', function () { if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
