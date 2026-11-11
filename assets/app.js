@@ -507,17 +507,20 @@
     var dot = $('#sync-dot'), title = $('#sync-title'), sub = $('#sync-sub');
     var n = Object.keys(dirty).length;
     syncDetailsButton(!DEMO && n > 0 && state !== 'busy');
+    sub.classList.remove('sync-who');
+    // Line 1 is the sync state (and when it last synced); line 2 the GitHub account, when it's known (Chris, 2026-11-10).
+    var who = settings.login && getToken() ? '@' + settings.login + (myRole() === 'contractor' ? ' (shared access)' : '') : '';
+    function line2(fallback) { sub.textContent = who || fallback; if (who) sub.classList.add('sync-who'); }
     if (DEMO) { dot.dataset.tone = 'idle'; title.textContent = 'Demo mode'; sub.textContent = 'Changes stay in this browser'; return; }
-    if (state === 'busy') { dot.dataset.tone = 'busy'; title.textContent = 'Syncing\u2026'; sub.textContent = settings.owner; return; }
+    if (state === 'busy') { dot.dataset.tone = 'busy'; title.textContent = 'Syncing\u2026'; line2(settings.owner); return; }
     if (state === 'error') { dot.dataset.tone = 'error'; title.textContent = 'Sync failed'; sub.textContent = 'Click for details'; return; }
     if (!getToken()) { dot.dataset.tone = n ? 'warn' : 'idle'; title.textContent = n ? plural(n, 'unsynced change') : 'Local only'; sub.textContent = 'Set up Git sync'; return; }
-    if (n) { dot.dataset.tone = 'warn'; title.textContent = plural(n, 'unsynced change'); sub.textContent = 'Click to sync'; return; }
+    if (n) { dot.dataset.tone = 'warn'; title.textContent = plural(n, 'unsynced change'); line2('Click to sync'); return; }
     dot.dataset.tone = 'ok';
-    title.textContent = 'Synced';
     var errs = lastSync && lastSync.errors && lastSync.errors.length;
     if (errs) { dot.dataset.tone = 'warn'; title.textContent = 'Synced with problems'; sub.textContent = lastSync.errors[0].message; return; }
-    sub.textContent = (lastSync ? relTime(lastSync.at) : 'Ready') +
-      (settings.login ? ' \u00b7 ' + settings.login + (myRole() === 'contractor' ? ' (shared access)' : '') : '');
+    title.textContent = lastSync ? 'Synced ' + relTime(lastSync.at) : 'Ready';
+    line2(lastSync ? '' : 'Click to sync');
   }
 
   // ── What's unsynced ─────────────────────────────────────
