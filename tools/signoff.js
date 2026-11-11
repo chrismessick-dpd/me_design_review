@@ -138,7 +138,7 @@ function findToken(io, opts, config) {
 // The suite's GitHub App (signoff/docs/sign-in.md). A device-flow sign-in needs no client secret, even
 // to renew, so the command line talks to GitHub directly, with no Worker. Its tokens last 8 hours and
 // renew from a refresh token that lasts 6 months and is replaced at every renewal.
-const SIGNIN_CLIENT_ID = 'Iv23liRCoaHFv0aMl16i';   // the dev app until the production one is registered
+const SIGNIN_CLIENT_ID = 'Iv23li2MtbpspvneopRN';   // the production app, Dovetail Signoff
 const DEVICE_URL = 'https://github.com/login/device/code';
 const TOKEN_URL = 'https://github.com/login/oauth/access_token';
 function signInFile(io) { return path.join(io.home, '.signoff', 'auth.json'); }

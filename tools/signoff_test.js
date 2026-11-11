@@ -651,7 +651,7 @@ test('login: shows the code, waits through pending and slow_down, and keeps the 
   ok(r.out.indexOf('ABCD-1234') >= 0 && r.out.indexOf('https://github.com/login/device') >= 0, 'the code and where to enter it');
   ok(r.out.indexOf('@aric') >= 0, 'who signed in');
   ok(r.out.indexOf('ghu_now') < 0 && r.out.indexOf('ghr_one') < 0, 'no token printed');
-  eq(hub.seen[0], { client_id: 'Iv23liRCoaHFv0aMl16i' }, 'the device code asks with the app’s client id only (no secret)');
+  eq(hub.seen[0], { client_id: 'Iv23li2MtbpspvneopRN' }, 'the device code asks with the app’s client id only (no secret)');
   eq(hub.seen[1].grant_type, 'urn:ietf:params:oauth:grant-type:device_code');
   ok(!('client_secret' in hub.seen[1]), 'no client secret');
   const a = JSON.parse(fs.readFileSync(path.join(home, '.signoff', 'auth.json'), 'utf8'));

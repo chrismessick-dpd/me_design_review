@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <!-- Scripts only from this site; data only from GitHub's API. Review files are
      other people's data, so this also blocks any markup in them that slipped past escaping. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com https://signoff-auth-dev.misty-dawn-b371.workers.dev; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com https://signoff-auth.misty-dawn-b371.workers.dev https://signoff-auth-dev.misty-dawn-b371.workers.dev; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <title>Signoff ME · Mechanical Design Review</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23004952'/%3E%3Csvg x='10' y='6' width='12' height='20' viewBox='0 0 59.21 98.68'%3E%3Cpath d='M0 0h18.19v41.88H0zM0 56.79h18.19v41.88H0zM18.2 41.89h1.59v14.91H18.2zM19.79 0v41.89l24.96-6.63v28.16L19.79 56.79v41.89l39.42-10.47V10.47z' fill='%23fff'/%3E%3C/svg%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/styles.css?v=57d1cca86843">
+<link rel="stylesheet" href="assets/styles.css?v=e74dd4f2af81">
 </head>
 <body>
 <div id="demo-banner" class="demo-banner" hidden></div>
@@ -101,18 +101,18 @@
 <div id="report" class="report" hidden></div>
 <input type="file" id="import-file" accept=".json,application/json" hidden>
 
-<script src="assets/config.js?v=57d1cca86843"></script>
-<script src="assets/version.js?v=57d1cca86843"></script>
-<script src="assets/templates.js?v=57d1cca86843"></script>
-<script src="assets/model.js?v=57d1cca86843"></script>
-<script src="assets/auth.js?v=57d1cca86843"></script>
-<script src="assets/github.js?v=57d1cca86843"></script>
-<script src="assets/workspace.js?v=57d1cca86843"></script>
-<script src="assets/demo.js?v=57d1cca86843"></script>
+<script src="assets/config.js?v=e74dd4f2af81"></script>
+<script src="assets/version.js?v=e74dd4f2af81"></script>
+<script src="assets/templates.js?v=e74dd4f2af81"></script>
+<script src="assets/model.js?v=e74dd4f2af81"></script>
+<script src="assets/auth.js?v=e74dd4f2af81"></script>
+<script src="assets/github.js?v=e74dd4f2af81"></script>
+<script src="assets/workspace.js?v=e74dd4f2af81"></script>
+<script src="assets/demo.js?v=e74dd4f2af81"></script>
 <!-- People & access: signoff/assets/people.js opens it as a sheet over this page; load before app.js. -->
 <script src="../signoff/assets/people.js"></script>
-<script src="assets/app.js?v=57d1cca86843"></script>
-<script src="assets/specguide.js?v=57d1cca86843"></script>
+<script src="assets/app.js?v=e74dd4f2af81"></script>
+<script src="assets/specguide.js?v=e74dd4f2af81"></script>
 <!-- Demo tour: signoff/assets/tour.js does nothing outside ?demo, or before the hub starts the tour. -->
 <script src="../signoff/assets/tour.js"></script>
 <!-- Animated logo: signoff/assets/mark.js swaps the sidebar's static mark for the animated one. -->
