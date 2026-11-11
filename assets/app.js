@@ -3781,7 +3781,7 @@
         return '<button type="button" class="' + (settings.theme === t[0] ? 'on' : '') + '" data-theme="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div></div>') +
       (welcome ? '' : DEMO ? '<p class="note">Git sync is off in demo mode. <a href="' + esc(location.pathname) + '">Open the full tool</a>.</p>' :
-        '<div class="field-label" style="margin-top:20px;font-size:13px;color:var(--text);font-weight:600">GitHub</div>' +
+        '<div class="field-label" style="margin-top:20px;font-size:13px;color:var(--text);font-weight:600">Signoff Repository Access</div>' +
         (viaSignIn || settings.login ? '<p class="note" style="margin:0 0 12px">Signed in ' + (viaSignIn ? 'with GitHub ' : '') + 'as <b>' + esc(viaSignIn ? '@' + auth.login : settings.login) + '</b> · ' +
           (dataAccess === 'none' ? 'Client or contractor: you see the ' + UNITS + ' shared with you' : dataAccess === 'ok' ? 'FTE: you see every ' + UNIT : 'not synced yet') + '</p>' : '') +
         (viaSignIn ? '' : signInBlock(auth, token)) +
@@ -3814,6 +3814,7 @@
       if (!b) return;
       if (b.dataset.sheet === 'cancel') { applyTheme(settings.theme); return closeSheet(); }
       if (b.dataset.sheet === 'signout') return signOut();
+      if (b.dataset.sheet === 'token') return toggleTokenPanel(b, w);
       var s = read();
       if (b.dataset.sheet === 'signin') {
         // Keep the name and repositories typed so far; the token comes back from GitHub.
@@ -3876,9 +3877,22 @@
         '<p class="note">Kept in this browser and sent only to api.github.com. Collaborators use a classic token with the <b>repo</b> scope. The account owner can use a fine-grained token with <b>All repositories</b> and <b>Contents</b> and <b>Administration</b> set to read and write; sharing creates new repositories, which a token limited to selected repositories can’t reach.</p></div>' +
         '<label class="check"><input type="checkbox" id="s-remember"' + (remembered ? ' checked' : '') + '> Remember the token after closing the browser (avoid on shared computers)</label>';
     if (!auth) return tokenHtml;
-    return '<button type="button" class="btn btn-primary" data-sheet="signin" style="margin:4px 0 6px">Sign in with GitHub</button>' +
+    // The token is the second way in: a gray button beside Sign in that drops its panel down.
+    var open = !!getToken();
+    return '<div class="signin-row"><button type="button" class="btn btn-primary" data-sheet="signin">Sign in with GitHub</button>' +
+      '<button type="button" class="btn token-toggle" data-sheet="token" aria-expanded="' + open + '" aria-controls="s-token-panel">Use a token instead</button></div>' +
       '<p class="note" style="margin:0 0 12px">Uses your GitHub login, with its two-factor step. No token to create or keep track of.</p>' +
-      '<details class="guide"' + (getToken() ? ' open' : '') + '><summary>Use a token instead</summary><div style="margin-top:10px">' + tokenHtml + '</div></details>';
+      '<div class="token-panel" id="s-token-panel"' + (open ? '' : ' hidden') + '>' + tokenHtml + '</div>';
+  }
+
+  // Use a token instead: opens or closes the token panel under the sign-in row.
+  function toggleTokenPanel(btn, root) {
+    var panel = root.querySelector('#' + btn.getAttribute('aria-controls'));
+    if (!panel) return;
+    var open = panel.hidden;
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) { var f = panel.querySelector('input[type="password"]'); if (f && !f.value) f.focus(); }
   }
 
   // Sign out of this browser: the token goes, and so does every copy the suite keeps here
