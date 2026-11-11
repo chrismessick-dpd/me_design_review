@@ -17,7 +17,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE = ROOT.parent / "ee_design_review"
 ENGINE = [
-    "assets/model.js", "assets/github.js", "assets/workspace.js", "assets/app.js", "assets/demo.js", "assets/specguide.js",
+    "assets/model.js", "assets/auth.js", "assets/github.js", "assets/workspace.js", "assets/app.js", "assets/demo.js", "assets/specguide.js",
     "assets/styles.css", "tools/build.py", "tools/package.py", "tools/validate_templates.py",
     "tools/signoff.js", "tools/signoff_test.js",
 ]

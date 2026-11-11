@@ -6,6 +6,8 @@
    (assets/config.js, templates.js, model.js, github.js), so it reads a review exactly as the browser
    does, and turns it into plain files to read and edit. Node 20 or later; no packages.
 
+     node tools/signoff.js login                    sign in with GitHub: a code to enter at github.com/login/device
+     node tools/signoff.js logout                   forget that sign-in on this computer
      node tools/signoff.js whoami                   the token's login, and whether it opens the data repo
      node tools/signoff.js list [--project P] [--all]
      node tools/signoff.js pull <review> [dir]      a checkout: scribe.md, reqs.csv, status.md, review.json
@@ -25,8 +27,9 @@
    force: false, and reads the file back. It commits only what a dry run showed: --confirm takes
    the code the dry run printed, which stops matching once the files or the review change.
 
-   The token comes from SIGNOFF_TOKEN, --token-file, the config's tokenFile, ee_tools_token.txt beside
-   the tool folders, or `gh auth token`, in that order. It is never printed. The config is
+   The token comes from SIGNOFF_TOKEN, --token-file, `signoff login` (kept in ~/.signoff/auth.json, and
+   renewed by itself), the config's tokenFile, ee_tools_token.txt beside the tool folders, or
+   `gh auth token`, in that order. It is never printed. The config is
    ~/.signoff/config.json (or the file SIGNOFF_CONFIG names):
      { "name": "Name to stamp edits with", "tokenFile": "path", "checkouts": "folder for checkouts" }
 
@@ -52,6 +55,7 @@ const LIST_CAP = 40;   // lines per list in the terminal; status.md has them all
 const USAGE = [
   'signoff: this Signoff tool from the command line (docs/cli.md)',
   '',
+  '  node tools/signoff.js login, logout',
   '  node tools/signoff.js whoami',
   '  node tools/signoff.js list [--project P] [--all]',
   '  node tools/signoff.js pull <review> [dir] [--force]',
@@ -108,6 +112,10 @@ function findToken(io, opts, config) {
   if (io.env.SIGNOFF_TOKEN && io.env.SIGNOFF_TOKEN.trim()) return { token: io.env.SIGNOFF_TOKEN.trim(), source: 'SIGNOFF_TOKEN' };
   const files = [];
   if (opts['token-file']) files.push([opts['token-file'], '--token-file']);
+  if (!opts['token-file']) {
+    const a = readSignIn(io);
+    if (a && a.expiresAt > Date.now()) return { token: a.access, source: 'signoff login (@' + a.login + ')' };
+  }
   if (config.tokenFile) files.push([config.tokenFile, 'tokenFile in the config']);
   files.push([path.join(path.dirname(TOOL_ROOT), 'ee_tools_token.txt'), 'ee_tools_token.txt beside the tool folders']);
   for (const [file, source] of files) {
@@ -123,7 +131,85 @@ function findToken(io, opts, config) {
       if (t) return { token: t, source: 'gh auth token' };
     } catch (e) { /* no gh, or not signed in */ }
   }
-  throw new CliError('No GitHub token. Set SIGNOFF_TOKEN, pass --token-file, put tokenFile in ~/.signoff/config.json, or sign in with `gh auth login`.');
+  throw new CliError('No GitHub token. Run `signoff login`, or set SIGNOFF_TOKEN, pass --token-file, put tokenFile in ~/.signoff/config.json, or sign in with `gh auth login`.');
+}
+
+// ── Sign in with GitHub (device flow) ──────────────────────
+// The suite's GitHub App (signoff/docs/sign-in.md). A device-flow sign-in needs no client secret, even
+// to renew, so the command line talks to GitHub directly, with no Worker. Its tokens last 8 hours and
+// renew from a refresh token that lasts 6 months and is replaced at every renewal.
+const SIGNIN_CLIENT_ID = 'Iv23liRCoaHFv0aMl16i';   // the dev app until the production one is registered
+const DEVICE_URL = 'https://github.com/login/device/code';
+const TOKEN_URL = 'https://github.com/login/oauth/access_token';
+function signInFile(io) { return path.join(io.home, '.signoff', 'auth.json'); }
+function signInClient(config) { return config.signinClientId || SIGNIN_CLIENT_ID; }
+function readSignIn(io) {
+  try {
+    const a = JSON.parse(fs.readFileSync(signInFile(io), 'utf8'));
+    return a && a.v === 1 && a.access && a.refresh ? a : null;
+  } catch (e) { return null; }
+}
+function writeSignIn(io, t, at, login) {
+  const file = signInFile(io);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const a = { v: 1, login, access: t.access_token, refresh: t.refresh_token,
+    expiresAt: at + (Number(t.expires_in) || 28800) * 1000, refreshExpiresAt: at + (Number(t.refresh_token_expires_in) || 15897600) * 1000 };
+  fs.writeFileSync(file, JSON.stringify(a, null, 2) + '\n', { mode: 0o600 });
+  return a;
+}
+async function oauthPost(io, url, params) {
+  const res = await (io.fetch || nodeFetch)(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'signoff-cli' },
+    body: new URLSearchParams(params).toString() });
+  let d = {};
+  try { d = JSON.parse(await res.text()) || {}; } catch (e) { d = {}; }
+  if (!res.ok && !d.error) d.error = 'http_' + res.status;
+  return d;
+}
+// Renew the sign-in when less than an hour is left. Unreachable GitHub isn't fatal here: a command
+// that needs GitHub fails on its own, and status works offline.
+async function renewSignIn(io, config) {
+  const a = readSignIn(io);
+  if (!a || a.expiresAt - Date.now() > 3600e3) return a;
+  if (a.refreshExpiresAt <= Date.now()) { fs.rmSync(signInFile(io), { force: true }); throw new CliError('Your GitHub sign-in has expired. Run `signoff login` again.'); }
+  const at = Date.now();
+  let d;
+  try { d = await oauthPost(io, TOKEN_URL, { client_id: signInClient(config), grant_type: 'refresh_token', refresh_token: a.refresh }); } catch (e) { return a; }
+  if (d.error === 'bad_refresh_token') { fs.rmSync(signInFile(io), { force: true }); throw new CliError('GitHub ended this sign-in. Run `signoff login` again.'); }
+  if (d.error || !d.access_token) return a;
+  return writeSignIn(io, d, at, a.login);
+}
+
+async function cmdLogin(ctx) {
+  const io = ctx.io, cid = signInClient(ctx.config), sleep = io.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const d = await oauthPost(io, DEVICE_URL, { client_id: cid });
+  if (d.error || !d.device_code) throw new CliError('GitHub didn’t start a sign-in: ' + (d.error_description || d.error || 'no device code') + '.');
+  if (ctx.opts.json) io.out(JSON.stringify({ url: d.verification_uri, code: d.user_code }) + '\n');
+  else io.out('To sign in, open ' + d.verification_uri + ' and enter the code ' + d.user_code + '.\nWaiting for you to finish on GitHub…\n');
+  let wait = (Number(d.interval) || 5) * 1000;
+  const until = Date.now() + (Number(d.expires_in) || 900) * 1000;
+  while (Date.now() < until) {
+    await sleep(wait);
+    const at = Date.now();
+    const t = await oauthPost(io, TOKEN_URL, { client_id: cid, device_code: d.device_code, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' });
+    if (t.error === 'authorization_pending') continue;
+    if (t.error === 'slow_down') { wait += 5000; continue; }
+    if (t.error === 'expired_token') break;
+    if (t.error === 'access_denied') throw new CliError('Sign-in was cancelled on GitHub.');
+    if (t.error || !t.access_token) throw new CliError('GitHub refused the sign-in: ' + (t.error_description || t.error || 'no token') + '.');
+    const u = await new ctx.eng.S.GitHubAccount(t.access_token, io.fetch || nodeFetch).user();
+    writeSignIn(io, t, at, u.login);
+    if (ctx.opts.json) return out(ctx, { login: u.login });
+    return out(ctx, 'Signed in as @' + u.login + '. The command line uses this sign-in now and renews it by itself; it lasts until it goes 6 months unused. `signoff logout` forgets it.');
+  }
+  throw new CliError('The code expired before the sign-in finished. Run `signoff login` again.');
+}
+
+async function cmdLogout(ctx) {
+  const had = readSignIn(ctx.io);
+  fs.rmSync(signInFile(ctx.io), { force: true });
+  out(ctx, ctx.opts.json ? { signedOut: !!had } : had
+    ? 'Signed out @' + had.login + ' on this computer. To end the sign-in on GitHub too, revoke it at https://github.com/settings/apps/authorizations.'
+    : 'Not signed in with `signoff login` on this computer.');
 }
 
 // The name edits are stamped with, as the browser's Settings → Your name.
@@ -909,6 +995,7 @@ function skillText(ctx) {
   L.push('');
   L.push('| Command | Does |');
   L.push('| --- | --- |');
+  L.push('| `signoff login` | Sign in with GitHub: prints a code to enter at github.com/login/device, then waits. The user runs it in their own terminal, since it waits on them |');
   L.push('| `signoff whoami` | The GitHub login, the name edits are stamped with, and whether the token opens the data repo |');
   L.push('| `signoff list [--project P] [--all]` | Every review the token reaches: id, name, project, stage, progress, and Scribe gaps |');
   L.push('| `signoff pull <review> [dir]` | A checkout of one review' + (checkouts ? ' (by default in `' + checkouts + '/<tool>/<review>`)' : '') + '. `<review>` is an id, a slug, or a name |');
@@ -987,7 +1074,7 @@ function skillText(ctx) {
   L.push('');
   L.push('## If something goes wrong');
   L.push('');
-  L.push('- "No GitHub token": run `signoff whoami`, and ask the user to set `SIGNOFF_TOKEN`, sign in with `gh auth login`, or set `tokenFile` in `~/.signoff/config.json`.');
+  L.push('- "No GitHub token": run `signoff whoami`, and ask the user to run `signoff login` in their own terminal (it shows a code to enter on GitHub), or to set `SIGNOFF_TOKEN`, sign in with `gh auth login`, or set `tokenFile` in `~/.signoff/config.json`.');
   L.push('- "Not a checkout": pass the checkout folder, or `cd` into it.');
   L.push('- "review.json isn\'t the file that was pulled": it was edited. Ask the user before pulling again with `--force`.');
   L.push('- A dry run that would change sections nobody edited: stop and tell the user.');
@@ -1026,9 +1113,9 @@ function parseArgs(argv) {
   return { cmd: args.shift(), args, opts };
 }
 
-const COMMANDS = { whoami: cmdWhoami, list: cmdList, pull: cmdPull, status: cmdStatus, push: cmdPush, open: cmdOpen, export: cmdExport, skill: cmdSkill };
+const COMMANDS = { login: cmdLogin, logout: cmdLogout, whoami: cmdWhoami, list: cmdList, pull: cmdPull, status: cmdStatus, push: cmdPush, open: cmdOpen, export: cmdExport, skill: cmdSkill };
 
-// io: { env, cwd, home, out(text), err(text), fetch, gh: false to skip `gh auth token` } (tests pass their own).
+// io: { env, cwd, home, out(text), err(text), fetch, gh: false to skip `gh auth token`, sleep(ms) } (tests pass their own).
 async function run(argv, io) {
   io = Object.assign({ env: process.env, cwd: process.cwd(), home: os.homedir(), out: (s) => process.stdout.write(s), err: (s) => process.stderr.write(s), fetch: null }, io || {});
   try {
@@ -1038,6 +1125,7 @@ async function run(argv, io) {
     if (!fn) throw new CliError('Unknown command “' + cmd + '”.\n\n' + USAGE, 2);
     const eng = loadEngine(opts.assets || io.env.SIGNOFF_ASSETS);
     const ctx = { eng, io, opts, config: readConfig(io, opts) };
+    if (cmd !== 'login' && cmd !== 'logout' && cmd !== 'skill' && !(io.env.SIGNOFF_TOKEN && io.env.SIGNOFF_TOKEN.trim()) && !opts['token-file']) await renewSignIn(io, ctx.config);
     await fn(ctx, args);
     return 0;
   } catch (err) {

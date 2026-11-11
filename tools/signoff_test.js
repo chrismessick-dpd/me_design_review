@@ -610,6 +610,91 @@ test('skill prints the Claude Code skill, and --install writes it once', async (
   eq((await sh(['skill', '--install', where, '--force'])).code, 0);
 });
 
+// ── signoff login: GitHub's device flow, against a fake github.com ──
+// A fresh home each time; SIGNOFF_TOKEN is cleared so the sign-in is what the commands use.
+function signInHub(script) {
+  const seen = [];
+  const reply = (status, body) => Promise.resolve({ ok: status < 300, status, text: () => Promise.resolve(JSON.stringify(body)) });
+  return {
+    seen,
+    fetch: (url, init) => {
+      if (url === 'https://github.com/login/device/code' || url === 'https://github.com/login/oauth/access_token') {
+        const params = Object.fromEntries(new URLSearchParams(init.body));
+        seen.push(params);
+        return reply(200, script(url, params));
+      }
+      const auth = init && init.headers && init.headers.Authorization;
+      if (new URL(url).pathname === '/user') return reply(auth === 'Bearer ghu_now' || auth === 'Bearer ghu_new' ? 200 : 401, { login: 'aric', name: 'Ari Chen', message: 'Bad credentials' });
+      return gh.fetch(url, init);
+    },
+  };
+}
+async function signInSh(argv, hub, home) {
+  let o = '', e = '';
+  const code = await cli.run(argv, { env: { SIGNOFF_TOKEN: '' }, cwd: TMP, home, out: (s) => { o += s; }, err: (s) => { e += s; },
+    fetch: hub.fetch, gh: false, sleep: () => Promise.resolve() });
+  return { code, out: o, err: e };
+}
+
+test('login: shows the code, waits through pending and slow_down, and keeps the sign-in out of every repo', async () => {
+  const home = fs.mkdtempSync(path.join(TMP, 'home-'));
+  let polls = 0;
+  const hub = signInHub((url, p) => {
+    if (url.endsWith('/device/code')) return { device_code: 'dev1', user_code: 'ABCD-1234', verification_uri: 'https://github.com/login/device', expires_in: 900, interval: 5 };
+    polls++;
+    if (polls === 1) return { error: 'authorization_pending' };
+    if (polls === 2) return { error: 'slow_down' };
+    return { access_token: 'ghu_now', expires_in: 28800, refresh_token: 'ghr_one', refresh_token_expires_in: 15897600, token_type: 'bearer' };
+  });
+  const r = await signInSh(['login'], hub, home);
+  eq(r.code, 0, r.err);
+  ok(r.out.indexOf('ABCD-1234') >= 0 && r.out.indexOf('https://github.com/login/device') >= 0, 'the code and where to enter it');
+  ok(r.out.indexOf('@aric') >= 0, 'who signed in');
+  ok(r.out.indexOf('ghu_now') < 0 && r.out.indexOf('ghr_one') < 0, 'no token printed');
+  eq(hub.seen[0], { client_id: 'Iv23liRCoaHFv0aMl16i' }, 'the device code asks with the app’s client id only (no secret)');
+  eq(hub.seen[1].grant_type, 'urn:ietf:params:oauth:grant-type:device_code');
+  ok(!('client_secret' in hub.seen[1]), 'no client secret');
+  const a = JSON.parse(fs.readFileSync(path.join(home, '.signoff', 'auth.json'), 'utf8'));
+  eq([a.login, a.access, a.refresh], ['aric', 'ghu_now', 'ghr_one']);
+  const w = await signInSh(['whoami', '--json'], hub, home);
+  eq(w.code, 0, w.err);
+  eq(JSON.parse(w.out).tokenFrom, 'signoff login (@aric)', 'commands use the sign-in');
+});
+
+test('login: a token with under an hour left renews before the command, and a dead sign-in says to log in again', async () => {
+  const home = fs.mkdtempSync(path.join(TMP, 'home-'));
+  const file = path.join(home, '.signoff', 'auth.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ v: 1, login: 'aric', access: 'ghu_old', refresh: 'ghr_one', expiresAt: Date.now() + 600e3, refreshExpiresAt: Date.now() + 864e5 }));
+  const hub = signInHub((url, p) => p.refresh_token === 'ghr_one'
+    ? { access_token: 'ghu_new', expires_in: 28800, refresh_token: 'ghr_two', refresh_token_expires_in: 15897600 }
+    : { error: 'bad_refresh_token', error_description: 'The refresh token passed is incorrect or expired.' });
+  let r = await signInSh(['whoami', '--json'], hub, home);
+  eq(r.code, 0, r.err);
+  eq(hub.seen[0].grant_type, 'refresh_token');
+  ok(!('client_secret' in hub.seen[0]), 'a device-flow sign-in renews without a secret');
+  const a = JSON.parse(fs.readFileSync(file, 'utf8'));
+  eq([a.access, a.refresh], ['ghu_new', 'ghr_two'], 'the renewed pair replaces the used one');
+  fs.writeFileSync(file, JSON.stringify(Object.assign(a, { expiresAt: Date.now() + 600e3 })));
+  hub.seen.length = 0;
+  fs.writeFileSync(file, JSON.stringify(Object.assign(a, { refresh: 'ghr_dead' })));
+  r = await signInSh(['whoami'], hub, home);
+  eq(r.code, 1);
+  ok(/signoff login/.test(r.err), r.err);
+  ok(!fs.existsSync(file), 'the dead sign-in is forgotten');
+});
+
+test('logout forgets the sign-in on this computer', async () => {
+  const home = fs.mkdtempSync(path.join(TMP, 'home-'));
+  const file = path.join(home, '.signoff', 'auth.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ v: 1, login: 'aric', access: 'ghu_now', refresh: 'ghr_one', expiresAt: Date.now() + 8 * 3600e3, refreshExpiresAt: Date.now() + 864e5 }));
+  const r = await signInSh(['logout'], signInHub(() => ({})), home);
+  eq(r.code, 0, r.err);
+  ok(/@aric/.test(r.out) && /github\.com\/settings\/apps\/authorizations/.test(r.out), r.out);
+  ok(!fs.existsSync(file));
+});
+
 (async () => {
   let failed = 0;
   for (const t of tests) {
