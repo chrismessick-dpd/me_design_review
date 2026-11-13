@@ -9,6 +9,8 @@
                    another tool's (contractors find their repos by name prefix).
    repos.suite:    other repositories every FTE is invited to, next to this tool's own:
                    the other discipline's tool and data repos, and the hub.
+   repos.sharedPrefixes: every tool's shared review repo prefix. FTEs are invited to (and, switched off
+                   FTE, removed from) every such repo of the owner, besides repos.suite (2026-11-12).
    ids:            prefixes for new project, comment, and custom-check IDs.
    templatePrefixes: checklist id -> required prefix of its section and item IDs.
    words.unit(s):  what one review is called on screen (board / part). "Project" is the
@@ -26,7 +28,8 @@ window.SIGNOFF_CONFIG = {
     "toolRepo": "me_design_review",
     "dataRepo": "me_design_review_data",
     "prefix": "review-me-",
-    "suite": ["ee_design_review", "ee_design_review_data", "fw_design_review", "fw_design_review_data", "signoff", "pcb_dfm", "signoff_pl", "signoff_pl_data", "signoff_tickets"]
+    "suite": ["ee_design_review", "ee_design_review_data", "fw_design_review", "fw_design_review_data", "signoff", "pcb_dfm", "signoff_pl", "signoff_pl_data", "signoff_tickets", "loom_data", "flasher_data"],
+    "sharedPrefixes": ["review-ee-", "review-me-", "review-fw-", "review-pl-", "review-loom-", "review-flasher-"]
   },
   "ids": { "project": "m", "comment": "mc", "custom": "mx" },
   "templateOrder": ["requirements", "part-design", "tolerancing", "dfa", "materials", "analysis", "enclosure", "drawings", "validation"],

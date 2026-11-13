@@ -385,15 +385,29 @@
     return repos;
   };
 
-  // Every repository an FTE needs: the internal ones and each shared project of this tool.
-  // (The other discipline's shared projects are granted from that tool's People page.)
-  Workspace.prototype.fteRepos = function (state) {
+  // Every repository an FTE needs: the internal ones, each shared project of this tool, and `others`:
+  // every other tool's shared repos (suiteShared below), so making someone an FTE here covers the
+  // whole suite (Chris, 2026-11-12).
+  Workspace.prototype.fteRepos = function (state, others) {
     var repos = this.internalRepos();
     Object.keys((state.roster && state.roster.shared) || {}).forEach(function (id) {
       var r = M.sharedRepo(state.roster, id);
       if (r && repos.indexOf(r) < 0) repos.push(r);
     });
+    (others || []).forEach(function (r) { if (repos.indexOf(r) < 0) repos.push(r); });
     return repos;
+  };
+
+  // The shared review repos of every tool in the suite (settings.sharedPrefixes: review-ee-, review-pl-,
+  // and so on) that this token can see, as owner/name. Only someone who can see them all (the owner, or
+  // an admin) can invite to them, so a shorter list from anyone else changes nothing they could do.
+  Workspace.prototype.suiteShared = function () {
+    var ws = this, prefixes = (this.s.sharedPrefixes || []).map(function (p) { return String(p).toLowerCase(); });
+    if (!prefixes.length) return Promise.resolve([]);
+    return ws.account.listRepos(ws.s.owner, '').then(function (names) {
+      return names.filter(function (n) { n = n.toLowerCase(); return prefixes.some(function (p) { return n.indexOf(p) === 0; }); })
+        .map(function (n) { return ws.full(n); }).sort();
+    });
   };
 
   // Collaborators and pending invitations of one repository.

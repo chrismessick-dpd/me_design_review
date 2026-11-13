@@ -54,7 +54,8 @@
   // prefix: name prefix for the private repos of projects shared with contractors.
   // suiteRepos: the rest of the suite FTEs are invited to; always taken from the config.
   var DEFAULT_SETTINGS = { user: '', owner: C.repos.owner, toolRepo: C.repos.toolRepo, dataRepo: C.repos.dataRepo, dataPath: '', prefix: C.repos.prefix, branch: 'main', templatePath: 'templates', theme: 'auto' };
-  var settings = Object.assign({}, DEFAULT_SETTINGS, load('settings', {}), { suiteRepos: (C.repos.suite || []).slice(),
+  // sharedPrefixes: every tool's shared repo prefix; FTEs are invited to all of those repos too.
+  var settings = Object.assign({}, DEFAULT_SETTINGS, load('settings', {}), { suiteRepos: (C.repos.suite || []).slice(), sharedPrefixes: (C.repos.sharedPrefixes || []).slice(),
     plRepo: (C.pl && C.pl.dataRepo) || '', plTool: (C.pl && C.pl.tool) || '' });
   settings.theme = sharedTheme() || settings.theme || 'auto';
   if (!settings.user && !DEMO) {
@@ -179,7 +180,7 @@
     var tag = getToken() ? M.tokenTag(getToken()) : '';
     if ((settings.tokenTag || '') === tag) return false;
     settings.tokenTag = tag; settings.login = ''; save('settings', settings);
-    dataAccess = ''; save('dataAccess', dataAccess); accessMap = {};
+    dataAccess = ''; save('dataAccess', dataAccess); accessMap = {}; suiteShared = []; suiteListed = false; save('suiteShared', suiteShared);
     invitations = []; save('invitations', invitations);
     plRead = null; save('pl', null);
     return true;
@@ -3797,7 +3798,7 @@
         '<div class="row2"><div class="field"><label for="s-data">Data repo (FTEs)</label><input class="input" id="s-data" value="' + esc(settings.dataRepo) + '"></div>' +
         '<div class="field"><label for="s-tool">Tool repo (FTEs)</label><input class="input" id="s-tool" value="' + esc(settings.toolRepo) + '"></div></div>' +
         '<div class="field"><label for="s-prefix">Shared review repos start with</label><input class="input" id="s-prefix" value="' + esc(settings.prefix) + '"></div>' +
-        (settings.suiteRepos.length ? '<p class="note">FTEs are also invited to the rest of the suite: ' + settings.suiteRepos.map(esc).join(', ') + ' (set in assets/config.js).</p>' : '') + '</details>') +
+        (settings.suiteRepos.length ? '<p class="note">FTEs are also invited to the rest of the suite: ' + settings.suiteRepos.map(esc).join(', ') + ', and every repo starting ' + settings.sharedPrefixes.map(esc).join(', ') + ' (set in assets/config.js).</p>' : '') + '</details>') +
       '</div><div class="sheet-foot">' + (DEMO ? '' : '<button class="btn" data-sheet="test">Test connection</button><button class="btn" data-sheet="signout" title="' + (viaSignIn ? 'Sign out of GitHub here, and remove' : 'Remove the token and') + ' every Signoff and Fabcheck copy kept in this browser">Sign out</button>') + '<span class="spacer"></span>' +
       '<button class="btn" data-sheet="cancel">' + (welcome ? 'Skip' : 'Cancel') + '</button><button class="btn btn-primary" data-sheet="ok">' + (welcome ? 'Start' : DEMO ? 'Done' : 'Save & sync') + '</button></div>');
 
@@ -3946,6 +3947,11 @@
   // ── People & access (FTEs only) ──────────────────────────
   // accessMap: 'owner/repo' -> { collaborators, invited } | { error }, loaded when People opens.
   var accessMap = {}, accessLoading = false;
+  // Every tool's shared review repos (workspace.suiteShared), found when People & access is checked.
+  var suiteShared = load('suiteShared', []), suiteListed = false;
+  function allFteRepos() { return workspace().fteRepos(stateNow(), suiteShared); }
+  // Another tool's shared repo: who's on it is that tool's business, except that FTEs belong on it.
+  function otherToolsRepo(r) { return suiteShared.indexOf(r) >= 0 && repoName(r).indexOf(settings.prefix) !== 0; }
 
   function stateNow() {
     var byId = {};
@@ -3955,21 +3961,28 @@
 
   function loadAccess(force) {
     if (DEMO || !getToken() || accessLoading) return;
-    var ws = workspace(), repos = ws.fteRepos(stateNow()).filter(function (r) { return force || !accessMap[r]; });
-    if (!repos.length) return;
+    var ws = workspace();
+    if (suiteListed && !force && !allFteRepos().some(function (r) { return !accessMap[r]; })) return;
     accessLoading = true;
-    Promise.all(repos.map(function (r) {
-      return ws.access(r).then(function (a) { accessMap[r] = a; }, function (err) {
-        accessMap[r] = { error: err.status === 403 || err.status === 404 ? 'needs an admin token' : err.message };
-      });
-    })).then(function () { accessLoading = false; if (peopleShown()) renderPage(); });
+    // The other tools' shared repos first (once a page, or on Refresh), so the FTE list is whole; the
+    // last list is kept if listing fails.
+    var listed = suiteListed && !force ? Promise.resolve() : ws.suiteShared().then(function (list) { suiteShared = list; save('suiteShared', suiteShared); }, function () { /* keep the last list */ });
+    suiteListed = true;
+    listed.then(function () {
+      var repos = allFteRepos().filter(function (r) { return force || !accessMap[r]; });
+      return Promise.all(repos.map(function (r) {
+        return ws.access(r).then(function (a) { accessMap[r] = a; }, function (err) {
+          accessMap[r] = { error: err.status === 403 || err.status === 404 ? 'needs an admin token' : err.message };
+        });
+      }));
+    }).then(function () { accessLoading = false; if (peopleShown()) renderPage(); });
   }
 
   function repoName(full) { return full.split('/')[1]; }
   // For one person: the repos they should be on and aren't, and the ones with an invite pending.
   function accessGaps(u) {
     var ws = workspace(), want;
-    if (u.role === 'fte') want = ws.fteRepos(stateNow());
+    if (u.role === 'fte') want = ws.fteRepos(stateNow(), suiteShared);
     else want = (u.projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
     var missing = [], pending = [], unknown = false;
     want.forEach(function (r) {
@@ -3983,7 +3996,7 @@
     // being taken off a project when the access change didn't go through.
     var extra = M.isOutside(u) ? Object.keys(accessMap).filter(function (r) {
       var a = accessMap[r];
-      return a && !a.error && want.indexOf(r) < 0 && (a.collaborators.indexOf(u.login) >= 0 || a.invited.indexOf(u.login) >= 0);
+      return a && !a.error && want.indexOf(r) < 0 && !otherToolsRepo(r) && (a.collaborators.indexOf(u.login) >= 0 || a.invited.indexOf(u.login) >= 0);
     }) : [];
     return { want: want, missing: missing, pending: pending, unknown: unknown, unshared: unshared, extra: extra };
   }
@@ -4074,7 +4087,7 @@
     }
     html += '<p class="note" style="margin-top:14px">Internal ' + UNITS + ' live in <b>' + esc(settings.dataRepo) + '</b>, which only FTEs can open. ' +
       'Adding a client or contractor to a ' + UNIT + ' moves it into its own private <b>' + esc(settings.prefix) + '…</b> repository and invites them to that one repository only. ' +
-      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + '; the other tools’ shared reviews are granted from their own tabs here. ' : '') +
+      (settings.suiteRepos.length ? 'FTEs are also invited to ' + settings.suiteRepos.map(function (r) { return '<b>' + esc(r) + '</b>'; }).join(', ') + ', and every tool’s shared repos (' + settings.sharedPrefixes.map(function (p) { return '<b>' + esc(p) + '…</b>'; }).join(', ') + '). ' : '') +
       'On a personal account every collaborator can push to the repositories they’re on; an organization allows narrower roles.</p></div>';
     return html;
   }
@@ -4196,7 +4209,7 @@
     var u = roster.users[login];
     if (!u || !getToken()) return;
     var g = accessGaps(u);
-    var repos = u.role === 'fte' ? (Object.keys(accessMap).length ? g.missing : workspace().fteRepos(stateNow())) : [];
+    var repos = u.role === 'fte' ? (Object.keys(accessMap).length ? g.missing : allFteRepos()) : [];
     var invite = M.isOutside(u) ? (u.projects || []).filter(function (id) { var r = M.sharedRepo(roster, id); return r && (g.missing.indexOf(r) >= 0 || !accessMap[r]); }) : [];
     var share = g.unshared;
     if (!repos.length && !invite.length && !share.length) { toast((u.name || login) + ' already has access'); return; }
@@ -4800,14 +4813,17 @@
         setPerson(el.dataset.login, { role: el.dataset.role }); renderPage();
         if (el.dataset.role === 'fte') fixAccess(el.dataset.login);
         else if (wasRole === 'fte' && getToken()) {   // client to contractor and back only changes the label
-          var internal = workspace().internalRepos();
+          // Everything FTEs get (Chris, 2026-11-12: the reverse of Give access), except this tool's repos
+          // of projects they keep as a client or contractor.
+          var keep = ((roster.users[el.dataset.login] || {}).projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
+          var internal = allFteRepos().filter(function (r) { return keep.indexOf(r) < 0; });
           if (confirm('Also remove ' + el.dataset.login + ' from ' + internal.map(repoName).join(', ') + ' on GitHub?')) runAccessOps('Removing FTE access', [{ login: el.dataset.login, revokeRepos: internal }]);
         }
         break;
       case 'remove-person':
         if (!confirm('Remove ' + el.dataset.login + ' from People?')) break;
         (function (login) {
-          var u = roster.users[login], repos = u.role === 'fte' ? workspace().fteRepos(stateNow()) : (u.projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
+          var u = roster.users[login], repos = u.role === 'fte' ? allFteRepos() : (u.projects || []).map(function (id) { return M.sharedRepo(roster, id); }).filter(Boolean);
           setPerson(login, { deleted: true, projects: [] }); renderPage();
           // A client's or contractor's access goes with them; for an FTE, ask first.
           if (getToken() && repos.length && (u.role !== 'fte' || confirm('Also take away their GitHub access to ' + repos.map(repoName).join(', ') + '?'))) runAccessOps('Removing ' + login, [{ login: login, revokeRepos: repos }]);
