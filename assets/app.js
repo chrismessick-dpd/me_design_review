@@ -3332,7 +3332,7 @@
       (specPhrase ? '<div class="spec-phrase"><span>Linking just <b>“' + esc(specPhrase) + '”</b></span><button class="btn btn-sm" data-act="spec-phrase-clear">Whole sentence</button></div>' :
         '<p class="note" style="margin:-6px 0 10px">Select words in the sentence to link just those.</p>') +
       '<div class="field"><span class="field-label">Requirements</span>' + (links || '<p class="note" style="margin:0 0 8px">' + (u.state === 'std' ? 'Standard text: description that needs no requirement.' : 'Not linked to a requirement yet.') + '</p>') +
-      '<input class="input" id="spec-link-search" placeholder="Search requirements to link…" value="' + esc(query) + '" autocomplete="off">' +
+      '<input class="input" id="spec-link-search" placeholder="Search existing requirements to link additional" value="' + esc(query) + '" autocomplete="off">' +
       '<div id="spec-link-results">' + specLinkResults(p, u, query) + '</div></div>' +
       (secLinks.length ? '<div class="field"><span class="field-label">Points at</span><div class="chips">' + secLinks.map(function (id) { return '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(a.ctx.secs[id].title) + '</button>'; }).join('') + '</div></div>' : '') +
       (u.state === 'note' ? '<p class="note">A review note: a question for the review, counted on its own and not a gap. Answer it in the text, then resolve it.</p>' : '') +
