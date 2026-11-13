@@ -1187,7 +1187,7 @@
   }
 
   // Comments tagged @req (on a check, a requirement, or the whole review), oldest first: they wait
-  // in Scribe's Write as requirements list beside the flagged sentences, until handled
+  // in Scribe's Requirements to make list beside the flagged sentences, until handled
   // (reqDone: the comment's words are left as written).
   function specCommentTags(project) {
     return liveComments(project).filter(function (c) { return !c.reqDone && SPEC_TAG.test(String(c.text || '')); }).map(function (c) {

@@ -2135,13 +2135,13 @@
       ['[The rail stays within ±3% at 1.5 A]{REQ-006}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
       ['[off within 100 ms]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
       ['[U7 is a 2 A synchronous buck.]{std}', 'Standard text: how the circuit works, which needs no requirement of its own.'],
-      ['Keep the ripple under 30 mV at the Wi-Fi module @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
+      ['Keep the ripple under 30 mV at the Wi-Fi module @req', 'Flags the sentence to become a requirement. It shows in the Requirements inbox, under Requirements to make.'],
       ['the [display link]{#Display connector}', 'Points at another block by its heading; the sentence’s panel has a button to go there.']
     ] : [
       ['[the relays go off]{REQ-003}', 'Links the words in brackets to a requirement. The rest of the sentence counts as linked too.'],
       ['[off on reset]{REQ-003, REQ-001}', 'Links to more than one requirement.'],
       ['[It runs on FreeRTOS.]{std}', 'Standard text: background or explanation that needs no requirement.'],
-      ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows under Write as requirements.'],
+      ['Make the LED pulse instead of blink @req', 'Flags the sentence to become a requirement. It shows in the Requirements inbox, under Requirements to make.'],
       ['the [status frame]{#Status frame}', 'Points at another section by its heading. Pointing at an interface section counts as linked.']
     ];
     var example = board ?
@@ -2269,11 +2269,23 @@
         '<button class="btn btn-sm" data-act="spec-edit" data-id="' + esc(x.sec.id) + '">Edit copy</button>' +
         '<button class="btn btn-sm" data-act="spec-copy-delete" data-id="' + esc(x.sec.id) + '" title="Delete the copy once its text is merged into the newer version">Delete copy</button></div></div>';
     }).join('');
+    // The requirement lists fold into one Requirements inbox, folded by default (Chris, 2026-11-13: a
+    // long list pushed the text off the page). ui.specInbox remembers it open.
+    var nMiss = a.undescribed.length, open = !!ui.specInbox, inbox = '';
+    if (nTags || nMiss) {
+      var counts = (nTags ? '<span class="count" title="Tagged @req: requirements still to make from them">' + nTags + ' to make</span>' : '') +
+        (nMiss ? '<span class="count" title="Requirements no sentence describes">' + nMiss + ' not described</span>' : '');
+      inbox = '<div class="card spec-inbox' + (open ? ' open' : '') + '">' +
+        '<button class="spec-inbox-head" data-act="spec-inbox" aria-expanded="' + open + '"><span class="spec-inbox-chev" aria-hidden="true">▸</span>Requirements inbox' + counts + '</button>' +
+        (open ? '<div class="spec-inbox-body">' +
+          (nTags ? '<div class="spec-needs-card"><div class="spec-needs-title">Requirements to make <span class="count">' + nTags + '</span></div><p class="note spec-needs-sub">Tagged @req. Make a requirement from each, or change one the section already links.</p>' + tags + '</div>' : '') +
+          (nMiss ? '<div class="spec-needs-card"><div class="spec-needs-title">Not described <span class="count">' + nMiss + '</span></div>' + missing + '</div>' : '') + '</div>' : '') +
+        '</div>';
+    }
     return '<div class="spec-needs">' +
       (copies.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Edited in two places <span class="count">' + copies.length + '</span></div>' +
         '<p class="note" style="margin:0 0 6px">Two people changed the same section at once. The newer edit won; the other is kept as a copy. Move what you need from the copy into the section, then delete the copy.</p>' + conflicts + '</div>' : '') +
-      (nTags ? '<div class="card spec-needs-card"><div class="spec-needs-title">Write as requirements <span class="count">' + nTags + '</span></div>' + tags + '</div>' : '') +
-      (a.undescribed.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Not described <span class="count">' + a.undescribed.length + '</span></div>' + missing + '</div>' : '') + '</div>';
+      inbox + '</div>';
   }
 
   // The layered diagram, drawn from the outline: one block per section with a kind, lines from
@@ -3325,7 +3337,13 @@
       (secLinks.length ? '<div class="field"><span class="field-label">Points at</span><div class="chips">' + secLinks.map(function (id) { return '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(a.ctx.secs[id].title) + '</button>'; }).join('') + '</div></div>' : '') +
       (u.state === 'note' ? '<p class="note">A review note: a question for the review, counted on its own and not a gap. Answer it in the text, then resolve it.</p>' : '') +
       '<div class="spec-acts">' +
+      // A linked sentence offers Edit for its requirements, not Make requirement (Chris, 2026-11-13: after
+      // New requirement the panel's Make requirement looked like the next step and made a duplicate).
+      // Linking a second requirement goes through the search above.
       (u.note ? '<button class="btn btn-primary" data-act="spec-resolve" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '" title="Take the note out of the text">Resolve</button>' :
+      u.reqs.length ? u.reqs.slice(-3).reverse().map(function (id, i) {
+        return '<button class="btn' + (i ? '' : ' btn-primary') + '" data-act="open-req" data-id="' + esc(id) + '" title="Open it in the Requirements tab">Edit ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
+      }).join('') :
       '<button class="btn btn-primary" data-act="spec-make" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '">Make requirement</button>') +
       (u.tag ? f.x.links.filter(function (id) { return u.reqs.indexOf(id) < 0; }).slice(0, 3).map(function (id) {
         return '<button class="btn" data-act="spec-change" data-sec="' + esc(f.x.sec.id) + '" data-u="' + u.start + '" data-id="' + esc(id) + '" title="' + esc(reqLabel(a.ctx.reqs[id])) + '">Change ' + esc(a.ctx.reqs[id].ref || 'requirement') + '</button>';
@@ -3429,6 +3447,8 @@
       edit: function (id) { if (!id) return false; specStartEdit(id); return true; },
       editAll: function () { var p = current(); if (!p) return; ui.view = 'spec'; ui.specView = 'doc'; saveUi(); specEditing = 'all'; specDraft = M.specToText(p); closeInspector(); selected = null; renderPage(); specFocusEditor(); },
       goto: specGoto,
+      // Unfold (or fold) the Requirements inbox, for the steps about its lists.
+      inbox: function (open) { ui.specInbox = open !== false; saveUi(); renderPage(); },
       req: function (ref) {
         var p = current(), q = p && M.liveReqs(p).filter(function (r) { return r.ref === ref; })[0];
         if (!q) return false; ui.view = 'reqs'; saveUi(); openReq(q.id); return true;
@@ -3442,7 +3462,7 @@
     };
   }
 
-  // From the Write as requirements list: show the sentence in the document, highlighted, without
+  // From the Requirements to make list: show the sentence in the document, highlighted, without
   // opening its panel (Chris: the text is where to write it up).
   function specJumpUnit(sec, start) {
     ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
@@ -4744,6 +4764,7 @@
         ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
       case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; ui.specShow = ''; saveUi(); renderPage(); break;
       case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
+      case 'spec-inbox': ui.specInbox = !ui.specInbox; saveUi(); renderPage(); break;
       case 'spec-resolve': specResolve(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-goto': specGoto(id); break;
       case 'spec-jump': specJumpUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;

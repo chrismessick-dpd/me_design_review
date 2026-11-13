@@ -972,12 +972,23 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-help code, .spec-page .note code, .spec-page .empty code { font: 11.5px var(--mono); background: var(--bg-sunk); padding: 1px 4px; border-radius: 4px; }
 .spec-editor-foot { display: flex; gap: 8px; align-items: center; }
 .spec-editor-foot .spacer { flex: 1; }
-.spec-needs { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.spec-needs { display: grid; gap: 14px; margin-bottom: 22px; }
+.spec-needs:empty { display: none; }
 .spec-needs-card { padding: 12px 14px; }
+.spec-inbox { padding: 0; }
+.spec-inbox-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; border: none; background: none; text-align: left; font-weight: 600; font-size: 13.5px; color: var(--text); cursor: pointer; border-radius: inherit; }
+.spec-inbox-head:hover { background: var(--bg-sunk); }
+.spec-inbox-head .count { font-size: 11px; font-weight: 500; color: var(--warn); padding: 1px 7px; border-radius: 9px; background: var(--warn-hatch), var(--warn-soft); }
+.spec-inbox-chev { display: inline-block; width: 12px; color: var(--text-3); transition: transform .15s; }
+.spec-inbox.open .spec-inbox-chev { transform: rotate(90deg); }
+.spec-inbox-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 14px; border-top: 1px solid var(--hair); }
+.spec-inbox-body .spec-needs-card + .spec-needs-card { border-left: 1px solid var(--hair); }
+@media (prefers-reduced-motion: reduce) { .spec-inbox-chev { transition: none; } }
 .spec-needs-title { font-weight: 600; font-size: 13.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
 .spec-needs-title .count { font-size: 11px; color: var(--warn); padding: 1px 7px; border-radius: 9px; background: var(--warn-hatch), var(--warn-soft); }
 .spec-need { padding: 8px 0; border-top: 1px solid var(--hair); }
-.spec-needs-title + .spec-need { border-top: none; }
+.spec-needs-title + .spec-need, .spec-needs-sub + .spec-need { border-top: none; }
+.spec-needs-sub { margin: -4px 0 6px; font-size: 12px; }
 .spec-need-text { display: block; width: 100%; text-align: left; border: none; background: none; padding: 0; font-size: 13.5px; line-height: 1.4; color: var(--text); }
 .spec-need-text .muted { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
 .spec-need-text:hover > span:first-child { text-decoration: underline; }
