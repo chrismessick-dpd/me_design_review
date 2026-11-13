@@ -5050,9 +5050,10 @@
   // A page left open keeps running the version it loaded. Now and then (on opening, every few
   // minutes, when the tab comes back into view, after a sync) it asks this site which version it
   // serves now. If that's another one, it reloads into it as soon as nothing is being typed or
-  // edited, and the new page says "Tool updated". Everything is already saved in the browser, so
-  // a reload loses nothing. A version it already reloaded for is never tried twice, so a stale
-  // cache can't make it loop.
+  // edited, and the new page says "Tool updated". Every saved change is already in the browser, so
+  // the reload waits only for what lives on the page alone: a Scribe section open for editing, a
+  // comment typed but not sent, a sheet, a ticket, or People & access (staged edits), and a sync.
+  // A version it already reloaded for is never tried twice, so a stale cache can't make it loop.
   var UPDATE_KEY = 'signoff.toolUpdate';   // sessionStorage: { tried: hash, from: hash }
   var updateWaiting = '', updateBusy = false;
   function updateMemo(v) {
@@ -5064,7 +5065,9 @@
   function pageIdle() {
     var a = document.activeElement;
     var typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
-    return !syncing && !typing && !$('#sheet') && !$('#busy-wrap') && !$('#menu') && !document.hidden;
+    var draft = $('#comment-input');
+    return !syncing && !typing && !specEditing && !(draft && draft.value.trim()) && !$('#sheet') && !$('#busy-wrap') && !$('#menu')
+      && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !document.hidden;
   }
   function reloadWhenIdle() {
     if (!updateWaiting) return;
