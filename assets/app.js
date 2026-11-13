@@ -873,7 +873,7 @@
   // and it counts nowhere (model.row, countStatuses).
   function referenceRow(r, counts) {
     var n = counts[r.id] || 0;
-    var sub = '<span class="res waived">Waived</span><span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : cap(UNIT) + ' check') + '</span><span class="tag">Reference, not counted</span>';
+    var sub = '<span class="res waived">Waived</span><span class="tag">' + (checkerName(r.def) || cap(UNIT) + ' check') + '</span><span class="tag">Reference, not counted</span>';
     return '<div class="item st-reference' + (selected === r.id ? ' sel' : '') + '" data-act="select" data-id="' + esc(r.id) + '">' +
       '<span class="ref-dot" aria-hidden="true">i</span>' +
       '<div><div class="item-text">' + esc(r.def.text) + '</div><div class="item-sub">' + sub + '</div></div>' +
@@ -891,7 +891,7 @@
       if (r.state.assignee) sub += '<span>→ ' + esc(r.state.assignee) + '</span>';
     }
     if (r.auto === 'profile') sub += '<span class="tag">Outside profile</span>';
-    if (r.custom) sub += '<span class="tag">' + (isFabcheck(r.def) ? 'Fabcheck' : cap(UNIT) + ' check') + '</span>';
+    if (r.custom) sub += '<span class="tag">' + (checkerName(r.def) || cap(UNIT) + ' check') + '</span>';
     (r.def.tags || []).forEach(function (tg) { sub += '<span class="tag">' + esc(tg) + '</span>'; });
     var stCls = r.status === 'open' ? '' : r.status;
     return '<div class="item st-' + r.status + (r.auto ? ' auto-na' : '') + (selected === r.id ? ' sel' : '') + '" data-act="select" data-id="' + esc(r.id) + '">' +
@@ -925,7 +925,8 @@
   // Waived findings a checker sent for reference: listed apart, after the issues, counted nowhere.
   function referenceHtml(p, refs, counts) {
     if (!refs.length) return '';
-    return '<div class="section-title">Waived in Fabcheck</div><p class="note" style="margin:-6px 0 10px">Kept for reference: these aren’t issues and aren’t counted anywhere.</p>' +
+    var by = refs.map(function (x) { return checkerName(x.row.def); }).filter(function (n, i, a) { return n && a.indexOf(n) === i; }).sort();
+    return '<div class="section-title">Waived in ' + esc(by.length ? by.join(' and ') : 'a checker') + '</div><p class="note" style="margin:-6px 0 10px">Kept for reference: these aren’t issues and aren’t counted anywhere.</p>' +
       '<div class="card table-scroll"><table class="table ref-table"><tbody>' +
       refs.map(function (x) {
         var r = x.row;
@@ -1123,6 +1124,96 @@
     }
     if (def.hint) h += '<details class="fab-detail"><summary>Details</summary><div>' + esc(def.hint) + '</div></details>';
     return h + '</div>';
+  }
+
+  // ── Pincheck runs (pincheck/docs/send-to-signoff-ee.md) ──
+  // Pincheck sends schematic findings as Fabcheck sends fab findings, and stores its run next to the
+  // review (config.pincheck.dir), but its runs are never revisions: no Revisions tab, no pictures.
+  function isPincheck(def) { return !!(def && def.source && def.source.tool === 'pincheck'); }
+  // The checker that wrote a custom check, by name, or '' for one a person added.
+  function checkerName(def) { return isFabcheck(def) ? 'Fabcheck' : isPincheck(def) ? 'Pincheck' : ''; }
+  var PK_RUN = /^pk[a-z0-9]{6,40}$/;
+  function pincheckUrl(p, src, loc) {
+    var run = src.run || {};
+    var q = ['run=' + encodeURIComponent(run.id || ''), 'project=' + encodeURIComponent(p.id), 'check=' + encodeURIComponent(src.check || '')];
+    if (loc && loc.finding) q.push('finding=' + encodeURIComponent(loc.finding));
+    return '../pincheck/index.html' + (DEMO ? '?demo' : '') + '#/findings?' + q.join('&');
+  }
+  function pincheckBlock(p, def) {
+    if (!isPincheck(def)) return '';
+    var src = def.source, run = src.run && typeof src.run === 'object' ? src.run : null, locs = Array.isArray(src.locations) ? src.locations : [];
+    var canOpen = run && PK_RUN.test(run.id || ''), runAttr = canOpen ? ' data-run="' + esc(run.id) + '"' : '';
+    var dz = (run && run.design) || {};
+    var h = '<div class="fab-card"><div class="fab-head"><span><b>From Pincheck</b></span>' +
+      (canOpen ? '<button class="btn btn-primary" data-act="open-pincheck"' + runAttr + ' data-href="' + esc(pincheckUrl(p, src, locs[0])) + '">Open in Pincheck</button>' : '') + '</div>';
+    if (run) {
+      h += '<div class="fab-meta">' + esc(dz.name || 'Schematic') +
+        (dz.parts ? ' <span class="muted">· ' + esc(dz.parts + ' parts' + (dz.nets ? ', ' + dz.nets + ' nets' : '')) + '</span>' : '') + '<br>' +
+        esc([fmtDate(run.at), run.by, run.library && run.library.files != null && run.library.files + ' part file' + (run.library.files === 1 ? '' : 's')].filter(Boolean).join(' · ')) + '<br>' +
+        (run.stored && run.stored.repo === 'demo' ? 'Demo: the run is kept in this browser' : run.stored && run.stored.repo ? 'Run stored in this ' + UNIT + '’s private repository' : 'Not stored with the ' + UNIT + ': open the schematic in Pincheck again to see it') + '</div>';
+    }
+    if (src.gone) h += '<div class="note" style="margin:6px 0 0">Not found in the latest Pincheck run.</div>';
+    if (locs.length) {
+      h += '<div class="fab-locs">' + locs.map(function (l) {
+        var label = String(l.label || l.finding || '') + ((l.refs || []).length ? ' — ' + l.refs.slice(0, 4).join(', ') : '') + ((l.nets || []).length ? ' · ' + l.nets.slice(0, 3).join(', ') : '');
+        return canOpen && l.finding ? '<button class="fab-loc" data-act="open-pincheck"' + runAttr + ' data-href="' + esc(pincheckUrl(p, src, l)) + '">' + esc(label) + '</button>'
+          : '<span class="fab-loc">' + esc(label) + '</span>';
+      }).join('') + '</div>';
+    }
+    if (def.hint) h += '<details class="fab-detail"><summary>Details</summary><div>' + esc(def.hint) + '</div></details>';
+    return h + '</div>';
+  }
+  // A run file Pincheck stored ({ run, findings }) as Signoff hands it on, or null. Anyone who can write the
+  // review's repo wrote it, so the id, hashes, and the bundle's place are checked: the bundle is taken
+  // relative to the run's folder (designs/<key>.json.gz), as cleanRun does for Fabcheck's zip.
+  function cleanPincheckRun(file) {
+    var run = file && file.run;
+    if (!run || typeof run !== 'object' || !PK_RUN.test(run.id || '')) return null;
+    var dz = run.design && typeof run.design === 'object' ? run.design : {};
+    var m = typeof dz.path === 'string' && dz.path.indexOf('..') < 0 && /(?:^|\/)designs\/([0-9a-f]{16})\.json\.gz$/.exec(dz.path);
+    if (!m || m[1] !== dz.key || !/^[0-9a-f]{64}$/.test(String(dz.sha256 || ''))) return { id: run.id, raw: run, bundle: null, findings: [] };
+    return { id: run.id, raw: run, bundle: { rel: 'designs/' + m[1] + '.json.gz', sha256: dz.sha256, size: +dz.size || 0 },
+      findings: Array.isArray(file.findings) ? file.findings : [] };
+  }
+  // Read a stored Pincheck run and its bundle with this tab's token and leave them for Pincheck
+  // (S.handoff, entry tool 'pincheck'). Resolves 'ok', 'missing', or 'nobundle'.
+  function handOffPincheck(p, runId, step) {
+    step = step || function () {};
+    var dir = checkerDir(p, C.pincheck.dir), store = workspace().store(homeOf(p));
+    step('Listing the ' + UNIT + '’s stored Pincheck runs…', 0.1);
+    return store.listTree(dir).then(function (entries) {
+      step('Reading run ' + runId + '…', 0.3);
+      return store.readBytes(dir + 'runs/' + runId + '.json', entries).then(function (b) {
+        var r = null;
+        try { r = b && cleanPincheckRun(JSON.parse(new TextDecoder().decode(b))); } catch (e) { r = null; }
+        if (!r || r.id !== runId) return 'missing';
+        if (!r.bundle) return 'nobundle';
+        step('Reading the design' + (r.bundle.size ? ' (' + Math.max(1, Math.round(r.bundle.size / 1024)) + ' KB)' : '') + '…', 0.5);
+        return store.readVerified(dir + r.bundle.rel, r.bundle.sha256, entries).then(function (bundle) {
+          step('Handing the run to Pincheck…', 0.9);
+          return S.handoff.put({ id: runId, tool: 'pincheck', run: r.raw, findings: r.findings, bundle: bundle, at: M.now() }, DEMO);
+        }).then(function () { return 'ok'; });
+      });
+    });
+  }
+  // Open in Pincheck, in this tab, as Open in Fabcheck: a card while the run is handed over, then Pincheck.
+  // The demo's runs are kept in Pincheck's own browser storage, so the demo goes straight there.
+  function openPincheck(el) {
+    var href = new URL(el.dataset.href, location.href).href, runId = el.dataset.run || '', p = current();
+    if (p) save('fabReturn', { project: p.id, view: ui.view, selected: selected || '', scroll: $('#main').scrollTop, at: M.now() });
+    var card = busyCard('Opening in Pincheck');
+    function go() { card.step('Opening Pincheck…', 1); location.href = href; }
+    if (DEMO || !C.pincheck || !p || !getToken() || !PK_RUN.test(runId)) return go();
+    function ask(why) {
+      card.stop(why + ' Pincheck can open it only if this browser sent it.', [['Stay here', card.close], ['Open Pincheck', go, true]], 'The run can’t be handed over');
+    }
+    handOffPincheck(p, runId, card.step).then(function (res) {
+      if (res === 'missing') ask('This run isn’t stored with the ' + UNIT + '.');
+      else if (res === 'nobundle') ask('This run was stored without its design.');
+      else go();
+    }, function (err) {
+      ask(err.code === 'mismatch' ? 'The stored design doesn’t match its SHA-256.' : 'Couldn’t read the run from GitHub' + (err.message ? ' (' + err.message + ')' : '') + '.');
+    });
   }
 
   // ── Revisions: runs stored with the review, some tagged (docs/fabcheck-link.md, "Revisions") ──
@@ -1468,9 +1559,9 @@
       '<button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<div class="insp-title"' + (d.custom ? ' contenteditable="true" data-edit-custom="' + esc(selected) + '"' : '') + '>' + esc(d.def.text) + '</div>' +
-      fabcheckBlock(p, d.def) +
-      (row && row.reference ? '<div class="note ref-note">Waived in Fabcheck and kept here for reference. It isn’t an issue and isn’t counted in progress, issues, or the project summary.</div>' : '') +
-      (d.def.hint && !isFabcheck(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
+      fabcheckBlock(p, d.def) + pincheckBlock(p, d.def) +
+      (row && row.reference ? '<div class="note ref-note">Waived in ' + esc(checkerName(d.def) || 'a checker') + ' and kept here for reference. It isn’t an issue and isn’t counted in progress, issues, or the project summary.</div>' : '') +
+      (d.def.hint && !checkerName(d.def) ? '<div class="hint"><b>Guidance</b>' + esc(d.def.hint) + '</div>' : '') +
       tracedBy(p, selected) +
       (row && row.auto ? '<div class="note" style="margin:-4px 0 12px">' + (row.auto === 'section' ? 'Counted as N/A because the section is marked N/A.' : 'Counted as N/A: outside this ' + W.thing + '’s profile (' + esc((d.def.tags || d.section.tags || []).join(', ')) + '). Set a status to review it anyway.') + '</div>' : '') +
       '<div class="field"><span class="field-label">Status</span><div class="seg full">' + statusBtn('open', 'To review') + statusBtn('pass', 'Pass') + statusBtn('issue', 'Issue') + statusBtn('na', 'N/A') + '</div></div>' +
@@ -3907,7 +3998,7 @@
   // Unsynced changes would be lost, so they're counted and named first.
   var SUITE_NS = ['signoff.v1.', 'signoff-me.v1.', 'signoff-fw.v1.', 'signoff-pl.v1.', 'fabcheck.v1.'];
   // IndexedDB: Fabcheck's runs, hand-offs, and PL's pictures and model files waiting to upload.
-  var SUITE_DBS = ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo', 'signoff-pl-pictures', 'signoff-pl-uploads'];
+  var SUITE_DBS = ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo', 'signoff-pl-pictures', 'signoff-pl-uploads', 'pincheck-runs'];
   function signOut() {
     var unsynced = 0;
     SUITE_NS.forEach(function (ns) {
@@ -4787,6 +4878,7 @@
       case 'discard': discard(); break;
       case 'pic-side': { ui.picSide = el.dataset.key; var pp = current(); if (pp) showPicture(pp); break; }
       case 'open-fabcheck': openFabcheck(el); break;
+      case 'open-pincheck': openPincheck(el); break;
       case 'runs-reload': { var rp = current(); if (rp) { loadRuns(rp, true); renderPage(); } break; }
       case 'rev-toggle': revOpen[el.dataset.key] = !revOpen[el.dataset.key]; renderPage(); break;
       case 'rev-tag': { var tp = current(), tr = tp && runById(tp, el.dataset.run); if (tr) revisionSheet(tp, tr); break; }

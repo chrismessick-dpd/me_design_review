@@ -309,8 +309,11 @@
       return push(1);
     }).then(function (res) {
       absorb(st, res, repoFull);
-      // Fabcheck runs and packages for this project move with it (docs/fabcheck-link.md).
-      return ws.moveFabcheck(projectId, ws.dataFull(), repoFull, log);
+      // Every checker's files for this project move with it: Fabcheck's runs and packages
+      // (docs/fabcheck-link.md) and Pincheck's runs (pincheck/docs/send-to-signoff-ee.md).
+      return ws.checkerDirs().reduce(function (chain, dir) {
+        return chain.then(function () { return ws.moveChecker(projectId, dir, ws.dataFull(), repoFull, log); });
+      }, Promise.resolve());
     }).then(function () {
       var shared = Object.assign({}, st.roster.shared);
       shared[projectId] = M.stamp({ id: projectId, repo: repoFull, name: doc.meta.name }, st.login);
@@ -325,18 +328,29 @@
     });
   };
 
-  /* Copy a project's Fabcheck files (fabcheck/<id>/) from one repo to another, then delete
-     them from the first. Safe to repeat: files already there are skipped, and the source is
-     only cleared once the copy has landed. */
-  Workspace.prototype.moveFabcheck = function (projectId, fromFull, toFull, log) {
-    var ws = this;
+  /* The folders a checker stores files in next to a review (config.runs.dir, config.previews.dir,
+     config.pincheck.dir): fabcheck/ and pincheck/ for Signoff EE. */
+  var CHECKERS = { 'fabcheck/': 'Fabcheck', 'pincheck/': 'Pincheck', 'partcheck/': 'Partcheck' };
+  Workspace.prototype.checkerDirs = function () {
+    var C = window.SIGNOFF_CONFIG || {}, out = [];
+    [C.runs && C.runs.dir, C.previews && C.previews.dir, C.pincheck && C.pincheck.dir].forEach(function (d) {
+      if (typeof d === 'string' && /^[a-z0-9_-]+\/$/.test(d) && out.indexOf(d) < 0) out.push(d);
+    });
+    return out;
+  };
+
+  /* Copy a project's files in a checker's folder (<dir><id>/, e.g. fabcheck/<id>/) from one repo
+     to another, then delete them from the first. Safe to repeat: files already there are skipped,
+     and the source is only cleared once the copy has landed. */
+  Workspace.prototype.moveChecker = function (projectId, dir, fromFull, toFull, log) {
+    var ws = this, name = CHECKERS[dir] || dir.slice(0, -1);
     log = log || function () {};
     var src = fromFull === ws.dataFull() ? ws.dataStore() : ws.store(fromFull);
     var dst = toFull === ws.dataFull() ? ws.dataStore() : ws.store(toFull);
-    var fromDir = src.dataDir() + 'fabcheck/' + projectId + '/', toDir = dst.dataDir() + 'fabcheck/' + projectId + '/';
+    var fromDir = src.dataDir() + dir + projectId + '/', toDir = dst.dataDir() + dir + projectId + '/';
     return src.listTree(fromDir).then(function (list) {
       if (!list.length) return;
-      log('Moving ' + list.length + ' Fabcheck file' + (list.length === 1 ? '' : 's') + ' to ' + toFull + '…');
+      log('Moving ' + list.length + ' ' + name + ' file' + (list.length === 1 ? '' : 's') + ' to ' + toFull + '…');
       var files = [], next = 0;
       function worker() {
         if (next >= list.length) return Promise.resolve();
@@ -347,9 +361,9 @@
         });
       }
       return Promise.all([worker(), worker(), worker(), worker()]).then(function () {
-        return dst.putFiles(files, { message: 'Signoff: move Fabcheck runs for ' + projectId });
+        return dst.putFiles(files, { message: 'Signoff: move ' + name + ' files for ' + projectId });
       }).then(function () {
-        return src.putFiles(list.map(function (e) { return { path: e.path, remove: true }; }), { message: 'Signoff: Fabcheck runs for ' + projectId + ' moved to ' + toFull });
+        return src.putFiles(list.map(function (e) { return { path: e.path, remove: true }; }), { message: 'Signoff: ' + name + ' files for ' + projectId + ' moved to ' + toFull });
       });
     });
   };
