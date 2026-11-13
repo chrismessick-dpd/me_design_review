@@ -423,7 +423,8 @@
         (ui.showArchived ? archived.map(row).join('') : '') + '</div>';
     }
     html = fromPlHtml(q) + html;
-    if (invitations.length && !DEMO) {
+    // The suite's shared card (signoff/assets/invites.js) lists private repos too; this one is the fallback.
+    if (invitations.length && !DEMO && !window.SignoffInvites) {
       html = '<div class="invite-card"><b>' + plural(invitations.length, 'invitation') + ' from ' + esc(settings.owner) + '</b><span>' +
         invitations.map(function (i) { return esc(String(i.repo).split('/')[1]); }).join(', ') + '</span><button class="btn btn-primary" data-act="accept-invites">Accept</button></div>' + html;
     }
@@ -633,7 +634,7 @@
     var seg = $('#view-seg'), acts = $('#toolbar-actions');
     if (!p) {
       seg.innerHTML = '';
-      acts.innerHTML = syncButtons();
+      acts.innerHTML = syncButtons() + (ticketsOn() ? moreButton() : '');
       return;
     }
     var st = M.projectStats(p, TEMPLATES);
@@ -655,8 +656,12 @@
     if (onTab) onTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     acts.innerHTML = syncButtons() +
       '<button class="btn" data-act="report" title="Review report">' + ICON.doc + '<span class="btn-label">Report</span></button>' +
-      '<button class="icon-btn" data-act="project-menu" title="More" aria-label="More">' + ICON.more + '</button>';
+      moreButton();
   }
+  // Tickets (signoff/assets/tickets.js): Open ticket… and Tickets in the ⋯ menu, for FTEs, on every page.
+  function ticketsOn() { return !!(window.SignoffTickets && window.SignoffTickets.can()); }
+  function moreButton() { return '<button class="icon-btn" data-act="project-menu" title="More" aria-label="More">' + ICON.more + '</button>'; }
+  function ticketEntries() { return ticketsOn() ? [['ticket', 'Open ticket\u2026'], ['tickets', 'Tickets']] : []; }
 
   // ── Pages ────────────────────────────────────────────────
   function renderPage() { var f = focusNow(); drawPage(); restoreFocus(f); }   // keeps the field being typed in (focusNow)
@@ -694,7 +699,7 @@
     if (!isFte()) {
       return '<div class="page"><div class="empty"><div class="empty-art">' + ICON.clipboard + '</div>' +
         '<h2>' + (!visibleProjects().length ? 'No ' + UNITS + ' shared with you yet' : 'Pick a ' + UNIT) + '</h2>' +
-        '<p>' + (!visibleProjects().length ? 'Signed in as <b>' + esc(settings.login) + '</b>. ' + (invitations.length ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a ' + UNIT + ', then sync.') : 'Choose a ' + UNIT + ' from the sidebar.') + '</p>' +
+        '<p>' + (!visibleProjects().length ? 'Signed in as <b>' + esc(settings.login) + '</b>. ' + (waitingInvites() ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a ' + UNIT + ', then sync.') : 'Choose a ' + UNIT + ' from the sidebar.') + '</p>' +
         syncNowButton('Sync now', true) + '</div></div>';
     }
     var none = !visibleProjects().length;
@@ -4202,6 +4207,8 @@
   }
 
   // ── Invitations waiting for me ───────────────────────────
+  // Invitations waiting, from the suite's shared card when it's loaded (it sees private repos too).
+  function waitingInvites() { return window.SignoffInvites ? window.SignoffInvites.count() : invitations.length; }
   function acceptInvitations() {
     var acc = new S.GitHubAccount(getToken());
     Promise.all(invitations.map(function (i) { return acc.acceptInvitation(i.id).then(function () { return i.repo; }); }))
@@ -4344,6 +4351,7 @@
         openWanted(true);
         if (res.templates && res.templates.length) { pulledTemplates = res.templates; save('templates', pulledTemplates); refreshTemplates(); }
         invitations = res.invitations || [];
+        if (window.SignoffInvites) window.SignoffInvites.refresh();
         if (res.pl) { plRead = res.pl; save('pl', plRead); save('plCache', res.plCache); }
         lastSync = { at: M.now(), startedAt: startedAt, version: res.version || (lastSync && lastSync.version), errors: res.errors };
         save('cache2', cache); save('lastSync', lastSync); save('dataAccess', dataAccess); save('invitations', invitations); persist();
@@ -4812,9 +4820,12 @@
       case 'export-csv': exportCsv(); break;
       case 'nav': toggleSidebar(); break;
       case 'project-menu':
-        menu(el, (isFte() ? [['edit', cap(UNIT) + ' details\u2026']] : []).concat([['report', 'Review report'], ['csv', 'Export findings (CSV)'], ['json', 'Export ' + UNIT + ' (JSON)']],
-          isFte() ? ['-', ['import', (C.legacyTabs || []).length ? 'Import ' + UNIT + ' or old checklist\u2026' : 'Import ' + UNIT + '\u2026'], '-', ['archive', current().meta.archived ? 'Unarchive ' + UNIT : 'Archive ' + UNIT, true]] : []))
+        menu(el, !current() ? ticketEntries() : (isFte() ? [['edit', cap(UNIT) + ' details\u2026']] : []).concat([['report', 'Review report'], ['csv', 'Export findings (CSV)'], ['json', 'Export ' + UNIT + ' (JSON)']],
+          isFte() ? ['-', ['import', (C.legacyTabs || []).length ? 'Import ' + UNIT + ' or old checklist\u2026' : 'Import ' + UNIT + '\u2026'], '-', ['archive', current().meta.archived ? 'Unarchive ' + UNIT : 'Archive ' + UNIT, true]] : [],
+          ticketsOn() ? ['-'].concat(ticketEntries()) : []))
           .then(function (choice) {
+            if (choice === 'ticket') { window.SignoffTickets.newTicket(); return; }
+            if (choice === 'tickets') { window.SignoffTickets.open(); return; }
             if (choice === 'edit') projectSheet(current());
             else if (choice === 'report') openReport();
             else if (choice === 'csv') exportCsv();
@@ -5070,6 +5081,16 @@
   })();
 
   if (!DEMO) noticeToken();
+  if (window.SignoffTickets) window.SignoffTickets.where(function () {
+    var p = current();
+    if (!p) return {};
+    var item = typeof selected === 'string' && /^[\w.:-]{1,80}$/.test(selected) ? selected : '';
+    var title = $('#inspector.open .insp-title');
+    return {
+      unit: p.meta.name, item: item, itemLabel: item && title ? title.textContent.trim().slice(0, 120) : '',
+      url: location.pathname + '?project=' + encodeURIComponent(p.id) + (item ? '&item=' + encodeURIComponent(item) : '') + (DEMO ? '&demo' : '')
+    };
+  });
   openWanted(DEMO || !getToken());
   if (!projects[ui.slug] && !(ui.home && !ui.slug)) ui.slug =Object.keys(projects).filter(function (k) { return !projects[k].meta.archived; })[0] || '';
   render();
@@ -5085,6 +5106,8 @@
   if (EMBED) { if (getToken()) sync(); }
   else if (!settings.user && !demoWelcomed()) settingsSheet(true);   // first opening, the demo included: ask for a name
   else if (!DEMO && getToken()) sync();
+  // Accepted from the suite's invitations card: sync to pick up what was just joined.
+  window.addEventListener('signoff:invites-accepted', function () { if (!DEMO && getToken()) sync(); });
   if (PEOPLE) PEOPLE.register(C.repos.toolRepo, { draw: function () { renderPage(); }, changed: function () { renderSidebar(); } });
   if (wantPeople) openPeople();
   setInterval(function () { renderSyncState(syncing ? 'busy' : undefined); }, 60000);
