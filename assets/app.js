@@ -2442,7 +2442,7 @@
       return { d: 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my + ' ' + x2 + ' ' + my + ' ' + x2 + ' ' + y2, mx: (x1 + x2) / 2, my: my };
     }
     // data-bands: each layer's top and bottom, for dragging a block into it (specMoveMove).
-    var svg = '<svg class="spec-map' + ((selBlock && pos[selBlock]) || specEdgeSel() ? ' focus' : '') + '" viewBox="0 0 ' + MW + ' ' + H + '" role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-bands="' + rows.map(function (r) { return Math.round(r.y - (RH - BH) / 2) + ':' + Math.round(r.y + r.h - (RH - BH) / 2); }).join(',') + '" data-bh="' + BH + '">' +
+    var svg = '<svg class="spec-map' + ((selBlock && pos[selBlock]) || specEdgeSel() ? ' focus' : '') + '" ' + specVBAttr('0 0 ' + MW + ' ' + H) + ' role="img" aria-label="Diagram of the ' + esc(W.thing) + ' from the outline" data-rows="' + rows.map(function (r) { return r.kind; }).join(',') + '" data-bands="' + rows.map(function (r) { return Math.round(r.y - (RH - BH) / 2) + ':' + Math.round(r.y + r.h - (RH - BH) / 2); }).join(',') + '" data-bh="' + BH + '">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern></defs>';
     rows.forEach(function (r, ri) {
       var y = r.y + (r.lines - 1) * LINE / 2;
@@ -2475,7 +2475,7 @@
       });
     });
     svg += '</svg>';
-    return '<div class="card spec-map-card">' + svg + '</div><p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line for its panel, where Delete removes it (Undo in the message brings it back). Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines join each interface to the blocks that use it. Lines from one block to several share a trunk, and pointing at a block brings its own lines forward. Dotted blocks have unlinked or flagged sentences.</p>';
+    return specCard(svg) + '<p class="note">Drawn from the outline, and written back to it. + adds a block to a layer (a new section in the text). Drag from the dot under a block to another block to say it uses that one; click a line for its panel, where Delete removes it (Undo in the message brings it back). Drag a block itself to another layer to change its kind, or beside other blocks to move it there in the outline. Click a block to rename it, change its kind or gist, or choose what it uses. Lines come from each section’s <code>Uses:</code> line, or join it to the section above it; dashed lines join each interface to the blocks that use it. Lines from one block to several share a trunk, and pointing at a block brings its own lines forward. Dotted blocks have unlinked or flagged sentences.</p>';
   }
   // A block's name on one line, or two (broken at a space) when it's too long for one; the second is
   // cut if it still doesn't fit.
@@ -2505,6 +2505,164 @@
     function anc(x) { var out = []; for (var d = dparent(x); d; d = dparent(byId[d])) out.push(d); return out; }
     return { byId: byId, items: items, ch: ch, dparent: dparent, isSec: isSec, anc: anc };
   }
+  // ── The expanded diagram (Chris, 2026-11-13) ──
+  // The expand button at the card's top right opens the diagram over the whole window (Chris: always
+  // full screen), with the block and line panel over it as usual. There the wheel (or a trackpad pinch) zooms about the pointer, a middle or right drag pans (a
+  // plain drag still draws a section), and on a touch screen a pinch zooms and one finger on empty space
+  // pans. Everything else works as in the page. Closed, the card shows the whole diagram as before.
+  // specZoom is the expanded view's viewBox, kept across re-renders and forgotten on close.
+  var specExpanded = false, specZoom = null, specZp = null;
+  var ICON_EXPAND = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5h4.5V8M8 16.5H3.5V12M16.5 3.5l-5 5M3.5 16.5l5-5"/></svg>';
+  var ICON_SHRINK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8H12V3.5M3.5 12H8v4.5M12 8l4.5-4.5M8 12l-4.5 4.5"/></svg>';
+  function specVBAttr(fit) { return 'viewBox="' + (specExpanded && specZoom ? specZoom.join(' ') : fit) + '" data-fit="' + fit + '"'; }
+  function specCard(svg) {
+    return '<div class="card spec-map-card' + (specExpanded ? ' expanded' : '') + '">' +
+      '<div class="spec-view-acts">' + (specExpanded ? '<button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
+      '<button class="icon-btn spec-expand" data-act="spec-export" title="Save the diagram as a picture or a PDF" aria-label="Export the diagram" aria-haspopup="menu">' + ICON_SAVE + '</button>' +
+      '<button class="icon-btn spec-expand" data-act="spec-expand" title="' + (specExpanded ? 'Back to the page (Esc)' : 'Expand the diagram: zoom and pan') + '" aria-label="' + (specExpanded ? 'Collapse the diagram' : 'Expand the diagram') + '">' + (specExpanded ? ICON_SHRINK : ICON_EXPAND) + '</button></div>' +
+      (specExpanded ? '<div class="spec-zoom-hint"><span class="hint-mouse">Scroll to zoom · middle or right drag to pan · Esc to close</span><span class="hint-touch">Pinch to zoom · drag empty space to pan</span></div>' : '') +
+      svg + '</div>';
+  }
+  var ICON_SAVE = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5v9M6 9l4 4 4-4M4 15.5h12"/></svg>';
+  // ── Exporting the diagram (Chris, 2026-11-13): PNG, SVG, or a landscape PDF with a title block ──
+  // Always the whole diagram in light colors, whatever the zoom or theme, without the editing handles,
+  // hit areas, current beads, or selection. Styles are copied inline so the file stands alone.
+  var SPEC_EXPORT_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-opacity', 'stroke-linecap', 'stroke-linejoin',
+    'opacity', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing'];
+  function specExportSvg() {
+    var live = document.querySelector('svg.spec-map'); if (!live) return null;
+    var fit = String(live.dataset.fit || '').split(' ').map(Number);
+    if (fit.length !== 4 || fit.some(function (n) { return !isFinite(n); })) { var b = live.viewBox.baseVal; fit = [b.x, b.y, b.width, b.height]; }
+    var c = live.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.spec-handle, .spec-edge-hit, .spec-pulse, title'), function (el) { el.remove(); });
+    c.classList.remove('focus', 'moving', 'moving-label');
+    Array.prototype.forEach.call(c.querySelectorAll('.sel, .on'), function (el) { el.classList.remove('sel', 'on'); });
+    c.setAttribute('viewBox', fit.join(' '));
+    c.setAttribute('width', Math.round(fit[2])); c.setAttribute('height', Math.round(fit[3]));
+    c.setAttribute('style', 'position:absolute;left:-100000px;top:0;width:' + fit[2] + 'px;height:' + fit[3] + 'px');
+    var root = document.documentElement, theme = root.getAttribute('data-theme');
+    root.classList.add('spec-exporting'); root.setAttribute('data-theme', 'light');
+    document.body.appendChild(c);
+    var els = [c].concat(Array.prototype.slice.call(c.querySelectorAll('*')));
+    var styles = els.map(function (el) {
+      var cs = getComputedStyle(el);
+      if (cs.display === 'none') return null;
+      return { st: SPEC_EXPORT_PROPS.map(function (k) { return k + ':' + cs.getPropertyValue(k); }).join(';'), upper: cs.textTransform === 'uppercase' };
+    });
+    var bg = getComputedStyle(document.body).getPropertyValue('--bg-elev') || '#fff';
+    c.remove();
+    if (theme) root.setAttribute('data-theme', theme); else root.removeAttribute('data-theme');
+    root.classList.remove('spec-exporting');
+    els.forEach(function (el, i) {
+      var st = styles[i];
+      if (!st) { el.remove(); return; }
+      el.setAttribute('style', st.st);
+      el.removeAttribute('class');
+      Array.prototype.slice.call(el.attributes).forEach(function (a) { if (/^(data-|aria-|role$|tabindex$)/.test(a.name)) el.removeAttribute(a.name); });
+      if (st.upper && el.tagName.toLowerCase() === 'text') el.textContent = el.textContent.toUpperCase();
+    });
+    c.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    c.setAttribute('style', 'background:#fff');
+    var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    ['x', 'y', 'width', 'height'].forEach(function (k, i) { bgRect.setAttribute(k, fit[i]); });
+    bgRect.setAttribute('fill', '#ffffff');
+    c.insertBefore(bgRect, c.firstChild);
+    return { svg: new XMLSerializer().serializeToString(c), w: fit[2], h: fit[3], bg: bg };
+  }
+  function specExportName(p, ext) {
+    return (String(p.meta.name || p.slug || 'diagram').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'diagram') + ' block diagram.' + ext;
+  }
+  function specSaveBlob(name, blob) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function specExport(anchor) {
+    var p = current(); if (!p) return;
+    menu(anchor, [['png', 'PNG picture'], ['svg', 'SVG drawing'], ['pdf', 'PDF, landscape, with a title block']]).then(function (ch) {
+      var x = specExportSvg(); if (!x) { toast('Nothing to export yet'); return; }
+      if (ch === 'svg') { specSaveBlob(specExportName(p, 'svg'), new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + x.svg], { type: 'image/svg+xml' })); return; }
+      if (ch === 'png') {
+        var img = new Image(), url = URL.createObjectURL(new Blob([x.svg], { type: 'image/svg+xml' }));
+        img.onload = function () {
+          var k = 2, cv = document.createElement('canvas');
+          cv.width = Math.round(x.w * k); cv.height = Math.round(x.h * k);
+          var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
+          URL.revokeObjectURL(url);
+          cv.toBlob(function (b) { if (b) specSaveBlob(specExportName(p, 'png'), b); else toast('Couldn’t make the picture'); }, 'image/png');
+        };
+        img.onerror = function () { URL.revokeObjectURL(url); toast('Couldn’t make the picture'); };
+        img.src = url;
+        return;
+      }
+      if (ch === 'pdf') specDiagramSheet(p, x);
+    });
+  }
+  // The landscape sheet: the diagram over the page, and a title block at the bottom right with the
+  // review's details. Print or save as PDF from the print view (the browser's own PDF printer).
+  function specDiagramSheet(p, x) {
+    var m = p.meta, d = new Date(), date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    var tool = (C.toolName || document.title.split('·')[0] || 'Signoff').trim();
+    var rows = [['Project', m.project], ['Client', m.client], ['Number', m.board], ['Revision', m.revision], ['Stage', m.stage], ['Date', date], ['By', settings.user || me()]]
+      .filter(function (r) { return r[1]; });
+    var block = '<div class="dg-title"><div class="dg-name"><span>' + esc(tool) + ' · Block diagram</span><b>' + esc(m.name || 'Untitled') + '</b></div>' +
+      rows.map(function (r) { return '<div class="dg-cell"><span>' + esc(r[0]) + '</span>' + esc(r[1]) + '</div>'; }).join('') +
+      '<div class="dg-cell"><span>Sheet</span>1 of 1</div></div>';
+    var r = $('#report');
+    r.innerHTML = '<div class="report-bar"><b>Block diagram</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print or save as PDF</button></div></div>' +
+      '<div class="paper dg-paper"><div class="dg-art">' + x.svg + '</div><div class="dg-foot">' + block + '</div></div>';
+    r.hidden = false;
+  }
+  function specSetExpanded(on) { specExpanded = !!on; specZoom = null; specZp = null; renderPage(); }
+  function specVB(svg) { var b = svg.viewBox.baseVal; return [b.x, b.y, b.width, b.height]; }
+  function specSetVB(svg, v) { specZoom = v.map(function (n) { return Math.round(n * 100) / 100; }); svg.setAttribute('viewBox', specZoom.join(' ')); }
+  // Zoom by f (above 1 zooms in) about a point on screen, between a twelfth and four times the fitted width.
+  function specZoomAt(svg, cx, cy, f) {
+    var v = specVB(svg), fit = Number(String(svg.dataset.fit || '').split(' ')[2]) || v[2];
+    var nw = Math.max(fit / 12, Math.min(fit * 4, v[2] / f)), k = nw / v[2];
+    var pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy;
+    var q = pt.matrixTransform(svg.getScreenCTM().inverse());
+    specSetVB(svg, [q.x - (q.x - v[0]) * k, q.y - (q.y - v[1]) * k, v[2] * k, v[3] * k]);
+  }
+  function specPanBy(svg, dx, dy) {
+    var v = specVB(svg), sc = svg.getScreenCTM().a || 1;
+    specSetVB(svg, [v[0] - dx / sc, v[1] - dy / sc, v[2], v[3]]);
+  }
+  function specZpDown(e, svg) {
+    e.preventDefault();
+    if (!specZp || specZp.svg !== svg) specZp = { svg: svg, pts: {}, moved: false };
+    specZp.pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    try { svg.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+  }
+  function specZpMove(e) {
+    var z = specZp, q = z && z.pts[e.pointerId]; if (!q) return false;
+    e.preventDefault();
+    var ids = Object.keys(z.pts);
+    if (ids.length === 1) specPanBy(z.svg, e.clientX - q.x, e.clientY - q.y);
+    else {
+      var o = z.pts[ids[0] === String(e.pointerId) ? ids[1] : ids[0]];
+      var d0 = Math.hypot(q.x - o.x, q.y - o.y) || 1, d1 = Math.hypot(e.clientX - o.x, e.clientY - o.y) || 1;
+      var m0 = { x: (q.x + o.x) / 2, y: (q.y + o.y) / 2 }, m1 = { x: (e.clientX + o.x) / 2, y: (e.clientY + o.y) / 2 };
+      specZoomAt(z.svg, m1.x, m1.y, d1 / d0); specPanBy(z.svg, m1.x - m0.x, m1.y - m0.y);
+    }
+    if (e.clientX !== q.x || e.clientY !== q.y) z.moved = true;
+    q.x = e.clientX; q.y = e.clientY;
+    return true;
+  }
+  function specZpUp(e) {
+    var z = specZp; if (!z || !z.pts[e.pointerId]) return;
+    delete z.pts[e.pointerId];
+    if (Object.keys(z.pts).length) return;
+    if (z.moved) { specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0); }
+    specZp = null;
+  }
+  document.addEventListener('wheel', function (e) {
+    var svg = specExpanded && e.target.closest && e.target.closest('.spec-map-card.expanded svg.spec-map'); if (!svg) return;
+    e.preventDefault();
+    specZoomAt(svg, e.clientX, e.clientY, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015) * (e.ctrlKey ? 4 : 1)));
+  }, { passive: false });
+  document.addEventListener('contextmenu', function (e) { if (specExpanded && e.target.closest && e.target.closest('.spec-map-card.expanded')) e.preventDefault(); });
+  document.addEventListener('mousedown', function (e) { if (e.button === 1 && specExpanded && e.target.closest && e.target.closest('.spec-map-card.expanded')) e.preventDefault(); });
   function bez(p0, p1, p2, p3, t) { var u = 1 - t; return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3; }
   // A line from one block to another, out of the side facing it, with a point for its label.
   function specRoute(A, B) {
@@ -2616,7 +2774,7 @@
     // A selected block brings its own lines forward, as in the layered map (CSS .focus, .on).
     // So does a selected line.
     function on(e) { return specEdgeIs(e.a, e.b, e.word) ? ' on sel' : isBlock[sel] && (e.a === sel || e.b === sel) ? ' on' : ''; }
-    var svg = '<svg class="spec-map spec-flow' + (isBlock[sel] || specEdgeSel() ? ' focus' : '') + '" viewBox="' + minX + ' ' + minY + ' ' + VW + ' ' + VH + '" role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
+    var svg = '<svg class="spec-map spec-flow' + (isBlock[sel] || specEdgeSel() ? ' focus' : '') + '" ' + specVBAttr(minX + ' ' + minY + ' ' + VW + ' ' + VH) + ' role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern>' +
       '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker>' +
       '<marker id="spec-lead-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="spec-lead-head"/></marker></defs>' +
@@ -2724,7 +2882,7 @@
       });
     });
     svg += '</svg>';
-    return bar + '<div class="card spec-map-card">' + svg + '</div><p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
+    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
@@ -5054,6 +5212,9 @@
       case 'spec-edge-delete': specEdgeDelete(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
       case 'spec-auto-layout': specAutoLayout(); break;
+      case 'spec-expand': specSetExpanded(!specExpanded); break;
+      case 'spec-fit': specZoom = null; renderPage(); break;
+      case 'spec-export': specExport(el); break;
       case 'spec-new-section': specNewSectionSheet(); break;
       case 'spec-tree-fold': { var fc = Object.assign({}, ui.specClosed || {}); if (fc[id]) delete fc[id]; else fc[id] = true; ui.specClosed = fc; saveUi(); renderPage(); break; }
       case 'spec-ungroup': {
@@ -5221,6 +5382,7 @@
       if (!$('#report').hidden) { $('#report').hidden = true; return; }
       if (inField) { document.activeElement.blur(); return; }
       if ($('#inspector').classList.contains('open')) { closePanel(); return; }
+      if (specExpanded) { specSetExpanded(false); return; }
     }
     // Back and forward in Scribe: Ctrl+Z, and Ctrl+Shift+Z or Ctrl+Y.
     if (!inField && ui.view === 'spec' && (e.ctrlKey || e.metaKey) && !e.altKey && /^[zy]$/i.test(e.key) && !$('#sheet') && current()) {
@@ -5333,11 +5495,13 @@
   document.addEventListener('pointerdown', function (e) {
     var h = e.target.closest && e.target.closest('.spec-handle');
     if (h) { specDragStart(e, h); return; }
+    var zsvg = specExpanded && e.target.closest && e.target.closest('.spec-map-card.expanded svg.spec-map');
+    if (zsvg && (e.button === 1 || e.button === 2 || (e.pointerType === 'touch' && (specZp || !e.target.closest('.spec-node, .spec-group-g, .spec-edge-hit, .spec-edge-label.drag, .spec-flag, [data-act]'))))) { specZpDown(e, zsvg); return; }
     if (e.target.closest && e.target.closest('svg.spec-flow')) { if (e.pointerType !== 'touch' || !e.target.closest('svg.spec-flow') || e.target.closest('.spec-node, .spec-group-g')) flowDown(e); return; }
     var n = e.target.closest && e.target.closest('.spec-map .spec-node');
     if (n && e.pointerType !== 'touch') specMoveDown(e, n);
   });
-  document.addEventListener('pointermove', function (e) { if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); else if (flowDrag) flowMove(e); });
+  document.addEventListener('pointermove', function (e) { if (specZp && specZpMove(e)) return; if (specDrag) specDragMove(e); else if (specMove) specMoveMove(e); else if (flowDrag) flowMove(e); });
   // Pointing at a block in a diagram brings its own lines forward and fades the others (fan-outs).
   var specHover = null;
   function specHoverMap(n) {
@@ -5354,8 +5518,8 @@
     var n = e.target.closest && e.target.closest('.spec-map .spec-node');
     specHoverMap(n && n.dataset.id ? n : null);
   });
-  document.addEventListener('pointerup', function (e) { if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); else if (flowDrag) flowUp(e); });
-  document.addEventListener('pointercancel', function () { if (specDrag) specDragEnd(); specMove = null; });
+  document.addEventListener('pointerup', function (e) { if (specZp && specZp.pts[e.pointerId]) { specZpUp(e); return; } if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); else if (flowDrag) flowUp(e); });
+  document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 

@@ -1010,6 +1010,35 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-res-diff ins::before { content: "+"; font: 700 11px var(--mono); display: inline-block; margin-right: 1px; }
 .spec-res-diff del::before { content: "\2212"; font: 700 11px var(--mono); display: inline-block; margin-right: 1px; }
 .spec-map-card { padding: 10px; overflow-x: auto; }
+/* The expanded diagram (Chris, 2026-11-13): the whole window, zoom and pan inside; the panel (z-index 40) opens over it. */
+.spec-map-card { position: relative; }
+.spec-view-acts { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; align-items: center; }
+.spec-expand { width: 32px; height: 32px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--hair-2); box-shadow: var(--shadow); }
+.spec-expand svg { width: 16px; height: 16px; }
+.spec-map-card.expanded { position: fixed; inset: 0; z-index: 38; margin: 0; border-radius: 0; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.spec-map-card.expanded .spec-map { width: 100%; height: 100%; min-width: 0; touch-action: none; }
+html:has(.spec-map-card.expanded) { overflow: hidden; }
+.spec-zoom-hint { position: absolute; left: 12px; bottom: 10px; z-index: 2; font-size: 12px; color: var(--text-3); pointer-events: none; }
+.spec-zoom-hint .hint-touch { display: none; }
+@media (hover: none) { .spec-zoom-hint .hint-mouse { display: none; } .spec-zoom-hint .hint-touch { display: inline; } }
+/* Exporting the diagram copies its computed styles with nothing mid-transition. */
+html.spec-exporting, html.spec-exporting * { transition: none !important; animation: none !important; }
+/* The landscape sheet (PDF): the diagram above, a title block at the bottom right (Chris, 2026-11-13). */
+.paper.dg-paper { max-width: 1120px; aspect-ratio: 297 / 210; padding: 28px 32px; display: flex; flex-direction: column; gap: 10px; }
+.dg-art { flex: 1; min-height: 0; display: flex; }
+.dg-art svg { width: 100%; height: 100%; }
+.dg-foot { display: flex; justify-content: flex-end; }
+.dg-title { display: grid; grid-template-columns: repeat(4, auto); border: 1.5px solid #1d1d1f; font-size: 10.5px; color: #1d1d1f; min-width: 340px; }
+.dg-title > div { padding: 4px 8px; border-right: 1px solid #c7c7cc; border-top: 1px solid #c7c7cc; }
+.dg-title span { display: block; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #6e6e73; }
+.dg-title .dg-name { grid-column: 1 / -1; border-top: none; font-size: 13px; }
+.dg-title .dg-name b { font-weight: 700; }
+@media print {
+  @page dg { size: landscape; margin: 10mm; }
+  .paper.dg-paper { page: dg; aspect-ratio: auto; height: 182mm; padding: 0; }
+}
+/* The panel opens over the top right: its buttons step left of it on a wide screen. */
+@media (min-width: 861px) { html:has(#inspector.open) .spec-map-card.expanded .spec-view-acts { right: 424px; } }
 .spec-map { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--sans); }
 .spec-row-label { font-size: 11px; font-weight: 600; fill: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
 .spec-row-line { stroke: var(--hair); stroke-width: 1; }
