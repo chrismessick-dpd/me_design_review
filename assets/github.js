@@ -199,6 +199,13 @@
      cfg.merge(local, remote):     merges two copies of a document; default model.mergeProjects.
                                    Tools whose documents aren't reviews (Signoff PL) pass their own.
      opts.dropGone, opts.keepLocal(id): see `gone` below.
+     opts.mergeOpts(id):           the third argument to cfg.merge for that project (model.mergeProjects
+                                   takes { since, base }; see model.mergeSpec).
+     opts.edited(id):              false when this browser has no unsynced edits to that project. Then
+                                   GitHub's copy is taken as it is and never written back, not even
+                                   a summary: a browser that changed nothing can't change the file
+                                   (2026-11-13: an unedited copy wrote conflict copies and a reordered
+                                   summary). Without it every merged project is a candidate, as before.
      Resolves { projects, roster, moved, gone, cache, templates, version, pushed, commitUrl };
      gone: local copies of projects deleted here since the last sync (with opts.dropGone).
      templates is null when they haven't changed since the last sync. */
@@ -306,9 +313,11 @@
         var ids = Object.keys(remote).concat(Object.keys(local).filter(function (id) { return !remote[id] && moved.indexOf(id) < 0 && gone.indexOf(id) < 0; }));
         ids.forEach(function (id) {
           var r = remote[id];
-          var doc = r && r.unchanged ? local[id] : merge(local[id], r && r.doc);
+          var untouched = !!r && !!opts.edited && !opts.edited(id);
+          var doc = r && r.unchanged ? local[id] : untouched ? r.doc : merge(local[id], r && r.doc, opts.mergeOpts ? opts.mergeOpts(id) : undefined);
           if (!doc) return;
           merged[id] = doc;
+          if (untouched) return;   // nothing of ours to write
           var written = M.withSummary(doc, self.cfg.summarize);
           candidates.push({ path: r ? r.path : dir + id + '.json', text: M.stableStringify(written), label: doc.meta.name, sha: r && r.sha });
         });

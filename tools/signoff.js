@@ -824,7 +824,9 @@ async function planPush(ctx, co) {
   }
 
   // The browser's merge: per record, newer wins; a section edited on both sides keeps a conflict copy.
-  const merged = M.mergeProjects(built.doc, remote);
+  // Three ways against review.json, the review as pulled: only a section edited in this checkout can
+  // be one side of a conflict (model.mergeSpec, base).
+  const merged = M.mergeProjects(built.doc, remote, { base: M.specBase(co.base) });
   const T = await currentTemplates(ctx);
   const written = M.withSummary(merged, (d) => M.projectSummary(d, T));
   const text = M.stableStringify(written);

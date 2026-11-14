@@ -65,7 +65,8 @@
      others still sync. Local copies are dropped when GitHub says a contractor lost access
      (`dropped`), and when a project this browser synced before no longer exists (`gone`):
      its file was deleted, or its repo left the shared map. opts.keepLocal(id) marks copies
-     with unsynced edits; those are never dropped as gone, they're pushed back instead. */
+     with unsynced edits; those are never dropped as gone, they're pushed back instead.
+     opts.mergeOpts(id), opts.edited(id): handed to each store's sync (GitHubStore.sync). */
   Workspace.prototype.sync = function (state0, opts) {
     var ws = this, st = copyState(state0), errors = [], out = { pushed: 0, dropped: [], gone: [], templates: null, version: null };
     opts = opts || {};
@@ -82,7 +83,7 @@
         var mine = subset(st, ws, dataFull);
         return ws.dataStore().sync(mine, st.roster, st.cache[dataFull], {
           roster: true, deleteStrays: true, message: msg, onRetry: opts.onRetry,
-          dropGone: true, keepLocal: keep,
+          dropGone: true, keepLocal: keep, mergeOpts: opts.mergeOpts, edited: opts.edited,
           belongsHere: function (id, r) { return !M.sharedRepo(r, id); }
         }).then(function (res) {
           st.dataAccess = 'ok';
@@ -147,7 +148,7 @@
             // An FTE takes from a shared repo only the projects the shared map puts there, so a
             // file planted in one contractor's repo can't stand in for another project.
             var mine = st.dataAccess === 'ok' ? function (id) { return M.sharedRepo(st.roster, id).toLowerCase() === repoFull.toLowerCase(); } : undefined;
-            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry, belongsHere: mine, dropGone: true, keepLocal: keep })
+            return ws.store(repoFull).sync(subset(st, ws, repoFull), null, st.cache[repoFull], { message: msg, onRetry: opts.onRetry, belongsHere: mine, dropGone: true, keepLocal: keep, mergeOpts: opts.mergeOpts, edited: opts.edited })
               .then(function (res) { absorb(st, res, repoFull); forget(res.gone || []); out.pushed += res.pushed; })
               .catch(function (err) {
                 if (denied(err) && st.dataAccess !== 'ok') {

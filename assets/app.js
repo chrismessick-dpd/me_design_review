@@ -70,6 +70,7 @@
   var projects = load('projects', {});      // slug -> project document (working copy)
   var dirty = load('dirty', {});            // project id (or 'roster') -> time of last unsynced edit
   var homes = load('homes', {});            // project id -> 'owner/repo' it lives in
+  var touchedAt = {};                       // project id -> Date.now() of this tab's last edit
   var cache = load('cache2', {});           // 'owner/repo' -> { path: { sha } } as of the last sync
   var dataAccess = load('dataAccess', '');  // 'ok' (FTE) | 'none' (contractor) | '' (not synced yet)
   var roster = Object.assign(M.emptyRoster(), load('roster', {}));   // users.json from the data repo
@@ -154,6 +155,14 @@
   }
 
   function persist() { save('projects', projects); save('dirty', dirty); save('roster', roster); save('homes', homes); }
+  // How this browser's copy of a project merges with GitHub's (GitHubStore.sync, model.mergeSpec): three
+  // ways against what it last pulled; without a base (not synced since this was added), a copy with
+  // no unsynced edits counts as all synced. A copy with none isn't merged at all (syncEdited).
+  // The bases (localStorage 'bases': project id -> { section id: model.specStampKey } of its Scribe as this
+  // browser last synced it) are read when a sync starts and written only when one ends, so a tab that
+  // didn't run the sync never writes back an older base.
+  function mergeOpts(id, all) { var b = (all || load('bases', {}))[id]; return b ? { base: b } : { since: dirty[id] ? '' : '\uffff' }; }
+  function syncEdited(id) { return !!dirty[id]; }
 
   // ── People and access ────────────────────────────────────
   // GitHub decides what each person can open. An FTE's token reaches the data repo; a
@@ -290,6 +299,7 @@
   function touch(p) {
     if (specHists[p.id]) specHistNote(p);
     dirty[p.id] = M.now();
+    touchedAt[p.id] = Date.now();
     persist();
     renderSidebar();
     renderSyncState();
@@ -4417,15 +4427,17 @@
     var st0 = stateNow();
     var names = Object.keys(dirty).map(function (k) { return k === 'roster' ? 'people' : st0.projects[k] ? st0.projects[k].meta.name : k; });
     var message = names.length ? 'Review update: ' + names.join(', ') + ' (' + me() + ')' : 'Review update (' + me() + ')';
+    var bases0 = load('bases', {});
     workspace().sync(st0, { message: message, onRetry: function () { toast('Someone else just synced — merging their changes'); },
-      keepLocal: function (id) { return !!dirty[id]; }, plCache: load('plCache', null) })
+      keepLocal: function (id) { return !!dirty[id]; }, mergeOpts: function (id) { return mergeOpts(id, bases0); }, edited: syncEdited, plCache: load('plCache', null) })
       .then(function (res) {
         var st = res.state;
         if (res.userName && !settings.user) settings.user = res.userName;
         settings.login = st.login; save('settings', settings);
         // Edits made while the sync ran are merged on top, and stay unsynced.
         var nowById = stateNow().projects, merged = {};
-        Object.keys(st.projects).forEach(function (id) { merged[id] = nowById[id] ? M.mergeProjects(nowById[id], st.projects[id]) : st.projects[id]; });
+        // Only sections stamped since the sync started are edits here; the rest went into the sync.
+        Object.keys(st.projects).forEach(function (id) { merged[id] = nowById[id] ? M.mergeProjects(nowById[id], st.projects[id], { since: startedAt }) : st.projects[id]; });
         // Projects that only exist locally and weren't touched by this sync (e.g. its repo
         // failed) are kept. One deleted on GitHub goes, unless it was edited while this ran.
         var gone = (res.gone || []).filter(function (id) { return dirty[id] === started[id]; });
@@ -4465,6 +4477,11 @@
         homes = st.homes; cache = st.cache; dataAccess = st.dataAccess;
         roster = M.mergeRosters(roster, st.roster);
         var failedRepos = res.errors.map(function (e) { return e.repo; });
+        // What each project synced as is the base of its next merge (from its repo only if that one synced).
+        var bases = load('bases', {});
+        Object.keys(st.projects).forEach(function (id) { if (failedRepos.indexOf(st.homes[id] || (settings.owner + '/' + settings.dataRepo)) < 0) bases[id] = M.specBase(st.projects[id]); });
+        Object.keys(bases).forEach(function (id) { if (!st.projects[id]) delete bases[id]; });
+        save('bases', bases);
         Object.keys(started).forEach(function (k) {
           if (dirty[k] !== started[k]) return;
           var repo = k === 'roster' ? settings.owner + '/' + settings.dataRepo : st.homes[k] || (settings.owner + '/' + settings.dataRepo);
@@ -4659,7 +4676,9 @@
     if (!theirs || typeof theirs !== 'object') return;
     if (key === 'projects') {
       var fresh = dropStaleDemo(theirs);
-      var res = M.mergeLocalCopies(projects, fresh);
+      // Every edit here is saved as it's made, so the other tab wrote on top of ours: our copy counts
+      // as synced unless we edited it in the last few seconds (it may have read before that save).
+      var res = M.mergeLocalCopies(projects, fresh, { since: function (id) { return Date.now() - (touchedAt[id] || 0) < 10000 ? '' : '\uffff'; } });
       // The other tab wrote stale demo copies over ours: write ours back.
       if (!res.changed && Object.keys(fresh).length !== Object.keys(theirs).length) { save('projects', projects); return; }
       if (!res.changed) return;
