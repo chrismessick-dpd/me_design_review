@@ -1029,10 +1029,11 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .hist-blk { position: relative; }
 .hist-node { position: absolute; left: -28px; top: 9px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 700 9px/1 var(--sans);
   background: var(--bg-elev); color: var(--text); box-shadow: 0 0 0 1px var(--hair-2); }
-.hist-head { display: grid; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; padding: 6px 8px; border-radius: 9px; cursor: pointer; }
+.hist-head { display: flex; flex-wrap: wrap; align-items: baseline; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; padding: 6px 8px; border-radius: 9px; cursor: pointer; }
 .hist-head:hover, .hist-row:hover { background: var(--hair); }
 .hist-blk.sel > .hist-head, .hist-row.sel { background: var(--accent-soft); }
 .hist-who { font-weight: 600; font-size: 13.5px; }
+.hist-when, .hist-counts { flex-basis: 100%; }   /* the name and its tags share line 1 */
 .hist-when { font-size: 12px; color: var(--text-3); }
 .hist-counts { font-size: 12.5px; color: var(--text-2); }
 .hist-tag { display: inline-block; font: 600 10.5px/1 var(--sans); padding: 3px 6px; border-radius: 5px; margin-left: 6px; color: var(--text-2); background: var(--na-soft); vertical-align: 1px; }
