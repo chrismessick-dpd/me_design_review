@@ -2354,7 +2354,7 @@
         var list = Object.keys(counts).map(function (k) { return counts[k] + ' ' + HIST_NOUN[k][counts[k] === 1 ? 0 : 1]; });
         var key = b.by + '|' + b.end, open = !!st.open[key], unsynced = b.rows.every(function (r) { return r.commit === null; });
         var copy = b.rows.some(function (r) { return r.kind === 'spec' && r.after && r.after.conflictOf; });
-        var span = b.rows.length > 1 && b.start !== b.end ? histClock(b.start) + '–' + histClock(b.end) : histClock(b.end);
+        var span = histClock(b.start) !== histClock(b.end) ? histClock(b.start) + '–' + histClock(b.end) : histClock(b.end);
         html += '<li class="hist-blk' + (open ? ' open' : '') + (st.sel && st.sel.block === key ? ' sel' : '') + '">' +
           '<span class="hist-node" aria-hidden="true">' + esc(histInitials(b.by)) + '</span>' +
           '<button class="hist-head" data-h="block" data-k="' + esc(key) + '" aria-expanded="' + open + '"><span class="hist-who">' + esc(b.by || 'Someone') + '</span>' +
@@ -3309,7 +3309,7 @@
     if (!recs.length) return;
     p.spec = p.spec || {};
     recs.forEach(function (r) { p.spec[r.id] = r; });
-    touch(p); renderPage(); renderInspector(); renderToolbar(); syncSoon();
+    touch(p); renderPage(); renderInspector(); renderToolbar();
   }
   var ICON_MENU = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg>';
   var ICON_PLUS = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 4.5v11M4.5 10h11"/></svg>';
@@ -3329,7 +3329,7 @@
   // ── Back and forward (Chris, 2026-11-09) ──
   // Every Scribe edit made in this page (a sentence, a section, a move, the diagram) can be taken back
   // and redone. A step writes the earlier text as a new edit, stamped now, so it syncs like any other
-  // and auto-sync carries on. A step is refused when its sections changed since (a sync brought
+  // and waits for a sync like any other. A step is refused when its sections changed since (a sync brought
   // someone's newer edit), so it never overwrites that. Kept per review while the page is open.
   var specHists = {}, specHistOff = false;
   function specRecKey(r) { return r ? (r.updatedAt || '') + '|' + (r.updatedBy || '') : ''; }
@@ -4113,7 +4113,7 @@
     var note = specBrokenNote(specDraft);
     specEditing = null; specDraft = '';
     if (recs.length) touch(p);
-    renderPage(); renderToolbar(); syncSoon();
+    renderPage(); renderToolbar();
     toast((recs.length ? 'Saved: ' + plural(recs.length - gone.length, 'section') + ' changed or added' + (gone.length ? ', ' + gone.length + ' removed' : '') : 'No changes') + note);
   }
   function specSaveEdit() {
@@ -4134,7 +4134,7 @@
     var note = specBrokenNote(specDraft);
     specEditing = null; specDraft = ''; specNewAfter = '';
     if (recs.length) touch(p);
-    renderPage(); syncSoon();
+    renderPage();
     if (note) toast('Saved' + note);
   }
   function specPasteSheet() {
@@ -4154,7 +4154,7 @@
       p.spec = p.spec || {};
       recs.forEach(function (r) { p.spec[r.id] = r; });
       touch(p); closeSheet();
-      ui.view = 'spec'; saveUi(); renderPage(); syncSoon();
+      ui.view = 'spec'; saveUi(); renderPage();
       toast('Added ' + plural(recs.length, 'section'));
     });
   }
@@ -4183,7 +4183,7 @@
       p.spec = p.spec || {};
       recs.forEach(function (r) { p.spec[r.id] = r; });
       touch(p); closeSheet();
-      ui.view = 'spec'; saveUi(); renderPage(); syncSoon();
+      ui.view = 'spec'; saveUi(); renderPage();
       toast('Added ' + plural(recs.length, 'section'));
     });
   }
@@ -4199,7 +4199,7 @@
     specUnitEdit(p, sec, start, 'link', q.id);
     selected = specSelKey(sec, start);
     $('#inspector').classList.add('open');
-    renderPage(); renderInspector(); renderToolbar(); syncSoon();
+    renderPage(); renderInspector(); renderToolbar();
     toast(q.ref + ' added as a draft');
   }
   // A flagged sentence that changes a requirement the section already links: link it, mark the
@@ -4213,7 +4213,7 @@
     if (q.status === 'approved') p.reqs[reqId] = M.stamp(Object.assign({}, q, { status: 'changed' }), me());
     var cid = M.uid(C.ids.comment || 'c');
     p.comments[cid] = M.stamp({ id: cid, item: reqId, author: me(), at: M.now(), text: 'From ' + SPEC_LABEL + ' (' + (f.x.sec.title || 'Untitled') + '): ' + text }, me());
-    touch(p); renderPage(); renderToolbar(); syncSoon();
+    touch(p); renderPage(); renderToolbar();
     toast(q.ref + (q.status === 'approved' ? ' marked Changed; ' : ': ') + 'the note is in its discussion');
   }
   // A comment flagged @req: make a draft requirement from it (traced to the check it's on), mark the
@@ -4231,7 +4231,7 @@
       toast(q.ref + (q.status === 'approved' ? ' marked Changed' : '') + '; the comment is in its discussion');
     }
     p.comments[cid] = M.stamp(Object.assign({}, c, { reqDone: true }), me());
-    touch(p); renderPage(); renderToolbar(); syncSoon();
+    touch(p); renderPage(); renderToolbar();
   }
   // The description on paper: the report overlay (whose print styles show only it), with the
   // document at full text and the requirements it describes.
@@ -4263,7 +4263,6 @@
       specPut(p, id, { body: (body ? body + '\n\n' : '') + line });
       var a = M.specAnalysis(p), w = (a.uses[q.id] || [])[0];
       if (w) specOpenUnit(w.sec, w.start); else renderPage();
-      syncSoon();
       toast('Added to ' + (cur.title || 'the section') + '. Rewrite it as prose with Edit section.');
     });
   }
@@ -4965,6 +4964,7 @@
   // An automatic sync: quiet when GitHub isn't set up, and queued behind one already running.
   // It follows deliberate saves (Comment, Save, Create, Tag, Import, adding or deleting a check,
   // comment or requirement, archiving), not every click: statuses and typed notes wait for a sync.
+  // Scribe edits never call it (Chris, 2026-11-13): they wait for Sync, counted on its badge and the pill.
   function syncSoon() {
     if (DEMO || !getToken() || !settings.owner || !settings.dataRepo || !settings.user) return;
     if (syncing) { syncAgain = true; return; }
@@ -5434,13 +5434,13 @@
       }
       case 'spec-cancel': specEditing = null; specDraft = ''; renderPage(); break;
       case 'spec-delete':
-        if (confirm('Delete this section?')) { var sp = current(); specPut(sp, id, { deleted: true }); specEditing = null; specDraft = ''; renderPage(); syncSoon(); }
+        if (confirm('Delete this section?')) { var sp = current(); specPut(sp, id, { deleted: true }); specEditing = null; specDraft = ''; renderPage(); }
         break;
       case 'spec-paste': specPasteSheet(); break;
       case 'spec-template': specTemplateSheet(); break;
       case 'spec-make': specMakeReq(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-change': specChangeReq(el.dataset.sec, parseInt(el.dataset.u, 10), id); break;
-      case 'spec-untag': { var up = current(); if (specUnitEdit(up, el.dataset.sec, parseInt(el.dataset.u, 10), 'tag', false)) { renderPage(); renderInspector(); renderToolbar(); syncSoon(); } break; }
+      case 'spec-untag': { var up = current(); if (specUnitEdit(up, el.dataset.sec, parseInt(el.dataset.u, 10), 'tag', false)) { renderPage(); renderInspector(); renderToolbar(); } break; }
       case 'spec-describe': specDescribe(el, id); break;
       case 'spec-phrase-clear': specPhrase = ''; renderInspector(); break;
       case 'spec-link': case 'spec-unlink': case 'spec-std': case 'spec-tag': {
@@ -5451,7 +5451,7 @@
           if (fa && M.specEdit(fa.x.sec.body, fa.u.start, fa.u.end, 'phrase', { id: id, text: specPhrase }) === fa.x.sec.body) { toast('Pick words outside other links, or link the whole sentence'); break; }
           op = 'phrase'; arg = { id: id, text: specPhrase }; specPhrase = '';
         }
-        if (specUnitEdit(sp2, ss.sec, ss.start, op, arg)) { renderPage(); renderInspector(); renderToolbar(); syncSoon(); }
+        if (specUnitEdit(sp2, ss.sec, ss.start, op, arg)) { renderPage(); renderInspector(); renderToolbar(); }
         break;
       }
       case 'req-import': importReqsSheet(); break;
