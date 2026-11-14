@@ -522,9 +522,13 @@
     sub.classList.remove('sync-who');
     // Line 1 is the sync state (and when it last synced); line 2 the GitHub account, when it's known (Chris, 2026-11-10).
     var who = settings.login && getToken() ? '@' + settings.login + (myRole() === 'contractor' ? ' (shared access)' : '') : '';
+    // Before the first sync after a sign-in, the sign-in itself says who it is. Never the data repo's
+    // owner: that read as the wrong account (Chris, 2026-11-13).
+    var signedAs = !who && getToken() && window.SignoffAuth ? window.SignoffAuth.status().login : '';
+    if (signedAs) who = '@' + signedAs;
     function line2(fallback) { sub.textContent = who || fallback; if (who) sub.classList.add('sync-who'); }
     if (DEMO) { dot.dataset.tone = 'idle'; title.textContent = 'Demo mode'; sub.textContent = 'Changes stay in this browser'; return; }
-    if (state === 'busy') { dot.dataset.tone = 'busy'; title.textContent = 'Syncing\u2026'; line2(settings.owner); return; }
+    if (state === 'busy') { dot.dataset.tone = 'busy'; title.textContent = 'Syncing\u2026'; line2('Checking your token'); return; }
     if (state === 'error') { dot.dataset.tone = 'error'; title.textContent = 'Sync failed'; sub.textContent = 'Click for details'; return; }
     if (!getToken()) { dot.dataset.tone = n ? 'warn' : 'idle'; title.textContent = n ? plural(n, 'unsynced change') : 'Local only'; sub.textContent = 'Set up Git sync'; return; }
     if (n) { dot.dataset.tone = 'warn'; title.textContent = plural(n, 'unsynced change'); line2('Click to sync'); return; }
