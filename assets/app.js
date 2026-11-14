@@ -1419,8 +1419,8 @@
   // Download a run's package zip from the review's repo, checked against its recorded SHA-256.
   function downloadRun(p, r) {
     if (!r || !r.zip) return;
-    var st = runsOf[p.id], path = checkerDir(p, C.runs.dir) + r.zip.rel;
-    var entries = st && st.entries && st.entries.some(function (e) { return e.path === path; }) ? st.entries : undefined;
+    var st = runsOf[p.id], path = zipPaths(checkerDir(p, C.runs.dir), r.zip), first = Array.isArray(path) ? path[0] : path;
+    var entries = st && st.entries && st.entries.some(function (e) { return e.path === first; }) ? st.entries : undefined;
     toast('Downloading ' + r.zip.name + '…');
     workspace().store(homeOf(p)).readVerified(path, r.zip.sha256, entries).then(function (bytes) {
       download(r.zip.name, bytes, 'application/zip');
@@ -1428,6 +1428,12 @@
     }, function (err) {
       toast(err.code === 'mismatch' ? 'Not saved: the stored zip doesn’t match its recorded SHA-256' : err.code === 'missing' ? 'Not saved: the zip isn’t in the repository' : 'Not saved: ' + (err.message || err));
     });
+  }
+
+  // Where a run's zip is under the run's folder: its path, or its parts' paths in order when
+  // Fabcheck stored it in parts (readVerified joins them).
+  function zipPaths(dir, zip) {
+    return zip.parts ? zip.parts.map(function (x) { return dir + x.rel; }) : dir + zip.rel;
   }
 
   // Read a stored run and its zip with this tab's token and leave them for Fabcheck (S.handoff).
@@ -1445,7 +1451,7 @@
         if (!r || r.id !== runId) return 'missing';
         if (!r.zip) return 'nozip';
         step('Downloading the fab package' + (r.zip.size ? ' (' + (r.zip.size / 1048576).toFixed(1) + ' MB)' : '') + '…', 0.5);
-        return store.readVerified(dir + r.zip.rel, r.zip.sha256, entries).then(function (zip) {
+        return store.readVerified(zipPaths(dir, r.zip), r.zip.sha256, entries).then(function (zip) {
           step('Handing the run to Fabcheck…', 0.9);
           return S.handoff.put({ id: runId, run: r.raw, findings: r.findings, zip: zip, at: M.now() }, DEMO);
         }).then(function () { return 'ok'; });
