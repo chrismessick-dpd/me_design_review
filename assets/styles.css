@@ -1072,25 +1072,26 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .dg-art { flex: 1; min-height: 0; display: flex; }
 .dg-art svg { width: 100%; height: 100%; }
 .dg-foot { display: flex; justify-content: flex-end; }
-/* After Dovetail's Altium schematic title block: black rules, small capital labels, Arial. */
-.dg-title { display: grid; width: 44%; min-width: 400px; gap: 1px; background: #000; border: 1.5px solid #000; color: #000; font: 11px/1.2 Arial, Helvetica, sans-serif;
+/* After Dovetail's Altium schematic title block: black rules, small capital labels, Arial. Half its first
+   size (Chris, 2026-11-13), its bottom right corner where it was. */
+.dg-title { display: grid; width: 22%; min-width: 200px; gap: 1px; background: #000; border: 1px solid #000; color: #000; font: 5.5px/1.2 Arial, Helvetica, sans-serif;
   grid-template-columns: 1fr 0.9fr 0.5fr 0.35fr 0.55fr 0.8fr;
   grid-template-areas: "page page page page page page" "pn proj proj logo logo logo" "title title rev logo logo logo" "date date var var var var" "eng eng client client client sheet"; }
-.dg-title > div { background: #fff; padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dg-title .tb-l { font-size: 8px; text-transform: uppercase; }
+.dg-title > div { background: #fff; padding: 1px 2.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dg-title .tb-l { font-size: 4px; text-transform: uppercase; }
 .dg-title .tb-big .tb-l { display: block; }
-.dg-title .tb-big .tb-v { font-size: 15px; }
-.dg-title .tb-page .tb-v { font-size: 20px; }
-.dg-title b { font-weight: 700; font-size: 12px; margin-left: 3px; }
+.dg-title .tb-big .tb-v { font-size: 7.5px; }
+.dg-title .tb-page .tb-v { font-size: 10px; }
+.dg-title b { font-weight: 700; font-size: 6px; margin-left: 1.5px; }
 .tb-page { grid-area: page; } .tb-pn { grid-area: pn; } .tb-proj { grid-area: proj; } .tb-title { grid-area: title; } .tb-rev { grid-area: rev; }
 .tb-date { grid-area: date; } .tb-var { grid-area: var; } .tb-eng { grid-area: eng; } .tb-client { grid-area: client; } .tb-sheet { grid-area: sheet; }
-.dg-title .tb-logo { grid-area: logo; display: flex; align-items: center; justify-content: center; gap: 12px; }
-.tb-logo svg { height: 36px; width: auto; }
-.tb-logo span { font: 400 15px Arial, Helvetica, sans-serif; letter-spacing: 0.28em; }
+.dg-title .tb-logo { grid-area: logo; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.tb-logo svg { height: 18px; width: auto; }
+.tb-logo span { font: 400 7.5px Arial, Helvetica, sans-serif; letter-spacing: 0.28em; }
 @media print {
   @page dg { size: landscape; margin: 10mm; }
   .paper.dg-paper { page: dg; aspect-ratio: auto; height: 182mm; padding: 0; }
-  .dg-title { width: 112mm; min-width: 0; }
+  .dg-title { width: 56mm; min-width: 0; }
 }
 /* The panel opens over the top right: its buttons step left of it on a wide screen. */
 @media (min-width: 861px) { html:has(#inspector.open) .spec-map-card.expanded .spec-view-acts { right: 424px; } }
@@ -1114,11 +1115,15 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .spec-edge-label { cursor: pointer; }
 .spec-edge-label rect { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1; }
 .spec-edge-label text { font-size: 11px; fill: var(--accent-ink); }
-/* Labels drag along their line or off it, with an arrow back to the line (Chris, 2026-11-13). */
+/* Labels drag along their line or off it, with a leader to a dot on the line, which drags along the line
+   (Chris, 2026-11-13). */
 .spec-edge-label.drag { cursor: grab; }
 .spec-flow.moving-label, .spec-flow.moving-label * { cursor: grabbing !important; user-select: none; }
-.spec-lead { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; }
-.spec-lead-head { fill: var(--accent); }
+.spec-lead { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; pointer-events: none; }
+.spec-lead-dot { cursor: grab; }
+.spec-lead-hit { fill: transparent; }
+.spec-lead-pt { fill: var(--accent); stroke: var(--bg-elev); stroke-width: 1.2; }
+.spec-lead-dot:hover .spec-lead-pt { r: 4; }
 .spec-node { cursor: pointer; }
 .spec-node rect { fill: var(--bg-elev); stroke: var(--hair-2); stroke-width: 1.2; }
 .spec-node:hover rect:first-of-type { stroke: var(--accent); stroke-width: 1.8; }
@@ -1239,10 +1244,10 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .spec-arrow { fill: var(--text-3); }
 .spec-flag { cursor: pointer; }
 .spec-flag path { stroke: var(--text-2); stroke-width: 1.4; fill: none; }
-.spec-flag .spec-flag-head { fill: var(--text-2); stroke: none; }
+.spec-flag .spec-flag-bar { stroke-width: 2; stroke-linecap: round; }
 .spec-flag text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
-.spec-flag:hover path, .spec-flag:hover text { stroke: var(--accent); fill: var(--accent); }
-.spec-flag:hover path:first-child { fill: none; }
+.spec-flag:hover path { stroke: var(--accent); }
+.spec-flag:hover text { fill: var(--accent); }
 .spec-use-label { margin-left: 4px; padding: 0 5px !important; border-radius: 6px; background: var(--bg-elev) !important; font-size: 11px !important; color: var(--text-2); }
 .spec-use-label:hover { color: var(--accent-ink); }
 .spec-part { font-family: var(--mono); font-size: 11px; }

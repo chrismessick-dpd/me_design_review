@@ -2696,7 +2696,7 @@
     var fit = String(live.dataset.fit || '').split(' ').map(Number);
     if (fit.length !== 4 || fit.some(function (n) { return !isFinite(n); })) { var b = live.viewBox.baseVal; fit = [b.x, b.y, b.width, b.height]; }
     var c = live.cloneNode(true);
-    Array.prototype.forEach.call(c.querySelectorAll('.spec-handle, .spec-edge-hit, .spec-pulse, title'), function (el) { el.remove(); });
+    Array.prototype.forEach.call(c.querySelectorAll('.spec-handle, .spec-edge-hit, .spec-lead-hit, .spec-pulse, title'), function (el) { el.remove(); });
     c.classList.remove('focus', 'moving', 'moving-label');
     Array.prototype.forEach.call(c.querySelectorAll('.sel, .on'), function (el) { el.classList.remove('sel', 'on'); });
     c.setAttribute('viewBox', fit.join(' '));
@@ -2762,8 +2762,9 @@
   }
   // The landscape sheet: the diagram over the page, and a title block at the bottom right with the
   // review's details. Print or save as PDF from the print view (the browser's own PDF printer).
-  // The title block follows Dovetail's Altium schematic sheets (Chris, 2026-11-13): Page across the top;
-  // part number and project beside the Dovetail mark; title and rev; date and, where the schematic has
+  // The title block follows Dovetail's Altium schematic sheets (Chris, 2026-11-13): the review's title
+  // across the top (Chris swapped it with Page the same day; the tb- areas name places, not contents);
+  // part number and project beside the Dovetail mark; page and rev; date and, where the schematic has
   // its variant, the stage; engineer, client (in the schematic's size), and sheet 1 of 1.
   var DG_MARK = '<svg viewBox="0 0 59.21 98.68" aria-hidden="true"><path d="M0 0h18.19v41.88H0zM0 56.79h18.19v41.88H0zM18.2 41.89h1.59v14.91H18.2zM19.79 0v41.89l24.96-6.63v28.16L19.79 56.79v41.89l39.42-10.47V10.47z" fill="#000"/></svg>';
   function specDiagramSheet(p, x) {
@@ -2773,11 +2774,11 @@
       return '<div class="tb-' + area + (big ? ' tb-big' : '') + '"><span class="tb-l">' + esc(label) + '</span>' + (big ? '' : ' ') + '<span class="tb-v">' + esc(value || '') + '</span></div>';
     }
     var block = '<div class="dg-title">' +
-      cell('page', 'Page', tool + ' block diagram', true) +
+      cell('page', 'Title', m.name || 'Untitled', true) +
       cell('pn', 'Part number', m.board, true) +
       cell('proj', 'Project', m.project, true) +
       '<div class="tb-logo">' + DG_MARK + '<span>DOVETAIL</span></div>' +
-      cell('title', 'Title:', m.name || 'Untitled') +
+      cell('title', 'Page:', tool + ' block diagram') +
       '<div class="tb-rev"><span class="tb-l">Rev</span> <b>' + esc(m.revision || '') + '</b></div>' +
       cell('date', 'Date:', date) +
       cell('var', 'Stage:', m.stage) +
@@ -2842,16 +2843,25 @@
   document.addEventListener('mousedown', function (e) { if (e.button === 1 && specExpanded && e.target.closest && e.target.closest('.spec-map-card.expanded')) e.preventDefault(); });
   function bez(p0, p1, p2, p3, t) { var u = 1 - t; return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3; }
   // A line from one block to another, out of the side facing it, with a point for its label.
+  // It leaves and enters square to the block's side on a short straight stub (Chris, 2026-11-13: lines
+  // fanning out of one connector came in at odd angles), so an arrowhead always sits on a straight run;
+  // the curve between the stubs (cd) is what labels ride on.
+  var SPEC_STUB = 12;
   function specRoute(A, B) {
-    var x1, y1, x2, y2, c1x, c1y, c2x, c2y;
-    if (B.x >= A.x + A.w + 12) { x1 = A.x + A.w; y1 = A.y + A.h / 2; x2 = B.x - 4; y2 = B.y + B.h / 2; c1x = c2x = (x1 + x2) / 2; c1y = y1; c2y = y2; }
-    else if (A.x >= B.x + B.w + 12) { x1 = A.x; y1 = A.y + A.h / 2; x2 = B.x + B.w + 4; y2 = B.y + B.h / 2; c1x = c2x = (x1 + x2) / 2; c1y = y1; c2y = y2; }
-    else if (B.y > A.y + A.h) { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y - 4; c1y = c2y = (y1 + y2) / 2; c1x = x1; c2x = x2; }
-    else if (B.y + B.h < A.y) { x1 = A.x + A.w / 2; y1 = A.y; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = (y1 + y2) / 2; c1x = x1; c2x = x2; }
-    else { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = Math.max(y1, y2) + 28; c1x = x1; c2x = x2; }
-    return { d: 'M' + x1 + ' ' + y1 + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + x2 + ' ' + y2,
-      mx: bez(x1, c1x, c2x, x2, 0.7), my: bez(y1, c1y, c2y, y2, 0.7),
-      at: function (t) { return { x: bez(x1, c1x, c2x, x2, t), y: bez(y1, c1y, c2y, y2, t) }; } };
+    var x1, y1, x2, y2, sx = 0, sy = 0, ex = 0, ey = 0, S = SPEC_STUB;
+    if (B.x >= A.x + A.w + 12) { x1 = A.x + A.w; y1 = A.y + A.h / 2; x2 = B.x - 1; y2 = B.y + B.h / 2; sx = ex = 1; }
+    else if (A.x >= B.x + B.w + 12) { x1 = A.x; y1 = A.y + A.h / 2; x2 = B.x + B.w + 1; y2 = B.y + B.h / 2; sx = ex = -1; }
+    else if (B.y > A.y + A.h) { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y - 1; sy = ey = 1; }
+    else if (B.y + B.h < A.y) { x1 = A.x + A.w / 2; y1 = A.y; x2 = B.x + B.w / 2; y2 = B.y + B.h + 1; sy = ey = -1; }
+    else { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y + B.h + 1; sy = 1; ey = -1; }
+    var p1x = x1 + sx * S, p1y = y1 + sy * S, p2x = x2 - ex * S, p2y = y2 - ey * S, c1x, c1y, c2x, c2y;
+    if (sx) { c1x = c2x = (p1x + p2x) / 2; c1y = p1y; c2y = p2y; }
+    else if (sy === ey) { c1y = c2y = (p1y + p2y) / 2; c1x = p1x; c2x = p2x; }
+    else { c1y = c2y = Math.max(p1y, p2y) + 28; c1x = p1x; c2x = p2x; }
+    var cd = 'M' + p1x + ' ' + p1y + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + p2x + ' ' + p2y;
+    return { d: 'M' + x1 + ' ' + y1 + ' L' + cd.slice(1) + ' L' + x2 + ' ' + y2, cd: cd,
+      mx: bez(p1x, c1x, c2x, p2x, 0.7), my: bez(p1y, c1y, c2y, p2y, 0.7),
+      at: function (t) { return { x: bez(p1x, c1x, c2x, p2x, t), y: bez(p1y, c1y, c2y, p2y, t) }; } };
   }
   // Current along a line: beads that run its length while its block is selected or pointed at, after
   // Loom's pulse on a selected wire. Drawn right after its .spec-edge, which CSS keys on.
@@ -2953,8 +2963,8 @@
     function on(e) { return specEdgeIs(e.a, e.b, e.word) ? ' on sel' : isBlock[sel] && (e.a === sel || e.b === sel) ? ' on' : ''; }
     var svg = '<svg class="spec-map spec-flow' + (isBlock[sel] || specEdgeSel() ? ' focus' : '') + '" ' + specVBAttr(minX + ' ' + minY + ' ' + VW + ' ' + VH) + ' role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern>' +
-      '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker>' +
-      '<marker id="spec-lead-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="spec-lead-head"/></marker></defs>' +
+      // A slim notched head of a fixed size (user units), so a thicker selected line doesn't grow it.
+      '<marker id="spec-arrow" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="9" markerHeight="7.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0.6L10 4L0 7.4L2.6 4z" class="spec-arrow"/></marker></defs>' +
       '<rect class="spec-flow-bg" x="' + minX + '" y="' + minY + '" width="' + VW + '" height="' + VH + '"/>';
     // Section boxes, outer ones first.
     if (show) {
@@ -2967,21 +2977,25 @@
           (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') + '</g>';
       });
     }
-    // drag: { from, key, d, anchor } makes the label draggable (Chris, 2026-11-13): along its line, or off it,
-    // where an arrow points back to its place on the line (anchor).
+    // drag: { from, key, d, anchor, t } makes the label draggable (Chris, 2026-11-13): along its line, or off
+    // it, where a leader ends in a dot at its place on the line (anchor, at t along d, the line's curve). The
+    // dot drags along the line too, and the leader follows both live (labelLead).
     function pill(x, y, text, drag) {
-      var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor;
-      var lead = an && Math.hypot(an.x - x, an.y - y) > 12 ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + an.x + ' ' + an.y + '" marker-end="url(#spec-lead-arrow)"/>' : '';
-      return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' : '') + '>' +
-        (drag ? '<title>Drag along its line, or off it</title>' : '') + lead +
-        '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g>';
+      var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
+      var lead = drag ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + (an ? an.x + ' ' + an.y : x + ' ' + y) + '"' + (off ? '' : ' style="display:none"') + '/>' +
+        '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
+        '<circle class="spec-lead-hit" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="8"/><circle class="spec-lead-pt" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="3"/></g>' : '';
+      return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' +
+        (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
+        '<g class="spec-pill">' + (drag ? '<title>Drag along its line, or off it</title>' : '') +
+        '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g></g>';
     }
     // Where a dragged label was left, from its block's record: { q, anchor } or null.
     function keptLabel(from, key, rt) {
       var labs = T.byId[from] && T.byId[from].sec.labels, k = labs && labs[key];
       if (!k) return null;
       var an = rt.at(k.t);
-      return { q: { x: an.x + k.x, y: an.y + k.y }, anchor: an };
+      return { q: { x: an.x + k.x, y: an.y + k.y }, anchor: an, t: k.t };
     }
     function hit(e, d, L) {
       var a = T.byId[e.a].sec.title, b = T.byId[e.b].sec.title, label = L ? L.labels.join(' / ') : e.label;
@@ -2998,7 +3012,7 @@
         if (e.label) {
           var skey = e.b + '|' + e.word.toLowerCase(), kept = keptLabel(e.a, skey, rt);
           var sq = kept ? kept.q : { x: (A.x + A.w + B.x) / 2, y: Math.min(A.y, B.y) + SPEC_BH / 2 - 14 };
-          svg += pill(sq.x, sq.y, e.label, { from: e.a, key: skey, d: rt.d, anchor: kept && kept.anchor });
+          svg += pill(sq.x, sq.y, e.label, { from: e.a, key: skey, d: rt.cd, anchor: kept && kept.anchor, t: kept ? kept.t : null });
         }
       } else flagged.push(e);
     });
@@ -3024,10 +3038,11 @@
       function clear(q) {
         return !blockRects.concat(placed).some(function (r) { return q.x + w / 2 > r.x - 2 && q.x - w / 2 < r.x + r.w + 2 && q.y + 10 > r.y - 2 && q.y - 10 < r.y + r.h + 2; });
       }
-      var q = cands.filter(clear)[0] || mid;
+      var q = cands.filter(clear)[0] || mid, i = cands.indexOf(q);
       placed.push({ x: q.x - w / 2, y: q.y - 10, w: w, h: 20 });
       // Off the line (above or below), it points back to the line's middle.
-      return { q: q, anchor: q.x === mid.x && q.y === mid.y || cands.indexOf(q) < tries.length ? null : mid };
+      var onLine = q === mid || i < tries.length;
+      return { q: q, anchor: onLine ? null : mid, t: onLine ? (i >= 0 ? tries[i] : 0.5) : 0.5 };
     }
     lines.forEach(function (L) {
       var rt = specRoute(R[L.a], R[L.b]), e = { a: L.a, b: L.b, word: L.word };
@@ -3036,7 +3051,7 @@
         (L.ab ? ' marker-end="url(#spec-arrow)"' : '') + (L.ba ? ' marker-start="url(#spec-arrow)"' : '') + '/>' + specPulse(rt.d) + hit(L.src, rt.d, L);
       if (L.labels.length) {
         var lt = L.labels.join(' / '), key = L.src.b + '|' + L.word.toLowerCase(), kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt);
-        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.d, anchor: kept.anchor });
+        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t });
       }
     });
     blocks.forEach(function (x) {
@@ -3054,7 +3069,8 @@
         var name = e.label || T.byId[e.a].sec.title, fw = Math.min(110, 22 + name.length * 6.2), fx = right - fw, fy = b.y - 15;
         right = fx - 6;
         svg += '<g class="spec-flag" data-act="spec-block" data-id="' + esc(e.a) + '" data-for="' + esc(x.sec.id) + '"><title>' + esc('Supplied by ' + T.byId[e.a].sec.title + (e.label ? ' (' + e.label + ')' : '')) + '</title>' +
-          '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 7) + '"/><path class="spec-flag-head" d="M' + (fx + 3) + ' ' + (fy + 7) + ' L' + (fx + 13) + ' ' + (fy + 7) + ' L' + (fx + 8) + ' ' + (fy + 1) + 'z"/>' +
+          // A rail symbol: a stem up from the block to a bar (Chris, 2026-11-13: a bar, not an arrow).
+          '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 4) + '"/><path class="spec-flag-bar" d="M' + (fx + 3) + ' ' + (fy + 4) + ' L' + (fx + 13) + ' ' + (fy + 4) + '"/>' +
           '<text x="' + (fx + 17) + '" y="' + (fy + 9) + '">' + esc(cutText(name, Math.floor((fw - 20) / 6.2))) + '</text></g>';
       });
     });
@@ -3177,8 +3193,10 @@
     var lab = e.target.closest('.spec-edge-label.drag');
     if (lab) {
       e.preventDefault();
-      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'label', el: lab,
-        from: lab.dataset.from, key: lab.dataset.key, route: labelRoute(lab.dataset.route), c0: { x: +lab.dataset.cx, y: +lab.dataset.cy } };
+      // The label itself, or the dot at the end of its leader ('dot'), which moves only along the line.
+      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: e.target.closest('.spec-lead-dot') ? 'dot' : 'label', el: lab,
+        from: lab.dataset.from, key: lab.dataset.key, route: labelRoute(lab.dataset.route), c0: { x: +lab.dataset.cx, y: +lab.dataset.cy },
+        t0: lab.dataset.t != null && lab.dataset.t !== '' ? +lab.dataset.t : null };
       return;
     }
     flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
@@ -3208,20 +3226,40 @@
     }
     return best;
   }
-  // Where a label being dragged goes: on its line when within 16 units of it, else where it's dropped.
+  function labelPt(r, t) { return { t: t, x: bez(r[0], r[2], r[4], r[6], t), y: bez(r[1], r[3], r[5], r[7], t) }; }
+  // Where a label being dragged goes: on its line when within 16 units of it, else where it's dropped, with
+  // its dot kept where the label last sat on the line (t0), or the nearest point when it never had a place.
+  // c is the label's middle, a its dot (null on the line).
   function labelDrop(d, ev) {
     var q = d.local(ev), c = { x: d.c0.x + q.x - d.start.x, y: d.c0.y + q.y - d.start.y }, s = d.route && labelSnap(d.route, c);
     if (!s) return null;
-    return s.dd <= 16 ? { t: s.t, x: 0, y: 0, c: { x: s.x, y: s.y } } : { t: s.t, x: Math.round(c.x - s.x), y: Math.round(c.y - s.y), c: c };
+    if (s.dd <= 16) return { t: s.t, x: 0, y: 0, c: { x: s.x, y: s.y }, a: null, on: true };
+    var a = d.t0 != null ? labelPt(d.route, d.t0) : s;
+    return { t: a.t, x: Math.round(c.x - a.x), y: Math.round(c.y - a.y), c: c, a: a };
+  }
+  // Where a dragged dot goes: the nearest point on the line; the label stays put.
+  function dotDrop(d, ev) {
+    var s = d.route && labelSnap(d.route, d.local(ev));
+    return s && { t: s.t, x: Math.round(d.c0.x - s.x), y: Math.round(d.c0.y - s.y), c: d.c0, a: s };
+  }
+  // The leader drawn live from the label's middle c to its dot a while either drags.
+  function labelLead(el, c, a) {
+    var lead = el.querySelector('.spec-lead'), dot = el.querySelector('.spec-lead-dot'); if (!lead || !dot) return;
+    var show = a && Math.hypot(a.x - c.x, a.y - c.y) > 12;
+    lead.style.display = dot.style.display = show ? '' : 'none';
+    if (!show) return;
+    lead.setAttribute('d', 'M' + c.x + ' ' + c.y + ' L' + a.x + ' ' + a.y);
+    Array.prototype.forEach.call(dot.querySelectorAll('circle'), function (ci) { ci.setAttribute('cx', a.x); ci.setAttribute('cy', a.y); });
   }
   function flowMove(e) {
     var d = flowDrag; if (!d) return;
-    if (d.type === 'label') {
+    if (d.type === 'label' || d.type === 'dot') {
       if (!d.on && Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 4) return;
       d.on = true; d.svg.classList.add('moving-label'); e.preventDefault();
-      var nd = labelDrop(d, e); if (!nd) return;
-      d.el.setAttribute('transform', 'translate(' + (nd.c.x - d.c0.x) + ' ' + (nd.c.y - d.c0.y) + ')');
-      var ld = d.el.querySelector('.spec-lead'); if (ld) ld.style.display = 'none';
+      var nd = d.type === 'dot' ? dotDrop(d, e) : labelDrop(d, e); if (!nd) return;
+      if (nd.on) d.t0 = nd.t;   // dragged along the line, then off it: the dot stays where it left
+      var pl = d.el.querySelector('.spec-pill'); if (pl) pl.setAttribute('transform', 'translate(' + (nd.c.x - d.c0.x) + ' ' + (nd.c.y - d.c0.y) + ')');
+      labelLead(d.el, nd.c, nd.a);
       return;
     }
     if (!d.on) {
@@ -3247,8 +3285,8 @@
     specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0);
     var p = current(); if (!p) return;
     var q = d.local(e);
-    if (d.type === 'label') {
-      var nd = labelDrop(d, e), rec = p.spec[d.from];
+    if (d.type === 'label' || d.type === 'dot') {
+      var nd = d.type === 'dot' ? dotDrop(d, e) : labelDrop(d, e), rec = p.spec[d.from];
       if (!nd || !rec) { renderPage(); return; }
       var labs = Object.assign({}, rec.labels || {});
       labs[d.key] = { t: Math.round(nd.t * 1000) / 1000, x: nd.x, y: nd.y };
