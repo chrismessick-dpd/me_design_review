@@ -877,6 +877,13 @@ button.req-link-main:hover { background: var(--hair-2); }
 .spec-outline [data-act="spec-goto"] { cursor: pointer; }
 .spec-outline [data-act="spec-goto"]:active { cursor: grabbing; }
 body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+/* The grip and hint that say headings drag (ticket 3, 2026-11-13). Touch doesn't drag sections, so neither shows there. */
+.spec-doc .spec-h > :is(h2, h3, h4, h5) { position: relative; }
+.spec-grip { position: absolute; left: -18px; top: 50%; width: 10px; height: 16px; margin-top: -8px; color: var(--text-3); opacity: 0; transition: opacity 0.15s var(--ease); pointer-events: none; }
+.spec-grip svg { display: block; width: 10px; height: 16px; }
+.spec-drag-hint { display: contents; }
+.spec-doc .spec-h:hover .spec-grip { opacity: 0.8; }
+@media (hover: none) { .spec-grip, .spec-drag-hint { display: none; } }
 .spec-dragged { opacity: 0.4; }
 .spec-drop-line { position: fixed; z-index: 90; height: 3px; border-radius: 2px; background: var(--accent); pointer-events: none; }
 .spec-drop-line::before { content: ''; position: absolute; left: -5px; top: -3px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bg-elev); box-sizing: border-box; }
@@ -1014,6 +1021,11 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-edge-label { cursor: pointer; }
 .spec-edge-label rect { fill: var(--bg-elev); stroke: var(--accent); stroke-width: 1; }
 .spec-edge-label text { font-size: 11px; fill: var(--accent-ink); }
+/* Labels drag along their line or off it, with an arrow back to the line (Chris, 2026-11-13). */
+.spec-edge-label.drag { cursor: grab; }
+.spec-flow.moving-label, .spec-flow.moving-label * { cursor: grabbing !important; user-select: none; }
+.spec-lead { fill: none; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; }
+.spec-lead-head { fill: var(--accent); }
 .spec-node { cursor: pointer; }
 .spec-node rect { fill: var(--bg-elev); stroke: var(--hair-2); stroke-width: 1.2; }
 .spec-node:hover rect:first-of-type { stroke: var(--accent); stroke-width: 1.8; }

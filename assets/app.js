@@ -1873,7 +1873,7 @@
   // How a link reads from the other end, and as a verb.
   function linkFrom(word) { return { uses: 'Used by', connects: 'Connected from', supplies: 'Supplied by' }[String(word).toLowerCase()] || word + ' from'; }
   function linkVerb(word) { return { uses: 'uses', connects: 'connects to', supplies: 'supplies' }[String(word).toLowerCase()] || String(word).toLowerCase(); }
-  function linkItemText(it) { return it.name + (it.label ? ' · ' + it.label : ''); }
+  function linkItemText(it) { return it.name + (it.label ? ' · ' + it.label : '') + (it.dir === 'both' ? ' ↔' : it.dir === 'in' ? ' ←' : ''); }
   // Untraced is "Unlinked" on screen (Chris, 2026-11-09), beside Linked; data keys stay 'untraced'.
   var STATE_LABEL = { linked: 'Linked', std: 'Standard', tag: 'Flagged for a requirement', untraced: 'Unlinked', note: 'Review note' };
   var specEditing = null, specDraft = '', specPhrase = '', specNewAfter = '';
@@ -2128,7 +2128,7 @@
       ]) +
       '<p class="note">Moving a block into another section moves its heading in the text; the hierarchy under the diagram does that by dragging.</p>' +
       '<h3>How blocks connect</h3>' + rows([
-        ['Connects: Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one sends signals to, with the signal or bus in brackets. Write it in the direction signals go; it draws the diagram’s labeled arrows.'],
+        ['Connects: Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one sends signals to, with the signal or bus in brackets. Write it in the direction signals go; it draws the diagram’s labeled arrows. Add a direction after the signal for one that comes in or goes both ways: (UART, in), (I2C, both ways). Two blocks that name each other draw one line, both ways.'],
         ['Supplies: MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. Each block fed shows a power flag with the rail’s name.'],
         ['Parts: U7, L1, C1–C3, C12', 'The reference designators the block covers, with ranges. Shown as chips on the block; not traced.']
       ]) +
@@ -2194,7 +2194,9 @@
       (t.untraced ? '<span class="sep">·</span><span>' + t.untraced + ' unlinked</span>' : '') +
       (t.note ? '<span class="sep">·</span><span>' + plural(t.note, 'review note') + '</span>' : '') +
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
-      (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') + '</div></div>' +
+      (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') +
+      // Ticket 3 (2026-11-13): moving sections wasn't obvious. Pointers only: touch doesn't drag them.
+      (t.sections > 1 && specEditing !== 'all' && ui.specView !== 'map' ? '<span class="spec-drag-hint"><span class="sep">·</span><span>Drag a heading to move its section</span></span>' : '') + '</div></div>' +
       // One row: back and forward, Edit all, Add section, and a menu for the rest (Chris, 2026-11-09).
       '<div class="spec-tools">' + (specEditing === 'all' ? '' : specHistHtml(p) +
       (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
@@ -2228,7 +2230,7 @@
       var s = x.sec, next = a.sections[i + 1], group = next && next.sec.level > s.level;
       if (specEditing === s.id) return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '">' + specEditorHtml(s.id) + '</section>';
       var hn = 'h' + Math.min(5, s.level + 1);
-      return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '"><div class="spec-h"><' + hn + '>' + esc(s.title || 'Untitled') + '</' + hn + '>' +
+      return '<section class="spec-sec lv-' + s.level + '" id="spec-' + esc(s.id) + '"><div class="spec-h"><' + hn + ' title="Drag to move this section"><span class="spec-grip" aria-hidden="true">' + ICON_GRIP + '</span>' + esc(s.title || 'Untitled') + '</' + hn + '>' +
         (s.kind ? '<span class="chip spec-kind">' + esc(s.kind) + '</span>' : '') + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) +
         '<button class="icon-btn spec-edit spec-add-after" data-act="spec-add-after" data-id="' + esc(s.id) + '" title="Add a section below this one" aria-label="Add a section below ' + esc(s.title) + '">' + ICON_PLUS + '</button>' +
         '<button class="icon-btn spec-edit" data-act="spec-edit" data-id="' + esc(s.id) + '" title="Edit this section" aria-label="Edit ' + esc(s.title) + '">' + ICON.pencil + '</button></div>' +
@@ -2445,7 +2447,8 @@
     else if (B.y + B.h < A.y) { x1 = A.x + A.w / 2; y1 = A.y; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = (y1 + y2) / 2; c1x = x1; c2x = x2; }
     else { x1 = A.x + A.w / 2; y1 = A.y + A.h; x2 = B.x + B.w / 2; y2 = B.y + B.h + 4; c1y = c2y = Math.max(y1, y2) + 28; c1x = x1; c2x = x2; }
     return { d: 'M' + x1 + ' ' + y1 + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + x2 + ' ' + y2,
-      mx: bez(x1, c1x, c2x, x2, 0.7), my: bez(y1, c1y, c2y, y2, 0.7) };
+      mx: bez(x1, c1x, c2x, x2, 0.7), my: bez(y1, c1y, c2y, y2, 0.7),
+      at: function (t) { return { x: bez(x1, c1x, c2x, x2, t), y: bez(y1, c1y, c2y, y2, t) }; } };
   }
   // Current along a line: beads that run its length while its block is selected or pointed at, after
   // Loom's pulse on a selected wire. Drawn right after its .spec-edge, which CSS keys on.
@@ -2457,7 +2460,7 @@
     blocks.forEach(function (x) { isBlock[x.sec.id] = 1; });
     var frozen = blocks.some(function (x) { return x.sec.pos; });
     var bar = '<div class="spec-flow-add"><button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
-      (frozen ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
+      (frozen || blocks.some(function (x) { return x.sec.labels; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
       '<span class="spec-flow-hint">Drag on empty space to draw a section around blocks</span>' +
       '<label class="spec-boxes" title="Show section boxes"><input type="checkbox" data-act="spec-boxes"' + (show ? ' checked' : '') + '> Sections</label></div>';
     if (!blocks.length) {
@@ -2465,7 +2468,7 @@
     }
     var conn = [], sup = [];
     blocks.forEach(function (x) {
-      x.edges.forEach(function (e) { if (!isBlock[e.id]) return; (supWord && e.word.toLowerCase() === supWord ? sup : conn).push({ a: x.sec.id, b: e.id, label: e.label, word: e.word }); });
+      x.edges.forEach(function (e) { if (!isBlock[e.id]) return; (supWord && e.word.toLowerCase() === supWord ? sup : conn).push({ a: x.sec.id, b: e.id, label: e.label, word: e.word, dir: e.dir || '' }); });
     });
     function under(x) { return T.isSec(x) ? T.ch[x.sec.id].reduce(function (acc, c) { return acc.concat(under(c)); }, []) : [x.sec.id]; }
     // Siblings in signal order: one goes right of another when a link runs from it into it.
@@ -2500,7 +2503,33 @@
       Y += h + SPEC_ROWGAP;
     });
     var R = {};
-    blocks.forEach(function (x) { var q = x.sec.pos || auto[x.sec.id] || { x: 20, y: Y }; R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: SPEC_BH }; });
+    blocks.forEach(function (x) { if (x.sec.pos) R[x.sec.id] = { x: x.sec.pos.x, y: x.sec.pos.y, w: SPEC_BW, h: SPEC_BH }; });
+    // Once the diagram is arranged, a block added later has no place of its own, and the automatic one
+    // can sit on a block that was moved (ticket 5, 2026-11-13). It goes right of the last block in its
+    // section instead, then further right or down until it covers nothing.
+    function free(q) {
+      return !Object.keys(R).some(function (k) { var r = R[k]; return q.x < r.x + r.w + SPEC_GAP && q.x + SPEC_BW + SPEC_GAP > r.x && q.y < r.y + r.h + SPEC_GAP && q.y + SPEC_BH + SPEC_GAP > r.y; });
+    }
+    blocks.forEach(function (x) {
+      if (x.sec.pos) return;
+      var q = auto[x.sec.id] || { x: 20, y: Y };
+      if (frozen) {
+        var sib = blocks.filter(function (y) { return y !== x && R[y.sec.id] && T.dparent(y) === T.dparent(x); }).map(function (y) { return R[y.sec.id]; });
+        var start = sib.length ? sib.reduce(function (m, r) { return r.x > m.x ? r : m; }) : null;
+        start = start ? { x: start.x + start.w + SPEC_GAP, y: start.y } : q;
+        var found = null;
+        for (var row = 0; row < 8 && !found; row++) for (var col = 0; col < 8 && !found; col++) {
+          var c = { x: start.x + col * (SPEC_BW + SPEC_GAP), y: start.y + row * (SPEC_BH + SPEC_GAP) };
+          if (free(c)) found = c;
+        }
+        if (!found) {
+          var maxY0 = Math.max.apply(null, Object.keys(R).map(function (k) { return R[k].y + R[k].h; }).concat([0]));
+          found = { x: start.x, y: maxY0 + SPEC_ROWGAP };
+        }
+        q = found;
+      }
+      R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: SPEC_BH };
+    });
     function boxOf(x) {
       if (!T.isSec(x)) return R[x.sec.id];
       var bs = T.ch[x.sec.id].map(boxOf).filter(Boolean);
@@ -2521,7 +2550,8 @@
     function on(e) { return specEdgeIs(e.a, e.b, e.word) ? ' on sel' : isBlock[sel] && (e.a === sel || e.b === sel) ? ' on' : ''; }
     var svg = '<svg class="spec-map spec-flow' + (isBlock[sel] || specEdgeSel() ? ' focus' : '') + '" viewBox="' + minX + ' ' + minY + ' ' + VW + ' ' + VH + '" role="img" aria-label="Block diagram of the ' + esc(W.thing) + ' from the outline">' +
       '<defs><pattern id="spec-dots" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.1" class="spec-dot"/></pattern>' +
-      '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker></defs>' +
+      '<marker id="spec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="spec-arrow"/></marker>' +
+      '<marker id="spec-lead-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="spec-lead-head"/></marker></defs>' +
       '<rect class="spec-flow-bg" x="' + minX + '" y="' + minY + '" width="' + VW + '" height="' + VH + '"/>';
     // Section boxes, outer ones first.
     if (show) {
@@ -2534,12 +2564,26 @@
           (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') + '</g>';
       });
     }
-    function pill(x, y, text) {
-      var w = Math.min(150, 14 + text.length * 6.6);
-      return '<g class="spec-edge-label"><rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g>';
+    // drag: { from, key, d, anchor } makes the label draggable (Chris, 2026-11-13): along its line, or off it,
+    // where an arrow points back to its place on the line (anchor).
+    function pill(x, y, text, drag) {
+      var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor;
+      var lead = an && Math.hypot(an.x - x, an.y - y) > 12 ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + an.x + ' ' + an.y + '" marker-end="url(#spec-lead-arrow)"/>' : '';
+      return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' : '') + '>' +
+        (drag ? '<title>Drag along its line, or off it</title>' : '') + lead +
+        '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g>';
     }
-    function hit(e, d) {
-      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(T.byId[e.a].sec.title + ' ' + linkVerb(e.word) + ' ' + T.byId[e.b].sec.title + (e.label ? ' (' + e.label + ')' : '') + ', click for its panel') + '</title></path>';
+    // Where a dragged label was left, from its block's record: { q, anchor } or null.
+    function keptLabel(from, key, rt) {
+      var labs = T.byId[from] && T.byId[from].sec.labels, k = labs && labs[key];
+      if (!k) return null;
+      var an = rt.at(k.t);
+      return { q: { x: an.x + k.x, y: an.y + k.y }, anchor: an };
+    }
+    function hit(e, d, L) {
+      var a = T.byId[e.a].sec.title, b = T.byId[e.b].sec.title, label = L ? L.labels.join(' / ') : e.label;
+      var says = L && L.ab && L.ba ? a + ' and ' + b + ' connect both ways' : L && L.ba && !L.ab ? (L.a === e.a ? b + ' ' + linkVerb(e.word) + ' ' + a : a + ' ' + linkVerb(e.word) + ' ' + b) : a + ' ' + linkVerb(e.word) + ' ' + b;
+      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(says + (label ? ' (' + label + ')' : '') + ', click for its panel') + '</title></path>';
     }
     // Supplies between neighbors in one section draw as arrows; every other supply is a power flag.
     var flagged = [];
@@ -2548,13 +2592,49 @@
       if (T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) {
         var rt = specRoute(A, B);
         svg += '<path class="spec-edge supply' + on(e) + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d) + hit(e, rt.d);
-        if (e.label) svg += pill((A.x + A.w + B.x) / 2, Math.min(A.y, B.y) + SPEC_BH / 2 - 14, e.label);
+        if (e.label) {
+          var skey = e.b + '|' + e.word.toLowerCase(), kept = keptLabel(e.a, skey, rt);
+          var sq = kept ? kept.q : { x: (A.x + A.w + B.x) / 2, y: Math.min(A.y, B.y) + SPEC_BH / 2 - 14 };
+          svg += pill(sq.x, sq.y, e.label, { from: e.a, key: skey, d: rt.d, anchor: kept && kept.anchor });
+        }
       } else flagged.push(e);
     });
+    // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
+    // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
+    // other (the default), in to it, or both ways; both blocks naming each other is both ways too.
+    var lines = [], pairs = {};
     conn.forEach(function (e) {
-      var rt = specRoute(R[e.a], R[e.b]);
-      svg += '<path class="spec-edge uses' + on(e) + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d) + hit(e, rt.d);
-      if (e.label) svg += pill(rt.mx, rt.my, e.label);
+      var k = [e.a, e.b].sort().join('|') + '|' + e.word.toLowerCase(), L = pairs[k];
+      if (!L) lines.push(L = pairs[k] = { a: e.a, b: e.b, word: e.word, labels: [], ab: false, ba: false, src: e });
+      var fwd = L.a === e.a, out = e.dir !== 'in', inn = e.dir === 'in' || e.dir === 'both';
+      if (e.dir === 'both') { L.ab = L.ba = true; }
+      else if (fwd ? out : inn) L.ab = true; else L.ba = true;
+      if (e.label && L.labels.map(function (t) { return t.toLowerCase(); }).indexOf(e.label.toLowerCase()) < 0) L.labels.push(e.label);
+    });
+    // A label goes at the middle of its line, or the nearest place along it that covers no block (ticket 7).
+    // A line too short for its label (two blocks side by side) puts it just above or below them.
+    // Each block's rect reaches up over its power flags.
+    var blockRects = blocks.map(function (x) { var r = R[x.sec.id]; return { x: r.x, y: r.y - 18, w: r.w, h: r.h + 18 }; }), placed = [];
+    function labelAt(rt, text) {
+      var w = Math.min(150, 14 + text.length * 6.6), tries = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74], mid = rt.at(0.5), off = SPEC_BH / 2 + 14;
+      var cands = tries.map(function (t) { return rt.at(t); }).concat([{ x: mid.x, y: mid.y + off }, { x: mid.x, y: mid.y - off - 18 }]);
+      function clear(q) {
+        return !blockRects.concat(placed).some(function (r) { return q.x + w / 2 > r.x - 2 && q.x - w / 2 < r.x + r.w + 2 && q.y + 10 > r.y - 2 && q.y - 10 < r.y + r.h + 2; });
+      }
+      var q = cands.filter(clear)[0] || mid;
+      placed.push({ x: q.x - w / 2, y: q.y - 10, w: w, h: 20 });
+      // Off the line (above or below), it points back to the line's middle.
+      return { q: q, anchor: q.x === mid.x && q.y === mid.y || cands.indexOf(q) < tries.length ? null : mid };
+    }
+    lines.forEach(function (L) {
+      var rt = specRoute(R[L.a], R[L.b]), e = { a: L.a, b: L.b, word: L.word };
+      var cls = specEdgeIs(L.a, L.b, L.word) || specEdgeIs(L.b, L.a, L.word) ? ' on sel' : isBlock[sel] && (L.a === sel || L.b === sel) ? ' on' : '';
+      svg += '<path class="spec-edge uses' + cls + (L.ab && L.ba ? ' both' : '') + '" data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '"' +
+        (L.ab ? ' marker-end="url(#spec-arrow)"' : '') + (L.ba ? ' marker-start="url(#spec-arrow)"' : '') + '/>' + specPulse(rt.d) + hit(L.src, rt.d, L);
+      if (L.labels.length) {
+        var lt = L.labels.join(' / '), key = L.src.b + '|' + L.word.toLowerCase(), kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt);
+        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.d, anchor: kept.anchor });
+      }
     });
     blocks.forEach(function (x) {
       var b = R[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
@@ -2585,6 +2665,7 @@
   // section's blocks are tiles on its branch. Drag a tile or a section onto a branch to move it into
   // that section, or onto a tile to put it just before; + on a branch adds a block inside. It is the
   // outline: every move is a heading moved in the text (model.specNest).
+  var ICON_GRIP = '<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="7" cy="13" r="1.3"/></svg>';
   var ICON_SECTION = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M2.5 7.5h15"/></svg>';
   function specTreeHtml(p, a, T) {
     var root = a.sections.filter(function (x) { return x.sec.level === 1 && (a.sections.some(function (y) { return y.parent === x.sec.id; })); })[0];
@@ -2690,6 +2771,13 @@
     var node = e.target.closest('.spec-node'), box = e.target.closest('.spec-group-g');
     var m = svg.getScreenCTM().inverse(), pt = svg.createSVGPoint();
     function local(ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); }
+    var lab = e.target.closest('.spec-edge-label.drag');
+    if (lab) {
+      e.preventDefault();
+      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'label', el: lab,
+        from: lab.dataset.from, key: lab.dataset.key, route: labelRoute(lab.dataset.route), c0: { x: +lab.dataset.cx, y: +lab.dataset.cy } };
+      return;
+    }
     flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
       type: node ? 'block' : box ? 'section' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '' };
     if (flowDrag.type === 'draw') e.preventDefault();
@@ -2704,8 +2792,35 @@
     });
     return best;
   }
+  // A label's line as a cubic (the d of specRoute: M x y C x y x y x y), and the nearest point on it.
+  function labelRoute(d) {
+    var n = String(d || '').match(/-?[\d.]+(?:e-?\d+)?/g); n = n ? n.map(Number) : [];
+    return n.length === 8 ? n : null;
+  }
+  function labelSnap(r, q) {
+    var best = null;
+    for (var i = 0; i <= 100; i++) {
+      var t = i / 100, x = bez(r[0], r[2], r[4], r[6], t), y = bez(r[1], r[3], r[5], r[7], t), dd = Math.hypot(q.x - x, q.y - y);
+      if (!best || dd < best.dd) best = { t: t, x: x, y: y, dd: dd };
+    }
+    return best;
+  }
+  // Where a label being dragged goes: on its line when within 16 units of it, else where it's dropped.
+  function labelDrop(d, ev) {
+    var q = d.local(ev), c = { x: d.c0.x + q.x - d.start.x, y: d.c0.y + q.y - d.start.y }, s = d.route && labelSnap(d.route, c);
+    if (!s) return null;
+    return s.dd <= 16 ? { t: s.t, x: 0, y: 0, c: { x: s.x, y: s.y } } : { t: s.t, x: Math.round(c.x - s.x), y: Math.round(c.y - s.y), c: c };
+  }
   function flowMove(e) {
     var d = flowDrag; if (!d) return;
+    if (d.type === 'label') {
+      if (!d.on && Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 4) return;
+      d.on = true; d.svg.classList.add('moving-label'); e.preventDefault();
+      var nd = labelDrop(d, e); if (!nd) return;
+      d.el.setAttribute('transform', 'translate(' + (nd.c.x - d.c0.x) + ' ' + (nd.c.y - d.c0.y) + ')');
+      var ld = d.el.querySelector('.spec-lead'); if (ld) ld.style.display = 'none';
+      return;
+    }
     if (!d.on) {
       if (Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 6) return;
       d.on = true; d.svg.classList.add('moving');
@@ -2725,10 +2840,18 @@
   function flowUp(e) {
     var d = flowDrag; flowDrag = null;
     if (!d || !d.on) return;
-    d.svg.classList.remove('moving');
+    d.svg.classList.remove('moving', 'moving-label');
     specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0);
     var p = current(); if (!p) return;
     var q = d.local(e);
+    if (d.type === 'label') {
+      var nd = labelDrop(d, e), rec = p.spec[d.from];
+      if (!nd || !rec) { renderPage(); return; }
+      var labs = Object.assign({}, rec.labels || {});
+      labs[d.key] = { t: Math.round(nd.t * 1000) / 1000, x: nd.x, y: nd.y };
+      specPutAll(p, [M.specStamp(Object.assign({}, rec, { labels: labs }), me())]);
+      return;
+    }
     if (d.type === 'draw') {
       var x0 = Math.min(q.x, d.start.x), y0 = Math.min(q.y, d.start.y), x1 = Math.max(q.x, d.start.x), y1 = Math.max(q.y, d.start.y);
       d.rect.remove();
@@ -2767,7 +2890,7 @@
   function T_title(p, id) { var s = M.liveSpec(p).filter(function (x) { return x.id === id; })[0]; return s ? s.title : 'It'; }
   function specAutoLayout() {
     var p = current(); if (!p) return;
-    var recs = M.liveSpec(p).filter(function (s) { return s.pos; }).map(function (s) { return M.specStamp(Object.assign({}, p.spec[s.id], { pos: null }), me()); });
+    var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; return M.specStamp(r, me()); });
     if (recs.length) { specPutAll(p, recs); toast('Laid out again'); }
   }
   function cutText(t, n) { t = String(t || ''); return n > 1 && t.length > n ? t.slice(0, n - 1) + '…' : t; }
@@ -3145,19 +3268,26 @@
     if (!a || !b || a.deleted || b.deleted) return null;
     var word = M.specLinkWord(s.word) || M.specLinkWords()[0], items = M.specUsesItems(a.body, word);
     var it = items.filter(function (n) { return M.specUseIs(n, b.title); })[0];
-    return it ? { s: s, from: a, to: b, word: word, items: items, it: it } : null;
+    // The same connection named from the other block too (one line on the diagram, ticket 6).
+    var back = M.specUsesItems(b.body, word).filter(function (n) { return M.specUseIs(n, a.title); })[0] || null;
+    return it ? { s: s, from: a, to: b, word: word, items: items, it: it, back: back } : null;
   }
   function renderSpecEdgeInspector(p) {
     var el = $('#inspector'), L = specEdgeItem(p);
     if (!L) { selected = null; closeInspector(); renderPage(); return; }
-    var words = M.specLinkWords();
+    var words = M.specLinkWords(), isSupply = !!M.specLinkWord('supplies') && L.word.toLowerCase() === M.specLinkWord('supplies').toLowerCase();
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › Line</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<h2 class="spec-edge-title">' + esc(L.from.title || 'Untitled') + ' <span>' + esc(linkVerb(L.word)) + '</span> ' + esc(L.to.title || 'Untitled') + '</h2>' +
       '<div class="field"><span class="field-label">From</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.a) + '">' + esc(L.from.title || 'Untitled') + '</button></div></div>' +
       '<div class="field"><span class="field-label">To</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.b) + '">' + esc(L.to.title || 'Untitled') + '</button></div></div>' +
       (words.length > 1 ? '<div class="field"><label for="spec-edge-label">Signal, bus, or rail</label><input class="input" id="spec-edge-label" value="' + esc(L.it.label || '') + '" placeholder="' + (M.specLinkWord('supplies') && L.word.toLowerCase() === M.specLinkWord('supplies').toLowerCase() ? '3V3' : 'I2C') + '"></div>' : '') +
-      '<p class="note">It’s the <code>' + esc(L.word) + ':</code> line in ' + esc(L.from.title || 'its block') + '’s text.</p>' +
+      (isSupply ? '' : '<div class="field"><label for="spec-edge-dir">Direction</label><select class="input" id="spec-edge-dir">' +
+        [['', 'Out: ' + (L.from.title || 'this block') + ' → ' + (L.to.title || 'the other')], ['in', 'In: ' + (L.to.title || 'the other') + ' → ' + (L.from.title || 'this block')], ['both', 'Both ways ↔']].map(function (o) {
+          return '<option value="' + o[0] + '"' + ((L.it.dir === 'out' ? '' : L.it.dir || '') === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+        }).join('') + '</select></div>') +
+      '<p class="note">It’s the <code>' + esc(L.word) + ':</code> line in ' + esc(L.from.title || 'its block') + '’s text' +
+        (L.back ? ', and ' + esc(L.to.title || 'the other block') + '’s names it too, so the diagram draws one line both ways. Delete removes both.' : '.') + '</p>' +
       '<div class="spec-acts"><button class="btn" data-act="spec-goto" data-id="' + esc(L.s.a) + '">Show in document</button>' +
       '<button class="btn btn-danger" data-act="spec-edge-delete">Delete line</button></div></div>';
     el.dataset.item = selected;
@@ -3169,10 +3299,33 @@
     L.it.label = v;
     specPutAll(p, [M.specStamp(Object.assign({}, L.from, { body: M.specSetLine(L.from.body, L.word, M.specLinkText(L.items)) }), me())]);
   }
+  // A line's direction (ticket 8): written into its item's brackets, "(UART, in)".
+  function specEdgeDir(value) {
+    var p = current(), L = specEdgeItem(p); if (!L) return;
+    var v = value === 'in' || value === 'both' ? value : '';
+    if (v === (L.it.dir === 'out' ? '' : L.it.dir || '')) return;
+    L.it.dir = v;
+    specPutAll(p, [M.specStamp(Object.assign({}, L.from, { body: M.specSetLine(L.from.body, L.word, M.specLinkText(L.items)) }), me())]);
+  }
   function specEdgeDelete() {
     var p = current(), L = specEdgeItem(p); if (!L) return;
     selected = null; closeInspector();
-    specUnlinkName(L.s.a, L.word, L.it.name);
+    if (!L.back) { specUnlinkName(L.s.a, L.word, L.it.name); return; }
+    // Named from both blocks: both entries go, with one Undo.
+    var recs = [[L.from, L.to.title], [L.to, L.from.title]].map(function (o) {
+      var sec = o[0], t = String(o[1] || '').toLowerCase();
+      return { before: sec.body, rec: M.specStamp(Object.assign({}, sec, { body: M.specSetLine(sec.body, L.word, M.specLinkText(M.specUsesItems(sec.body, L.word).filter(function (n) { return !M.specUseIs(n, t); }))) }), me()) };
+    });
+    specPutAll(p, recs.map(function (r) { return r.rec; }));
+    toast('Removed: ' + (L.from.title || 'It') + ' ' + linkVerb(L.word) + ' ' + (L.to.title || 'it') + ', both ways', { label: 'Undo', run: function () {
+      var q = current(), back = [];
+      for (var i = 0; i < recs.length; i++) {
+        var cur = q && (q.spec || {})[recs[i].rec.id];
+        if (!cur || cur.updatedAt !== recs[i].rec.updatedAt) { toast('It has changed since; add the link again'); return; }
+        back.push(M.specStamp(Object.assign({}, cur, { body: recs[i].before }), me()));
+      }
+      specPutAll(q, back);
+    } });
   }
   // A link's signal or rail name, from the block panel.
   function specLinkLabel(word, name) {
@@ -5071,6 +5224,7 @@
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
+    if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);
   });
   document.addEventListener('keydown', function (e) {
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {
