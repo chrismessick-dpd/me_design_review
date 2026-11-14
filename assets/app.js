@@ -2600,14 +2600,29 @@
   }
   // The landscape sheet: the diagram over the page, and a title block at the bottom right with the
   // review's details. Print or save as PDF from the print view (the browser's own PDF printer).
+  // The title block follows Dovetail's Altium schematic sheets (Chris, 2026-11-13): Page across the top;
+  // part number and project beside the Dovetail mark; title and rev; date and, where the schematic has
+  // its variant, the stage; engineer, client (in the schematic's size), and sheet 1 of 1.
+  var DG_MARK = '<svg viewBox="0 0 59.21 98.68" aria-hidden="true"><path d="M0 0h18.19v41.88H0zM0 56.79h18.19v41.88H0zM18.2 41.89h1.59v14.91H18.2zM19.79 0v41.89l24.96-6.63v28.16L19.79 56.79v41.89l39.42-10.47V10.47z" fill="#000"/></svg>';
   function specDiagramSheet(p, x) {
     var m = p.meta, d = new Date(), date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     var tool = (C.toolName || document.title.split('·')[0] || 'Signoff').trim();
-    var rows = [['Project', m.project], ['Client', m.client], ['Number', m.board], ['Revision', m.revision], ['Stage', m.stage], ['Date', date], ['By', settings.user || me()]]
-      .filter(function (r) { return r[1]; });
-    var block = '<div class="dg-title"><div class="dg-name"><span>' + esc(tool) + ' · Block diagram</span><b>' + esc(m.name || 'Untitled') + '</b></div>' +
-      rows.map(function (r) { return '<div class="dg-cell"><span>' + esc(r[0]) + '</span>' + esc(r[1]) + '</div>'; }).join('') +
-      '<div class="dg-cell"><span>Sheet</span>1 of 1</div></div>';
+    function cell(area, label, value, big) {
+      return '<div class="tb-' + area + (big ? ' tb-big' : '') + '"><span class="tb-l">' + esc(label) + '</span>' + (big ? '' : ' ') + '<span class="tb-v">' + esc(value || '') + '</span></div>';
+    }
+    var block = '<div class="dg-title">' +
+      cell('page', 'Page', tool + ' block diagram', true) +
+      cell('pn', 'Part number', m.board, true) +
+      cell('proj', 'Project', m.project, true) +
+      '<div class="tb-logo">' + DG_MARK + '<span>DOVETAIL</span></div>' +
+      cell('title', 'Title:', m.name || 'Untitled') +
+      '<div class="tb-rev"><span class="tb-l">Rev</span> <b>' + esc(m.revision || '') + '</b></div>' +
+      cell('date', 'Date:', date) +
+      cell('var', 'Stage:', m.stage) +
+      cell('eng', 'Engineer:', settings.user || me()) +
+      cell('client', 'Client:', m.client) +
+      '<div class="tb-sheet"><span class="tb-l">Sheet</span> <b>1</b> <span class="tb-l">of</span> <b>1</b></div>' +
+      '</div>';
     var r = $('#report');
     r.innerHTML = '<div class="report-bar"><b>Block diagram</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print or save as PDF</button></div></div>' +
       '<div class="paper dg-paper"><div class="dg-art">' + x.svg + '</div><div class="dg-foot">' + block + '</div></div>';

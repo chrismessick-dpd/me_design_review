@@ -1028,14 +1028,25 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .dg-art { flex: 1; min-height: 0; display: flex; }
 .dg-art svg { width: 100%; height: 100%; }
 .dg-foot { display: flex; justify-content: flex-end; }
-.dg-title { display: grid; grid-template-columns: repeat(4, auto); border: 1.5px solid #1d1d1f; font-size: 10.5px; color: #1d1d1f; min-width: 340px; }
-.dg-title > div { padding: 4px 8px; border-right: 1px solid #c7c7cc; border-top: 1px solid #c7c7cc; }
-.dg-title span { display: block; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #6e6e73; }
-.dg-title .dg-name { grid-column: 1 / -1; border-top: none; font-size: 13px; }
-.dg-title .dg-name b { font-weight: 700; }
+/* After Dovetail's Altium schematic title block: black rules, small capital labels, Arial. */
+.dg-title { display: grid; width: 44%; min-width: 400px; gap: 1px; background: #000; border: 1.5px solid #000; color: #000; font: 11px/1.2 Arial, Helvetica, sans-serif;
+  grid-template-columns: 1fr 0.9fr 0.5fr 0.35fr 0.55fr 0.8fr;
+  grid-template-areas: "page page page page page page" "pn proj proj logo logo logo" "title title rev logo logo logo" "date date var var var var" "eng eng client client client sheet"; }
+.dg-title > div { background: #fff; padding: 2px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dg-title .tb-l { font-size: 8px; text-transform: uppercase; }
+.dg-title .tb-big .tb-l { display: block; }
+.dg-title .tb-big .tb-v { font-size: 15px; }
+.dg-title .tb-page .tb-v { font-size: 20px; }
+.dg-title b { font-weight: 700; font-size: 12px; margin-left: 3px; }
+.tb-page { grid-area: page; } .tb-pn { grid-area: pn; } .tb-proj { grid-area: proj; } .tb-title { grid-area: title; } .tb-rev { grid-area: rev; }
+.tb-date { grid-area: date; } .tb-var { grid-area: var; } .tb-eng { grid-area: eng; } .tb-client { grid-area: client; } .tb-sheet { grid-area: sheet; }
+.dg-title .tb-logo { grid-area: logo; display: flex; align-items: center; justify-content: center; gap: 12px; }
+.tb-logo svg { height: 36px; width: auto; }
+.tb-logo span { font: 400 15px Arial, Helvetica, sans-serif; letter-spacing: 0.28em; }
 @media print {
   @page dg { size: landscape; margin: 10mm; }
   .paper.dg-paper { page: dg; aspect-ratio: auto; height: 182mm; padding: 0; }
+  .dg-title { width: 112mm; min-width: 0; }
 }
 /* The panel opens over the top right: its buttons step left of it on a wide screen. */
 @media (min-width: 861px) { html:has(#inspector.open) .spec-map-card.expanded .spec-view-acts { right: 424px; } }
