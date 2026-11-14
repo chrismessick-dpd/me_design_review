@@ -269,6 +269,50 @@
     return out.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
   }
 
+  // ── History (Chris, 2026-11-13; ../signoff/docs/history.md) ──
+  // Built from the versions of a review file in git, never stored. recordDiff(before, after) lists the
+  // records whose stamp (updatedAt, updatedBy) differs between two versions of one review, in
+  // changesSince's shape plus before and after (the records themselves; before is null for a new one).
+  // before null: every record of after is new (the file's first version). Rows are attributed by each
+  // record's own stamp, never by who made the commit. Read-only; values are untrusted (escape them).
+  var HIST_MAP = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec' };
+  function recordDiff(before, after, templates) {
+    if (!after || !after.meta) return [];
+    var key = function (r) { return r && typeof r === 'object' ? String(r.updatedAt || '') + '|' + String(r.updatedBy || '') : ''; };
+    return changesSince(after, '', templates).filter(function (row) {
+      var a = row.kind === 'meta' ? after.meta : (after[HIST_MAP[row.kind]] || {})[row.id];
+      var b = !before ? null : row.kind === 'meta' ? before.meta : (before[HIST_MAP[row.kind]] || {})[row.id];
+      if (b && key(a) === key(b)) return false;
+      row.before = b || null; row.after = a || null;
+      return true;
+    });
+  }
+  // versions: newest first, [{ doc, commit: { sha, at, login } }]. Every change made in each version,
+  // newest first by the record's own time, each with commit (the version that first had it). The
+  // oldest version given counts as all new only when it's the file's first (opts.complete); otherwise
+  // it's the base the next one is compared with and adds no rows.
+  function historyRows(versions, templates, opts) {
+    var out = [], v = versions || [];
+    for (var i = 0; i < v.length; i++) {
+      var older = v[i + 1];
+      if (!older && !(opts && opts.complete)) break;
+      recordDiff(older ? older.doc : null, v[i].doc, templates).forEach(function (row) { row.commit = v[i].commit || null; out.push(row); });
+    }
+    return out.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  }
+  // Rows (newest first) folded into blocks: a run by the same person (by), each row within gapMs of the
+  // one after it, on the same calendar day (local time). gapMs 0: one block per row.
+  function historyBlocks(rows, gapMs) {
+    var out = [], day = function (t) { var d = new Date(t); return isNaN(d) ? '' : d.toDateString(); };
+    (rows || []).forEach(function (r) {
+      var b = out[out.length - 1], last = b && b.rows[b.rows.length - 1];
+      var fits = b && gapMs > 0 && b.by === r.by && day(last.at) === day(r.at) && (Date.parse(last.at) - Date.parse(r.at)) <= gapMs;
+      if (fits) { b.rows.push(r); b.start = r.at; }
+      else out.push({ by: r.by, start: r.at, end: r.at, rows: [r] });
+    });
+    return out;
+  }
+
   var RECENT = 6;   // comments kept in summary.recent
   function projectSummary(project, templates) {
     var stats = projectStats(project, templates), meta = project.meta, checklists = {};
@@ -2246,7 +2290,7 @@
     newProject: newProject, checklistRows: checklistRows, countStatuses: countStatuses,
     projectStats: projectStats, reqsEnabled: reqsEnabled, projectSummary: projectSummary, withSummary: withSummary, projectGroups: projectGroups,
     isAssembly: isAssembly, cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
-    liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
+    liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince, recordDiff: recordDiff, historyRows: historyRows, historyBlocks: historyBlocks,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
     specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specLinkDir: specLinkDir, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specResolvePlan: specResolvePlan, specResolveApply: specResolveApply, specBase: specBase, specStampKey: specStampKey, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
     specSpans: specSpans, specCells: specCells, specUseIs: specUseIs, specUseId: specUseId, specRemoveUnit: specRemoveUnit, specBrokenMarks: specBrokenMarks, SPEC_BODY_MAX: SPEC_BODY_MAX, specTooLong: specTooLong, specKindLabel: specKindLabel, specKindPlural: specKindPlural, specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
