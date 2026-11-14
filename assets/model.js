@@ -719,6 +719,82 @@
     return out;
   }
 
+  // ── Resolving a conflict copy in one step (Chris, 2026-11-13; signoff/docs/history.md) ──
+  // specResolvePlan(sectionBody, copyBody) lists what the copy has that the section lacks, piece by piece.
+  // A piece is one sentence of a prose line (specSentences, so marks never split), or a whole line of
+  // anything else: a gist (>), a list item, a table row, a heading, or a Parts:, Supplies:, Connects:,
+  // Uses:, or Check: line. A copy piece equal (raw text, marks included) to a section piece is already
+  // there. Otherwise it changes the section piece of the same sort that shares most of its words (at
+  // least 60%, by specPlain), or it's new and goes after the section piece that the copy piece before
+  // it matched. Items: { mode: 'change', at, text, was } or { mode: 'add', after (-1: first), text }.
+  // specResolveApply(sectionBody, plan, picks) writes the picked items (picks[i] true) into the body.
+  // Only lines it changes are rebuilt; every other line keeps its bytes.
+  var SPEC_LINE_KEYS = /^\s*(?:>|[-*+]\s|\d+[.)]\s|\||#|(?:parts|supplies|connects|uses|check)\s*:)/i;
+  function specPieces(body) {
+    var lines = String(body || '').split('\n'), pieces = [];
+    lines.forEach(function (line, li) {
+      if (!line.trim()) return;
+      if (SPEC_LINE_KEYS.test(line)) { pieces.push({ line: li, prose: false, text: line.trim() }); return; }
+      specSentences(line, 0, line.length).forEach(function (r) { pieces.push({ line: li, prose: true, text: line.slice(r[0], r[1]) }); });
+    });
+    return { lines: lines, pieces: pieces };
+  }
+  function specPieceSort(pc) { return pc.prose ? 'prose' : (/^\s*([^\s\w]+|\w+\s*:)/.exec(pc.text) || ['', 'line'])[1].toLowerCase(); }
+  function specLikeness(a, b) {
+    // Words only: a table's bars or a list's dash shared by every row isn't likeness.
+    var words = function (t) { return specPlain(t).toLowerCase().split(/\s+/).filter(function (w) { return /\w/.test(w); }); };
+    var wa = words(a), wb = words(b), n = 0;
+    if (!wa.length || !wb.length) return 0;
+    var pool = wb.slice();
+    wa.forEach(function (w) { var k = pool.indexOf(w); if (k >= 0) { n++; pool.splice(k, 1); } });
+    return n / Math.max(wa.length, wb.length);
+  }
+  function specResolvePlan(sectionBody, copyBody) {
+    var sec = specPieces(sectionBody).pieces, cp = specPieces(copyBody).pieces, anchor = -1, taken = {}, items = [];
+    cp.forEach(function (pc) {
+      var same = -1;
+      sec.forEach(function (s, i) { if (same < 0 && s.text === pc.text) same = i; });
+      if (same >= 0) { anchor = same; return; }
+      var best = -1, score = 0, sort = specPieceSort(pc);
+      sec.forEach(function (s, i) {
+        if (taken[i] || specPieceSort(s) !== sort) return;
+        var l = specLikeness(pc.text, s.text); if (l > score) { score = l; best = i; }
+      });
+      if (score >= 0.6) { taken[best] = 1; anchor = best; items.push({ mode: 'change', at: best, text: pc.text, was: sec[best].text, prose: pc.prose }); }
+      else items.push({ mode: 'add', after: anchor, text: pc.text, prose: pc.prose });
+    });
+    return { items: items };
+  }
+  function specResolveApply(sectionBody, plan, picks) {
+    var sp = specPieces(sectionBody), lines = sp.lines, sec = sp.pieces, swap = {}, after = {}, changed = {};
+    (plan.items || []).forEach(function (it, i) {
+      if (!picks || !picks[i]) return;
+      if (it.mode === 'change') swap[it.at] = it.text;
+      else (after[it.after] = after[it.after] || []).push(it);
+    });
+    // Each section line as its pieces (prose) or itself, with new lines queued after it.
+    var parts = lines.map(function () { return null; }), extra = lines.map(function () { return []; }), head = [];
+    sec.forEach(function (s, i) {
+      if (!parts[s.line]) parts[s.line] = [];
+      parts[s.line].push(swap[i] != null ? swap[i] : s.text);
+      if (swap[i] != null) changed[s.line] = 1;
+      (after[i] || []).forEach(function (it) {
+        if (it.prose && s.prose) { parts[s.line].push(it.text); changed[s.line] = 1; }
+        else extra[s.line].push(it.text);
+      });
+    });
+    (after[-1] || []).forEach(function (it) { head.push(it.text); });
+    var out = head.slice();
+    lines.forEach(function (line, li) {
+      if (changed[li]) {
+        var lead = /^\s*/.exec(line)[0];
+        out.push(lead + (SPEC_LINE_KEYS.test(line) ? parts[li][0] : parts[li].join(' ')));
+      } else out.push(line);
+      extra[li].forEach(function (t) { out.push(t); });
+    });
+    return out.join('\n');
+  }
+
   function newSection(fields, user) {
     var s = Object.assign({ id: uid('s'), order: 0, level: 1, title: '', kind: '', body: '', createdAt: now(), deleted: false }, fields || {});
     return stamp(s, user);
@@ -2172,7 +2248,7 @@
     isAssembly: isAssembly, cleanPlPart: cleanPlPart, plSlim: plSlim, plWaiting: plWaiting,
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
-    specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specLinkDir: specLinkDir, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specBase: specBase, specStampKey: specStampKey, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
+    specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specLinkDir: specLinkDir, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specResolvePlan: specResolvePlan, specResolveApply: specResolveApply, specBase: specBase, specStampKey: specStampKey, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
     specSpans: specSpans, specCells: specCells, specUseIs: specUseIs, specUseId: specUseId, specRemoveUnit: specRemoveUnit, specBrokenMarks: specBrokenMarks, SPEC_BODY_MAX: SPEC_BODY_MAX, specTooLong: specTooLong, specKindLabel: specKindLabel, specKindPlural: specKindPlural, specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
     specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specNest: specNest, specGroup: specGroup, specUngroup: specUngroup, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary, specTemplate: specTemplate,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,

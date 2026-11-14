@@ -1000,6 +1000,15 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-need-text .muted { display: block; font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
 .spec-need-text:hover > span:first-child { text-decoration: underline; }
 .spec-need-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.spec-res-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 10px; }
+.spec-res-item label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.spec-res-mode { font: 600 11px var(--sans); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+/* Added and removed words differ by more than hue (Chris is colorblind): + and underline, − and strike. */
+.spec-res-diff { margin-top: 4px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-sunk); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.spec-res-diff ins { text-decoration: underline 2px; text-underline-offset: 2px; background: var(--pass-soft); color: inherit; border-radius: 3px; }
+.spec-res-diff del { text-decoration: line-through 2px; background: var(--issue-hatch), var(--issue-soft); color: var(--text-2); border-radius: 3px; }
+.spec-res-diff ins::before { content: "+"; font: 700 11px var(--mono); display: inline-block; margin-right: 1px; }
+.spec-res-diff del::before { content: "\2212"; font: 700 11px var(--mono); display: inline-block; margin-right: 1px; }
 .spec-map-card { padding: 10px; overflow-x: auto; }
 .spec-map { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--sans); }
 .spec-row-label { font-size: 11px; font-weight: 600; fill: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }

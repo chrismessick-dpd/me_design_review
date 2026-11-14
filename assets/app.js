@@ -2242,6 +2242,73 @@
     return html + '<div class="spec-wrap depth-' + depth + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
   }
 
+  // Resolve a conflict copy in one step (Chris, 2026-11-13; ../signoff/docs/history.md, lab
+  // ../signoff/lab/history.html). Lists what the copy has that the section lacks (M.specResolvePlan):
+  // new sentences ticked, changed ones not. Add checked writes them into the section (M.specResolveApply);
+  // Use the copy puts the copy's text in the section; Delete copy keeps nothing. Each is one step for back
+  // and forward: the section's edit and the copy's tombstone are stamped together in one specPutAll.
+  function specWordDiff(a, b) {
+    var x = String(a || '').split(/(\s+)/), y = String(b || '').split(/(\s+)/), n = x.length, m = y.length, i, j;
+    if (n * m > 250000) return '<del>' + esc(a) + '</del> <ins>' + esc(b) + '</ins>';
+    var L = []; for (i = 0; i <= n; i++) L.push(new Array(m + 1).fill(0));
+    for (i = n - 1; i >= 0; i--) for (j = m - 1; j >= 0; j--) L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    var out = [], put = function (t, s) { var l = out[out.length - 1]; if (l && l.t === t) l.s += s; else out.push({ t: t, s: s }); };
+    i = 0; j = 0;
+    while (i < n && j < m) {
+      if (x[i] === y[j]) { put('=', x[i]); i++; j++; }
+      else if (L[i + 1][j] >= L[i][j + 1]) put('-', x[i++]);
+      else put('+', y[j++]);
+    }
+    while (i < n) put('-', x[i++]);
+    while (j < m) put('+', y[j++]);
+    return out.map(function (p) {
+      if (p.t === '=') return esc(p.s);
+      var lead = /^\s*/.exec(p.s)[0], core = p.s.slice(lead.length), tag = p.t === '+' ? 'ins' : 'del';
+      return esc(lead) + (core ? '<' + tag + '>' + esc(core) + '</' + tag + '>' : '');
+    }).join('');
+  }
+  function specResolveSheet(id) {
+    var p = current(), cp = p && (p.spec || {})[id], sec = cp && (p.spec || {})[cp.conflictOf];
+    if (!cp || cp.deleted || !sec || sec.deleted) { toast('That copy is already resolved'); return; }
+    var plan = M.specResolvePlan(sec.body, cp.body), picks = plan.items.map(function (it) { return it.mode === 'add'; });
+    var copyTitle = String(cp.title || '').replace(/ \(conflict copy\)$/, '');
+    var also = [];
+    if (copyTitle !== (sec.title || '')) also.push('its title is “' + copyTitle + '”');
+    if ((cp.level || 1) !== (sec.level || 1)) also.push('it’s at heading level ' + (cp.level || 1));
+    if ((cp.kind || '') !== (sec.kind || '')) also.push(cp.kind ? 'its kind is ' + cp.kind : 'it has no kind');
+    var items = plan.items.map(function (it, k) {
+      return '<li class="spec-res-item"><label><input type="checkbox" data-pick="' + k + '"' + (picks[k] ? ' checked' : '') + '> ' +
+        '<span class="spec-res-mode">' + (it.mode === 'change' ? 'Changes a ' + (it.prose ? 'sentence' : 'line') : 'New ' + (it.prose ? 'sentence' : 'line')) + '</span></label>' +
+        '<div class="spec-res-diff">' + (it.mode === 'change' ? specWordDiff(it.was, it.text) : specWordDiff('', it.text)) + '</div></li>';
+    }).join('');
+    var who = function (r) { return r.updatedBy || 'someone'; };
+    var w = sheet('<div class="sheet-head"><h2>Resolve: ' + esc(sec.title || 'Untitled') + '</h2><p>' +
+      esc(who(sec) + '’s edit (' + relTime(sec.updatedAt) + ') is the section. ' + who(cp) + '’s edit (' + relTime(cp.updatedAt) + ') is the copy. Pick what to keep from the copy.') + '</p></div>' +
+      '<div class="sheet-body">' +
+      (plan.items.length ? '<ul class="spec-res-list">' + items + '</ul>' : '<p class="note">Everything in the copy is already in the section.</p>') +
+      (also.length ? '<p class="note">The copy differs in more than its text: ' + esc(also.join('; ')) + '. Resolve keeps the section’s; change it by hand if you want the copy’s.</p>' : '') +
+      '<p class="note">Each choice deletes the copy. Back undoes it in one step, and the copy stays in the review’s history on GitHub.</p></div>' +
+      '<div class="sheet-foot"><button class="btn btn-danger" data-sheet="drop">Delete copy</button><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button>' +
+      (plan.items.length ? '<button class="btn" data-sheet="use">Use the copy instead</button><button class="btn btn-primary" data-sheet="add">Add checked to section</button>' : '') + '</div>', { wide: true });
+    w.addEventListener('change', function (e) { var k = e.target.getAttribute('data-pick'); if (k != null) picks[+k] = e.target.checked; });
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      var act = b.getAttribute('data-sheet');
+      if (act === 'cancel') { closeSheet(); return; }
+      var body = null;
+      if (act === 'add') {
+        if (!picks.some(Boolean)) { toast('Tick at least one, or use Delete copy'); return; }
+        body = M.specResolveApply(sec.body, plan, picks);
+      } else if (act === 'use') body = String(cp.body || '');
+      var recs = [], who = me();
+      if (body != null && body !== sec.body) recs.push(M.specStamp(Object.assign({}, sec, { body: body }), who));
+      recs.push(M.specStamp(Object.assign({}, cp, { deleted: true }), who));
+      closeSheet();
+      specPutAll(p, recs);
+      toast(act === 'drop' ? 'Copy deleted' : 'Section updated and copy deleted');
+    });
+  }
+
   // The two lists that need someone: flagged sentences and requirements nothing describes.
   function specNeedsHtml(p, a) {
     var copies = a.sections.filter(function (x) { return x.sec.conflictOf; }), ctags = M.specCommentTags(p);
@@ -2277,7 +2344,8 @@
       var orig = a.ctx.secs[x.sec.conflictOf];
       return '<div class="spec-need"><button class="spec-need-text" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(orig ? orig.title || 'Untitled' : x.sec.title) + '</span>' +
         '<span class="muted">' + esc((x.sec.updatedBy ? x.sec.updatedBy + '’s' : 'An') + ' edit from ' + relTime(x.sec.updatedAt) + ', kept beside the newer one') + '</span></button>' +
-        '<div class="spec-need-acts">' + (orig ? '<button class="btn btn-sm" data-act="spec-goto" data-id="' + esc(orig.id) + '">Newer version</button>' : '') +
+        '<div class="spec-need-acts">' + (orig ? '<button class="btn btn-sm btn-primary" data-act="spec-copy-resolve" data-id="' + esc(x.sec.id) + '" title="Take what you need from the copy into the section, then delete the copy, in one step">Resolve…</button>' +
+          '<button class="btn btn-sm" data-act="spec-goto" data-id="' + esc(orig.id) + '">Newer version</button>' : '') +
         '<button class="btn btn-sm" data-act="spec-edit" data-id="' + esc(x.sec.id) + '">Edit copy</button>' +
         '<button class="btn btn-sm" data-act="spec-copy-delete" data-id="' + esc(x.sec.id) + '" title="Delete the copy once its text is merged into the newer version">Delete copy</button></div></div>';
     }).join('');
@@ -2296,7 +2364,7 @@
     }
     return '<div class="spec-needs">' +
       (copies.length ? '<div class="card spec-needs-card"><div class="spec-needs-title">Edited in two places <span class="count">' + copies.length + '</span></div>' +
-        '<p class="note" style="margin:0 0 6px">Two people changed the same section at once. The newer edit won; the other is kept as a copy. Move what you need from the copy into the section, then delete the copy.</p>' + conflicts + '</div>' : '') +
+        '<p class="note" style="margin:0 0 6px">Two people edited the same section from the same version. The newer edit is the section; the older one is kept beside it as a copy, so nothing is lost. Resolve takes what you need from the copy into the section and deletes the copy.</p>' + conflicts + '</div>' : '') +
       inbox + '</div>';
   }
 
@@ -5011,6 +5079,7 @@
         });
         break;
       }
+      case 'spec-copy-resolve': specResolveSheet(id); break;
       case 'spec-copy-delete': {
         var cp = current(), cc = cp && (cp.spec || {})[id];
         if (cc && confirm('Delete this conflict copy? Its text is gone once you do.')) specPutAll(cp, [M.specStamp(Object.assign({}, cc, { deleted: true }), me())]);
