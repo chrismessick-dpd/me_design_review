@@ -4,6 +4,7 @@
 (function (S) {
   'use strict';
   var M = S.model;
+  var HIST = window.SignoffHistory;   // History, version tags, and Version comparison (assets/history.js)
   var C = S.config, W = C.words || {};
   // One review is a board (EE) or a part (ME); a "project" is the client project it belongs to.
   var UNIT = W.unit || 'review', UNITS = W.units || UNIT + 's';
@@ -292,11 +293,20 @@
   }
 
   // ── Current project helpers ──────────────────────────────
-  function current() { var p = projects[ui.slug]; return p && visible(p) ? p : null; }
+  // While a Version comparison shows its tagged side (assets/history.js), the page draws that version: a
+  // copy that's never in `projects`, and that touch() refuses to save.
+  function current() {
+    var p = projects[ui.slug];
+    if (!p || !visible(p)) { if (HIST.compare.active()) HIST.compare.exit(true); return null; }
+    HIST.compare.check(p.id);
+    return HIST.compare.view(p.id) || p;
+  }
   function templateById(id) { return TEMPLATES.filter(function (t) { return t.id === id; })[0]; }
   function projectTemplates(p) { return TEMPLATES.filter(function (t) { return p.meta.checklists.indexOf(t.id) >= 0; }); }
 
   function touch(p) {
+    // An edit to the tagged version being compared is dropped, and the page goes back to it as stored.
+    if (HIST.compare.isCopy(p)) { HIST.compare.refuse(); HIST.compare.reset(); render(); return; }
     if (specHists[p.id]) specHistNote(p);
     dirty[p.id] = M.now();
     touchedAt[p.id] = Date.now();
@@ -544,7 +554,7 @@
   // last sync started (model.changesSince). A project with no home repo was never synced, so
   // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
   // it's listed without details. Nothing here touches dirty or sync.
-  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe' };
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe', tag: 'Version tag' };
   var CHANGES_SHOWN = 8;
   function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
   function unsyncedList() {
@@ -2326,16 +2336,12 @@
   // browser hasn't synced yet comes first. Runs by one person fold into blocks (M.historyBlocks). A change
   // shows its diff; Revert writes the record as it was before as a new edit stamped now, refused when the
   // record changed since. The demo has no git, so it lists each record's latest change only.
-  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec' };
+  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec', tag: 'tags' };
   var HIST_NOUN = { meta: ['detail change', 'detail changes'], check: ['check', 'checks'], section: ['section set aside or back', 'sections set aside or back'], comment: ['comment', 'comments'],
-    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'] };
-  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL };
+    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'], tag: ['version tag', 'version tags'] };
+  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL, tag: 'Version tag' };
   var HIST_FILTERS = [['all', 'Everything'], ['spec', SPEC_LABEL], ['check', 'Checks'], ['comment', 'Comments'], ['req', 'Requirements']];
   var histCache = {};   // per repo: { commits, blobs } for fileHistory, for as long as the page is open
-  function histInitials(name) {
-    var w = String(name || '?').trim().split(/\s+/).filter(Boolean);
-    return ((w[0] || '?').charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase();
-  }
   function histRecKey(r) { return r && typeof r === 'object' ? String(r.updatedAt || '') + '|' + String(r.updatedBy || '') : ''; }
   function histText(kind, r) {
     if (!r) return '';
@@ -2344,6 +2350,7 @@
     if (kind === 'req') return [r.ref, r.text].filter(Boolean).join(' ') + '\nStatus: ' + (r.status || '') + ', verify: ' + (r.verify || 'open') + (r.evidence ? '\nEvidence: ' + r.evidence : '');
     if (kind === 'check') return 'Status: ' + (r.status || 'to review') + (r.severity ? ', ' + r.severity : '') + (r.resolution ? ', ' + r.resolution : '');
     if (kind === 'section') return r.na ? 'Set aside (N/A)' : 'In review';
+    if (kind === 'tag') return 'Version ' + String(r.commit || '').slice(0, 7) + ': ' + String(r.note || '');
     if (kind === 'revision') return 'Revision ' + (r.label || '') + (r.status ? ' (' + r.status + ')' : '') + (r.title ? ': ' + r.title : '');
     if (kind === 'meta') return ['name', 'stage', 'revision'].map(function (k) { return r[k] ? cap(k) + ': ' + r[k] : ''; }).filter(Boolean).join('\n') +
       ((r.profile || []).length ? '\nProfile: ' + r.profile.join(', ') : '') + ((r.checklists || []).length ? '\nChecklists: ' + r.checklists.join(', ') : '');
@@ -2351,107 +2358,62 @@
   }
   function historySheet(p) {
     if (!p) return;
-    var st = { rows: [], page: 0, more: !DEMO, loading: false, error: '', versions: [], filter: 'all', gap: 2 * 3600e3, open: {}, sel: null };
-    var w = sheet('<div class="hist-wrap"></div>', { wide: true }), box = w.querySelector('.sheet');
-    box.classList.add('hist-sheet');
-    function rowsShown() { return st.rows.filter(function (r) { return st.filter === 'all' || r.kind === st.filter; }); }
-    function draw() {
-      var blocks = M.historyBlocks(rowsShown(), st.gap), lastDay = '', html = '';
-      blocks.forEach(function (b, bi) {
-        var day = relDay(b.end);
-        if (day !== lastDay) { html += '<li class="hist-day">' + esc(day) + '</li>'; lastDay = day; }
-        var counts = {}; b.rows.forEach(function (r) { counts[r.kind] = (counts[r.kind] || 0) + 1; });
-        var list = Object.keys(counts).map(function (k) { return counts[k] + ' ' + HIST_NOUN[k][counts[k] === 1 ? 0 : 1]; });
-        var key = b.by + '|' + b.end, open = !!st.open[key], unsynced = b.rows.every(function (r) { return r.commit === null; });
-        var copy = b.rows.some(function (r) { return r.kind === 'spec' && r.after && r.after.conflictOf; });
-        var span = histClock(b.start) !== histClock(b.end) ? histClock(b.start) + '–' + histClock(b.end) : histClock(b.end);
-        html += '<li class="hist-blk' + (open ? ' open' : '') + (st.sel && st.sel.block === key ? ' sel' : '') + '">' +
-          '<span class="hist-node" aria-hidden="true">' + esc(histInitials(b.by)) + '</span>' +
-          '<button class="hist-head" data-h="block" data-k="' + esc(key) + '" aria-expanded="' + open + '"><span class="hist-who">' + esc(b.by || 'Someone') + '</span>' +
-          (unsynced ? '<span class="hist-tag">Not synced yet</span>' : '') + (copy ? '<span class="hist-tag hist-conflict">Conflict copy</span>' : '') +
-          '<span class="hist-when">' + esc(span + ' · ' + relTime(b.end)) + '</span><span class="hist-counts">' + esc(listText(list)) + '</span></button>' +
-          (open ? '<ul class="hist-rows">' + b.rows.map(function (r) {
-            var rk = st.rows.indexOf(r);
-            return '<li><button class="hist-row' + (st.sel && st.sel.row === rk ? ' sel' : '') + '" data-h="row" data-r="' + rk + '"><span class="hist-kind">' + esc(HIST_KIND[r.kind]) + '</span>' +
-              '<span class="hist-what">' + esc(r.label) + (r.deleted ? ' <span class="hist-tag hist-del">Deleted</span>' : !r.before && r.commit !== undefined ? ' <span class="muted">added</span>' : '') + '</span>' +
-              '<time>' + esc(histClock(r.at)) + '</time></button></li>';
-          }).join('') + '</ul>' : '') + '</li>';
-      });
-      var people = {}; st.rows.forEach(function (r) { people[r.by || 'Someone'] = 1; });
-      var foot = st.loading ? '<p class="note">Reading the ' + esc(UNIT) + '’s history from GitHub…</p>'
-        : st.error ? '<p class="note">' + esc(st.error) + '</p>'
-        : st.more ? '<button class="btn" data-h="older">Load older</button>'
-        : st.rows.length ? '<p class="note">' + (DEMO ? 'In the demo, history shows each record’s latest change only.' : 'That’s the whole history.') + '</p>' : '';
-      box.innerHTML = '<div class="sheet-head"><h2>History · ' + esc(p.meta.name) + '</h2><p>' +
-        esc(st.rows.length ? st.rows.length + ' changes by ' + listText(Object.keys(people)) + '. Runs by one person fold into a block.' : 'Who changed what, from the ' + UNIT + '’s versions on GitHub.') + '</p></div>' +
-        '<div class="hist-bar"><div class="seg" role="group" aria-label="Show">' + HIST_FILTERS.map(function (f) {
-          return '<button data-h="filter" data-f="' + f[0] + '" aria-pressed="' + (st.filter === f[0]) + '">' + esc(f[1]) + '</button>';
-        }).join('') + '</div><label class="hist-gap">Fold runs within <select data-h="gap">' + [[30, '30 min'], [120, '2 h'], [1440, '1 day'], [0, 'Never']].map(function (o) {
-          return '<option value="' + o[0] * 6e4 + '"' + (st.gap === o[0] * 6e4 ? ' selected' : '') + '>' + o[1] + '</option>';
-        }).join('') + '</select></label></div>' +
-        '<div class="hist-grid"><div class="hist-col"><ol class="hist-tl">' + (html || (st.loading ? '' : '<li class="note">No changes' + (st.filter === 'all' ? '' : ' of this kind') + ' yet.</li>')) + '</ol>' + foot + '</div>' +
-        '<div class="hist-col hist-pane">' + paneHtml() + '</div></div>' +
-        '<div class="sheet-foot"><button class="btn" data-h="close">Close</button></div>';
-    }
-    function listText(a) { return a.length < 3 ? a.join(' and ') : a.slice(0, -1).join(', ') + ', and ' + a[a.length - 1]; }
-    function relDay(iso) {
-      var d = new Date(iso), t = new Date();
-      if (isNaN(d)) return '';
-      if (d.toDateString() === t.toDateString()) return 'Today';
-      if (d.toDateString() === new Date(Date.now() - 864e5).toDateString()) return 'Yesterday';
-      return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-    }
-    function paneHtml() {
-      var s = st.sel;
-      if (!s) return '<p class="note">Pick a block or a change to see what it did.</p>';
-      var rows = s.row != null ? [st.rows[s.row]] : (M.historyBlocks(rowsShown(), st.gap).filter(function (b) { return b.by + '|' + b.end === s.block; })[0] || { rows: [] }).rows;
-      return rows.map(function (r) {
-        var rk = st.rows.indexOf(r), a = histText(r.kind, r.after), b = histText(r.kind, r.before);
+    p = projects[ui.slug] && projects[ui.slug].id === p.id ? projects[ui.slug] : p;   // the live review, never a compared copy
+    var full = homeOf(p), store = DEMO || !getToken() ? null : workspace().store(full);
+    histCache[full] = histCache[full] || {};
+    var live = function () { var k = Object.keys(projects).filter(function (s) { return projects[s].id === p.id; })[0]; return (k && projects[k]) || p; };
+    var parse = function (text) { var d = JSON.parse(text); return d && d.meta && d.id === p.id ? d : null; };
+    HIST.open({
+      title: p.meta.name, word: UNIT, demo: DEMO, demoNote: 'In the demo, history shows each record’s latest change only.',
+      mount: function () { return sheet('<div class="hist-wrap"></div>', { wide: true }).querySelector('.sheet'); }, unmount: closeSheet,
+      store: store, repo: full, path: store ? store.projectsDir() + p.id + '.json' : '', cache: histCache[full],
+      noStore: 'Sign in to GitHub to see this ' + UNIT + '’s history.', toast: function (t) { toast(t, null, 6000); },
+      parse: parse, live: live,
+      rows: function (versions, complete) { return M.historyRows(versions, TEMPLATES, { complete: complete }); },
+      // This browser's edits not on GitHub yet: records newer here than in the newest version. (A record
+      // newer on GitHub is someone else's change this browser hasn't pulled; it's in the rows already.)
+      unsynced: function (d, newest) {
+        return !newest ? M.recordDiff(null, d, TEMPLATES)
+          : M.recordDiff(newest, d, TEMPLATES).filter(function (r) { return !r.before || String(r.after && r.after.updatedAt || '') > String(r.before.updatedAt || ''); });
+      },
+      demoRows: function (d) { return M.changesSince(d, '', TEMPLATES).map(function (r) { r.before = null; r.after = r.kind === 'meta' ? d.meta : (d[HIST_KEY[r.kind]] || {})[r.id]; return r; }); },
+      intro: function (rows) {
+        var people = {}; rows.forEach(function (r) { people[r.by || 'Someone'] = 1; });
+        return rows.length ? rows.length + ' changes by ' + HIST.fmt.listText(Object.keys(people)) + '. Runs by one person fold into a block.' : 'Who changed what, from the ' + UNIT + '’s versions on GitHub.';
+      },
+      empty: function (f) { return 'No changes' + (f === 'all' ? '' : ' of this kind') + ' yet.'; },
+      filters: HIST_FILTERS, filter: function (r, f) { return r.kind === f; },
+      counts: function (rows) {
+        var counts = {}; rows.forEach(function (r) { counts[r.kind] = (counts[r.kind] || 0) + 1; });
+        return HIST.fmt.listText(Object.keys(counts).map(function (k) { return counts[k] + ' ' + HIST_NOUN[k][counts[k] === 1 ? 0 : 1]; }));
+      },
+      blockTags: function (rows) { return rows.some(function (r) { return r.kind === 'spec' && r.after && r.after.conflictOf; }) ? '<span class="hist-tag hist-conflict">Conflict copy</span>' : ''; },
+      row: function (r) {
+        return { kind: HIST_KIND[r.kind], label: r.label,
+          sub: r.deleted ? '<span class="hist-tag hist-del">' + (r.kind === 'tag' ? 'Removed' : 'Deleted') + '</span>' : !r.before && r.commit !== undefined ? '<span class="muted">added</span>' : '' };
+      },
+      change: function (r, k) {
+        var a = histText(r.kind, r.after), b = histText(r.kind, r.before);
         var diff = r.deleted ? '<del>' + esc(b || a) + '</del>' : specWordDiff(r.before ? b : '', a);
-        var where = r.commit ? 'synced in <a href="https://github.com/' + esc(homeOf(p)) + '/commit/' + esc(r.commit.sha) + '" target="_blank" rel="noopener"><code>' + esc(r.commit.sha.slice(0, 7)) + '</code></a>' +
-          (r.commit.login ? ' by @' + esc(r.commit.login) : '') : r.commit === null ? 'not synced yet' : '';
         // Removing what a change added is a tombstone, which only these kinds keep; the others revert
         // only to an earlier version.
-        var canRevert = r.kind !== 'meta' && !DEMO && (r.before || (!r.deleted && /^(spec|comment|req|custom)$/.test(r.kind)));
-        return '<div class="hist-chg"><h3>' + esc(HIST_KIND[r.kind]) + ': ' + esc(r.label) + '</h3>' +
-          '<p class="hist-meta">' + esc((r.by || 'Someone') + ' · ' + histClock(r.at) + ', ' + relTime(r.at)) + (where ? ' · ' + where : '') + '</p>' +
-          (a || b ? '<div class="hist-diff">' + diff + '</div>' : '') +
-          (canRevert ? '<div class="hist-acts"><button class="btn btn-sm" data-h="revert" data-r="' + rk + '">' + (r.before ? 'Revert…' : 'Remove…') + '</button></div>' : '') + '</div>';
-      }).join('');
-    }
-    function histClock(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
-    // The rows: this browser's unsynced edits, then a page of versions from git.
-    function load() {
-      if (DEMO) {
-        st.rows = M.changesSince(p, '', TEMPLATES).map(function (r) { r.before = null; r.after = r.kind === 'meta' ? p.meta : (p[HIST_KEY[r.kind]] || {})[r.id]; return r; });
-        st.more = false; draw(); return;
-      }
-      var full = homeOf(p), store = workspace().store(full);
-      st.loading = true; st.error = ''; draw();
-      histCache[full] = histCache[full] || {};
-      store.fileHistory(store.projectsDir() + p.id + '.json', { page: st.page + 1, perPage: 15, cache: histCache[full] }).then(function (got) {
-        st.page++;
-        var parsed = got.versions.map(function (v) {
-          var doc = null; try { doc = v.text ? JSON.parse(v.text) : null; } catch (e) { /* not a review file */ }
-          return { doc: doc && doc.meta ? doc : null, commit: v.commit };
-        }).filter(function (v) { return v.doc; });
-        st.versions = st.versions.concat(parsed);
-        st.more = got.more;
-        // This browser's edits not on GitHub yet: records newer here than in the newest version. (A
-        // record newer on GitHub is someone else's change this browser hasn't pulled; it's in the rows
-        // already.) A review never synced is all unsynced.
-        var newest = st.versions[0], mine = !newest ? M.recordDiff(null, p, TEMPLATES)
-          : M.recordDiff(newest.doc, p, TEMPLATES).filter(function (r) { return !r.before || String(r.after && r.after.updatedAt || '') > String(r.before.updatedAt || ''); });
-        mine.forEach(function (r) { r.commit = null; });
-        st.rows = mine.concat(M.historyRows(st.versions, TEMPLATES, { complete: !got.more }))
-          .sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
-        st.loading = false; draw();
-      }, function (err) {
-        st.loading = false; st.error = 'Couldn’t read the history from GitHub: ' + (err.message || 'unknown error'); draw();
-      });
-    }
-    function revert(r) {
-      var map = HIST_KEY[r.kind], cur = (p[map] || {})[r.id];
+        var canRevert = r.kind !== 'meta' && r.kind !== 'tag' && !DEMO && (r.before || (!r.deleted && /^(spec|comment|req|custom)$/.test(r.kind)));
+        return { title: HIST_KIND[r.kind] + ': ' + r.label, body: a || b ? '<div class="hist-diff">' + diff + '</div>' : '',
+          acts: canRevert ? '<button class="btn btn-sm" data-h="revert" data-r="' + k + '">' + (r.before ? 'Revert…' : 'Remove…') + '</button>' : '' };
+      },
+      act: function (name, r, api) { if (name === 'revert') revert(r, api); },
+      tags: true, user: me,
+      writeTags: function (map) {
+        var cur = live();
+        if (HIST.compare.isCopy(cur)) return false;
+        cur.tags = map;   // each tag is its own record, stamped (HIST.tags.set)
+        touch(cur); renderPage(); renderToolbar(); syncSoon();
+        return true;
+      },
+      compareKey: p.id, compareTitle: p.meta.name
+    });
+    function revert(r, api) {
+      var cur0 = live(), map = HIST_KEY[r.kind], cur = (cur0[map] || {})[r.id];
       if (histRecKey(cur) !== histRecKey(r.after)) {
         toast((cur && cur.updatedBy ? cur.updatedBy : 'Someone') + ' changed it since' + (cur && cur.updatedAt ? ', ' + relTime(cur.updatedAt) : '') + '. Open its newest change to revert from there.', null, 6000);
         return;
@@ -2461,24 +2423,11 @@
       var rec = JSON.parse(JSON.stringify(r.before || Object.assign({}, r.after, { deleted: true })));
       if (!r.before) rec.deleted = true;
       rec = r.kind === 'spec' ? M.specStamp(rec, me()) : M.stamp(rec, me());
-      p[map] = p[map] || {}; p[map][r.id] = rec;
-      touch(p); renderPage(); renderInspector(); renderToolbar(); syncSoon();
-      st.rows.unshift({ kind: r.kind, id: r.id, item: r.item, label: r.label, detail: '', at: rec.updatedAt, by: rec.updatedBy, deleted: !!rec.deleted, before: cur, after: rec, commit: null });
-      st.sel = { row: 0 }; draw();
+      cur0[map] = cur0[map] || {}; cur0[map][r.id] = rec;
+      touch(cur0); renderPage(); renderInspector(); renderToolbar(); syncSoon();
+      api.addRow({ kind: r.kind, id: r.id, item: r.item, label: r.label, detail: '', at: rec.updatedAt, by: rec.updatedBy, deleted: !!rec.deleted, before: cur, after: rec, commit: null });
       toast(r.before ? 'Reverted' : 'Removed');
     }
-    box.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-h]'); if (!b) return;
-      var h = b.getAttribute('data-h');
-      if (h === 'close') closeSheet();
-      else if (h === 'filter') { st.filter = b.getAttribute('data-f'); st.sel = null; draw(); }
-      else if (h === 'block') { var k = b.getAttribute('data-k'); st.open[k] = !st.open[k]; st.sel = { block: k }; draw(); }
-      else if (h === 'row') { st.sel = { row: +b.getAttribute('data-r') }; draw(); }
-      else if (h === 'older') load();
-      else if (h === 'revert') revert(st.rows[+b.getAttribute('data-r')]);
-    });
-    box.addEventListener('change', function (e) { if (e.target.getAttribute('data-h') === 'gap') { st.gap = +e.target.value; st.open = {}; st.sel = null; draw(); } });
-    load();
   }
 
   // The two lists that need someone: flagged sentences and requirements nothing describes.
@@ -3431,6 +3380,7 @@
   }
   function specHistStep(back) {
     var p = current(); if (!p) return;
+    if (HIST.compare.isCopy(p)) { HIST.compare.refuse(); return; }   // the tagged version: its back and forward are the live review's
     if (specEditing) { toast('Save or cancel the edit first'); return; }
     var h = specHistOf(p), from = back ? h.undo : h.redo, to = back ? h.redo : h.undo, e = from[from.length - 1];
     if (!e) { toast(back ? 'Nothing to undo' : 'Nothing to redo'); return; }
@@ -5752,6 +5702,29 @@
   // ── Boot ─────────────────────────────────────────────────
   function render() { var f = focusNow(); renderSidebar(); renderSyncState(); drawPage(); drawInspector(); restoreFocus(f); }
 
+  // Version comparison (assets/history.js): Restore this version puts back everything but the comments
+  // (Chris, 2026-11-14), as new edits (model.restorePlan), and Undo in its toast puts it all back.
+  function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
+  function fillProject(d) { ['items', 'sections', 'comments', 'custom', 'reqs'].forEach(function (k) { if (!d[k] || typeof d[k] !== 'object') d[k] = {}; }); return d; }
+  function restoreTo(id, older, said) {
+    var k = slugOfId(id), cur = projects[k];
+    if (!cur) return false;
+    var before = JSON.parse(JSON.stringify(cur)), plan = M.restorePlan(cur, fillProject(older), me());
+    if (!plan.count) { toast('Nothing to put back: it’s already as it was.'); return true; }
+    M.restoreApply(cur, plan);
+    touch(cur); render(); renderToolbar(); syncSoon();
+    toast(said + ' (' + plural(plan.count, 'record') + ')', said === 'Put back' ? null : { label: 'Undo', run: function () { restoreTo(id, before, 'Put back'); } });
+    return true;
+  }
+  HIST.compare.setup({
+    render: function () { render(); renderToolbar(); },
+    toast: function (t) { toast(t, null, 6000); },
+    fresh: function (key, d) { return fillProject(d); },
+    restore: function (key, older) { return restoreTo(key, older, 'Restored'); },
+    word: function () { return UNIT; },
+    restoreNote: function () { return 'Checks, requirements' + (C.spec ? ', ' + SPEC_LABEL : '') + ', and the details go back to how they were, and anything added since is removed. Comments and revision tags stay as they are.'; }
+  });
+
   applyTheme(settings.theme);
   // Applied on narrow windows too (styles.css only hides it above 860 px), so widening the window
   // later shows the sidebar as it was left.
@@ -5812,7 +5785,7 @@
     var typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
     var draft = $('#comment-input');
     return !syncing && !typing && !specEditing && !(draft && draft.value.trim()) && !$('#sheet') && !$('#busy-wrap') && !$('#menu')
-      && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !document.hidden;
+      && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !HIST.compare.active() && !document.hidden;   // a Version comparison lives on the page too
   }
   function reloadWhenIdle() {
     if (!updateWaiting) return;
