@@ -330,11 +330,12 @@
   };
 
   /* The folders a checker stores files in next to a review (config.runs.dir, config.previews.dir,
-     config.pincheck.dir): fabcheck/ and pincheck/ for Signoff EE. */
-  var CHECKERS = { 'fabcheck/': 'Fabcheck', 'pincheck/': 'Pincheck', 'partcheck/': 'Partcheck' };
+     config.pincheck.dir): fabcheck/ and pincheck/ for Signoff EE, and rework/ for the pictures of
+     bring-up reworks (config.rework; model.reworkPicPath). */
+  var CHECKERS = { 'fabcheck/': 'Fabcheck', 'pincheck/': 'Pincheck', 'partcheck/': 'Partcheck', 'rework/': 'rework picture' };
   Workspace.prototype.checkerDirs = function () {
     var C = window.SIGNOFF_CONFIG || {}, out = [];
-    [C.runs && C.runs.dir, C.previews && C.previews.dir, C.pincheck && C.pincheck.dir].forEach(function (d) {
+    [C.runs && C.runs.dir, C.previews && C.previews.dir, C.pincheck && C.pincheck.dir, C.rework && 'rework/'].forEach(function (d) {
       if (typeof d === 'string' && /^[a-z0-9_-]+\/$/.test(d) && out.indexOf(d) < 0) out.push(d);
     });
     return out;

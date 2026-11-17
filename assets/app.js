@@ -210,7 +210,7 @@
   function assignedContractors(projectId) {
     return M.liveUsers(roster).filter(function (u) { return M.isOutside(u) && (u.projects || []).indexOf(projectId) >= 0; });
   }
-  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', closedGroups: ui.closedGroups || {}, home: !!ui.home }); }
+  function saveUi() { save('ui', { slug: ui.slug, view: ui.view, filter: ui.filter, showArchived: ui.showArchived, sideCollapsed: !!ui.sideCollapsed, reqFilter: ui.reqFilter || 'all', reworkView: ui.reworkView === 'rework' ? 'rework' : 'checklist', rwFilter: ui.rwFilter || 'all', closedGroups: ui.closedGroups || {}, home: !!ui.home }); }
   // Close the open review and show the home screen; it stays there on reload (ui.home).
   function goHome() {
     ui.slug = ''; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = true; selected = null;
@@ -554,7 +554,7 @@
   // last sync started (model.changesSince). A project with no home repo was never synced, so
   // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
   // it's listed without details. Nothing here touches dirty or sync.
-  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe', tag: 'Version tag' };
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe', tag: 'Version tag', rework: 'Rework' };
   var CHANGES_SHOWN = 8;
   function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
   function unsyncedList() {
@@ -624,6 +624,7 @@
     ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : kind === 'spec' && specOn(p) ? 'spec' : 'overview';
     closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open');
     if (kind === 'req' && !gone && ui.view === 'reqs' && reqOf(p, id)) openReq(id);
+    else if ((kind === 'rework' && !gone && reworkOf(p, id)) || (kind === 'comment' && item && reworkOf(p, item))) openRework(kind === 'rework' ? id : item);
     else if ((kind === 'check' || kind === 'custom' || kind === 'comment') && item && (!gone || kind === 'comment') && !itemDef(p, item).retired) gotoItem(item);
     else if (kind === 'spec' && !gone && ui.view === 'spec') specGoto(id);
     else $('#main').scrollTop = 0;
@@ -704,6 +705,7 @@
     else if (ui.view === 'revisions') { loadRuns(p); page.innerHTML = revisionsPage(p); }
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
     else if (ui.view === 'spec') page.innerHTML = specPage(p);
+    else if (reworkTab(p) && ui.reworkView === 'rework') page.innerHTML = reworkPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
   }
@@ -851,7 +853,7 @@
     groups.forEach(function (g) { all = all.concat(g.rows); });
     var c = M.countStatuses(all);
     var filters = [['all', 'All', c.total], ['open', 'To review', c.open], ['issue', 'Issues', c.issue], ['comments', 'Discussed', Object.keys(counts).filter(function (k) { return all.some(function (r) { return r.id === k; }); }).length]];
-    var html = '<div class="page">' +
+    var html = '<div class="page">' + (C.rework && t.id === C.rework.template ? reworkSwitch(p) : '') +
       '<div class="cl-head"><div>' + '<div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">' + esc(t.title) + '</h1>' +
       '<div class="page-sub"><span>' + c.reviewed + ' of ' + c.total + ' reviewed</span>' + (c.issue ? '<span class="sep">·</span><span style="color:var(--issue)">' + plural(c.issue, 'issue') + '</span>' : '') + '</div></div>' +
       ring(c.pct, 64, 6, c.pct + '%', '') + '</div>' +
@@ -1016,6 +1018,7 @@
   }
   // Show a check in its checklist (even if its section is collapsed or set aside) and open it.
   function gotoItem(id) {
+    if (reworkOf(current(), id)) { openRework(id); return; }
     var d = itemDef(current(), id);
     if (d.template) { ui.view = d.template.id; ui.filter = 'all'; ui.query = ''; collapsed[(d.section || {}).id] = false; showHidden[(d.section || {}).id] = true; saveUi(); renderPage(); }
     select(id, true);
@@ -1309,11 +1312,19 @@
     return html + revNotesSection(p) + '</div>';
   }
   // Next revision updates: comments tagged @revnotes (model.revNotes), under the runs.
+  // Reworks ticked Fix in the next revision come first, with any @revnotes comments on them.
   function revNotesSection(p) {
-    var groups = M.revNotes(p);
+    var groups = M.revNotes(p), on = C.rework && M.reworkOn(p);
+    if (on) {
+      var byItem = {}; groups.forEach(function (g) { byItem[g.item] = g; });
+      var nexts = M.liveRework(p).filter(function (r) { return r.next; }).map(function (r) { return byItem[r.id] || { item: r.id, at: '', comments: [] }; });
+      groups = nexts.concat(groups.filter(function (g) { return nexts.indexOf(g) < 0; }));
+    }
     var html = '<div class="section-title">Next revision updates' + (groups.length ? ' <span class="muted rev-notes-count">' + plural(groups.length, 'item') + '</span>' : '') + '</div>';
-    if (!groups.length) return html + '<div class="card empty rev-notes-empty"><p>Nothing noted yet. Write <b>@revnotes</b> in a comment on any check or issue, and it’s listed here for the next revision.</p></div>';
+    if (!groups.length) return html + '<div class="card empty rev-notes-empty"><p>Nothing noted yet. Write <b>@revnotes</b> in a comment on any check or issue' + (on ? ', or tick <b>Fix in the next revision</b> on a rework,' : '') + ' and it’s listed here for the next revision.</p></div>';
     return html + '<div class="card rev-notes-list">' + groups.map(function (g) {
+      var w = g.item && reworkOf(p, g.item);
+      if (w) return revNoteGroup('open-rework', g, '<span class="muted rev-note-cl">' + esc(w.ref || 'Rework') + '</span><span>' + esc(w.title || 'Rework') + '</span>' + rwChip(w.status));
       var q = g.item && reqOf(p, g.item);
       if (q) return revNoteGroup('open-req', g, '<span class="muted rev-note-cl">' + esc(q.ref || 'Requirement') + '</span><span>' + esc(q.text) + '</span>');
       var d = g.item ? itemDef(p, g.item) : null, it = (g.item && p.items[g.item]) || {};
@@ -1556,12 +1567,234 @@
     try { if (f.start != null) a.setSelectionRange(f.start, f.end, f.dir); } catch (e) { /* no selection on this input type */ }
     a.scrollTop = f.top;
   }
+  // ── Rework (Chris, 2026-11-16) ───────────────────────────
+  // Bring-up reworks beside the Bring-up checklist (config.rework.template): its tab has a Checklist |
+  // Rework switch (ui.reworkView). One record per rework (model.js, Rework), opened in the details pane
+  // with its pictures and discussion. Pictures are scaled and re-encoded as Tickets does, then stored at
+  // once in the review's repo (rework/<review id>/<rework id>/), and read back as blob: URLs.
+  var RW_ICON = { planned: '<span class="rw-glyph" aria-hidden="true">\u25cb</span>', done: ICON.check, verified: '<span class="rw-glyph" aria-hidden="true">\u2713\u2713</span>', notneeded: ICON.dash };
+  var RW_MAX_SIDE = 1920, RW_MAX_BYTES = 2500000, RW_MAX_PICS = 8;
+  var rwPics = {};      // review id/rework id/picture id -> { state: 'loading' | 'ok' | 'missing' | 'signin', url }
+  var rwDemoUrls = {};  // the demo's added pictures, for this page load only (the demo has no repo)
+  var rwUploading = {}; // rework id -> how many pictures are going up
+  function reworkTab(p) { return !!(C.rework && p && ui.view === C.rework.template && M.reworkOn(p)); }
+  function reworkOf(p, id) { var r = p && p.rework && id && p.rework[id]; return r && typeof r === 'object' && !r.deleted ? M.cleanRework(r, id) : null; }
+  function rwChip(status) { return '<span class="rw-st rw-' + status + '">' + RW_ICON[status] + M.REWORK_LABEL[status] + '</span>'; }
+  function reworkSwitch(p) {
+    if (!C.rework || !M.reworkOn(p)) return '';
+    var st = M.reworkStats(p), on = ui.reworkView === 'rework';
+    return '<div class="seg rw-switch" role="tablist" aria-label="Bring-up">' +
+      '<button role="tab" class="' + (on ? '' : 'on') + '" data-act="rw-view" data-val="checklist">Checklist</button>' +
+      '<button role="tab" class="' + (on ? 'on' : '') + '" data-act="rw-view" data-val="rework">Rework' + (st.total ? ' <span class="count" title="' + st.planned + ' planned">' + (st.planned ? st.planned + ' / ' : '') + st.total + '</span>' : '') + '</button></div>';
+  }
+  function rwMatches(p, r) {
+    var f = ui.rwFilter || 'all';
+    if (f === 'next' && !r.next) return false;
+    if (f !== 'all' && f !== 'next' && r.status !== f) return false;
+    if (ui.rwQuery) {
+      var q = ui.rwQuery.toLowerCase();
+      if ([r.ref, r.title, r.problem, r.fix, r.parts, r.nets, r.by].join(' ').toLowerCase().indexOf(q) < 0) return false;
+    }
+    return true;
+  }
+  function reworkPage(p) {
+    var all = M.liveRework(p), st = M.reworkStats(p), list = all.filter(function (r) { return rwMatches(p, r); });
+    var html = '<div class="page">' + reworkSwitch(p) + '<div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Rework</h1>' +
+      '<div class="page-sub"><span>' + plural(st.total, 'rework') + '</span>' +
+      M.REWORK_STATUS.filter(function (s) { return st[s]; }).map(function (s) { return '<span class="sep">\u00b7</span><span>' + st[s] + ' ' + M.REWORK_LABEL[s].toLowerCase() + '</span>'; }).join('') +
+      (st.next ? '<span class="sep">\u00b7</span><span>' + st.next + ' for the next revision</span>' : '') + '</div></div>' +
+      '<button class="btn btn-primary" data-act="rw-add">Add rework</button></div>';
+    if (!all.length) {
+      return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No reworks yet</h2>' +
+        '<p>Track each change made to the boards during bring-up: what was wrong, the rework, the parts and nets it touched, pictures, and whether it\u2019s been verified. Tick <b>Fix in the next revision</b> to list it with the next revision\u2019s updates.</p>' +
+        '<button class="btn btn-primary" data-act="rw-add">Add rework</button></div></div>';
+    }
+    var filters = [['all', 'All', st.total]].concat(M.REWORK_STATUS.map(function (s) { return [s, M.REWORK_LABEL[s], st[s]]; }), [['next', 'Next revision', st.next]]);
+    html += '<div class="filters"><div class="seg">' + filters.map(function (f) {
+      return '<button class="' + ((ui.rwFilter || 'all') === f[0] ? 'on' : '') + '" data-act="rw-filter" data-filter="' + f[0] + '">' + f[1] + ' <span class="count">' + f[2] + '</span></button>';
+    }).join('') + '</div><div class="search">' + ICON.search + '<input id="rw-search" type="search" placeholder="Filter reworks" value="' + esc(ui.rwQuery || '') + '" autocomplete="off"></div></div>';
+    if (!list.length) return html + '<div class="empty"><h2>Nothing here</h2><p>No reworks match this filter.</p></div></div>';
+    return html + '<div class="card rw-list">' + list.map(function (r) {
+      var n = M.liveComments(p, r.id).length;
+      var sub = [r.parts ? '<span class="rw-parts">' + esc(r.parts) + '</span>' : '', r.nets ? '<span class="muted">' + esc(r.nets) + '</span>' : '',
+        r.pics.length ? '<span class="muted">' + plural(r.pics.length, 'picture') + '</span>' : '', n ? '<span class="cmt-count">' + ICON.bubble + n + '</span>' : '',
+        r.next ? '<span class="chip accent">Next revision</span>' : ''].filter(Boolean).join('');
+      var who = [r.by, r.doneAt ? fmtDate(r.doneAt + 'T12:00:00Z') : ''].filter(Boolean).join(', ');
+      return '<button class="rw-row rw-is-' + r.status + (selected === r.id ? ' sel' : '') + '" data-act="rw-select" data-id="' + esc(r.id) + '">' +
+        '<span class="rw-ref">' + esc(r.ref) + '</span>' +
+        '<span class="rw-main"><span class="rw-title">' + (r.title ? esc(r.title) : '<span class="muted">No title yet</span>') + '</span>' + (sub ? '<span class="rw-sub">' + sub + '</span>' : '') + '</span>' +
+        '<span class="rw-right">' + rwChip(r.status) + (who ? '<span class="muted rw-who">' + esc(who) + '</span>' : '') + '</span></button>';
+    }).join('') + '</div></div>';
+  }
+  function openRework(id) {
+    if (C.rework) { ui.view = C.rework.template; ui.reworkView = 'rework'; saveUi(); }
+    selected = id;
+    closeInspector(); renderPage();
+    $('#inspector').classList.add('open'); renderInspector();
+    var row = document.querySelector('.rw-row[data-id="' + CSS.escape(id) + '"]');
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+  function addRework() {
+    var p = current(); if (!p) return;
+    if (HIST.compare.isCopy(p)) { touch(p); return; }
+    p.rework = p.rework || {};
+    var r = M.newRework(p, {}, me());
+    p.rework[r.id] = r;
+    touch(p);
+    ui.rwFilter = 'all'; ui.rwQuery = '';
+    openRework(r.id);
+    setTimeout(function () { var t = $('#rw-title'); if (t) t.focus(); }, 60);
+  }
+  // Writes fields onto the stored record (kept as stored, so fields this version doesn't know survive).
+  function setRework(id, fields) {
+    var p = current(); if (!p || !p.rework || !p.rework[id]) return;
+    var prev = p.rework[id], next = Object.assign({}, prev, fields);
+    // Done or verified fills in who and when, if they're blank.
+    if ((fields.status === 'done' || fields.status === 'verified') && prev.status !== fields.status) {
+      if (!next.by) next.by = me();
+      if (!next.doneAt) next.doneAt = new Date().toISOString().slice(0, 10);
+    }
+    p.rework[id] = M.stamp(next, me());
+    touch(p); renderPage(); renderInspector();
+  }
+  function rwPicKey(p, r, pic) { return p.id + '/' + r.id + '/' + pic.id; }
+  function rwPicPath(p, r, pic) { return checkerDir(p, 'rework/') + r.id + '/' + pic.file; }
+  function loadRwPic(p, r, pic) {
+    var k = rwPicKey(p, r, pic);
+    if (rwPics[k]) return rwPics[k];
+    if (DEMO) return (rwPics[k] = { state: 'ok', url: rwDemoUrls[pic.id] || 'assets/demo-previews/' + pic.file });
+    if (!getToken()) return { state: 'signin' };
+    rwPics[k] = { state: 'loading' };
+    var store = workspace().store(homeOf(p)), path = rwPicPath(p, r, pic);
+    (pic.sha256 ? store.readVerified(path, pic.sha256) : store.readBytes(path)).then(function (b) {
+      if (!b) throw new Error('missing');
+      rwPics[k] = { state: 'ok', url: URL.createObjectURL(new Blob([b], { type: pic.type })) };
+    }).catch(function () { rwPics[k] = { state: 'missing' }; }).then(function () { if (selected === r.id) renderInspector(); });
+    return rwPics[k];
+  }
+  function rwPicsHtml(p, r) {
+    var up = rwUploading[r.id] || 0;
+    return '<div class="field"><span class="field-label">Pictures</span><div class="rw-pics">' + r.pics.map(function (pic) {
+      var s = loadRwPic(p, r, pic);
+      var inner = s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '" loading="lazy">'
+        : '<span class="muted">' + (s.state === 'loading' ? 'Loading\u2026' : s.state === 'signin' ? 'Sign in to see it' : 'Not found') + '</span>';
+      return '<div class="rw-thumb"><button class="rw-thumb-img" data-act="rw-pic-open" data-id="' + esc(pic.id) + '" title="' + esc((pic.name ? pic.name + ' \u00b7 ' : '') + (pic.by ? 'added by ' + pic.by : '')) + '">' + inner + '</button>' +
+        '<button class="rw-thumb-x" data-act="rw-pic-del" data-id="' + esc(pic.id) + '" title="Remove picture" aria-label="Remove picture">' + ICON.close + '</button></div>';
+    }).join('') + (up ? '<div class="rw-thumb rw-thumb-up"><span class="muted">Adding ' + plural(up, 'picture') + '\u2026</span></div>' : '') + '</div>' +
+      '<label class="rw-drop" data-rw-drop="1"><input type="file" id="rw-pic-file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>' +
+      '<span>Paste (Ctrl+V), drop, or <u>pick</u> pictures</span></label></div>';
+  }
+  function renderReworkInspector(p, r) {
+    var el = $('#inspector');
+    var keep = el.dataset.item === r.id ? { body: (el.querySelector('.insp-body') || {}).scrollTop || 0 } : null;
+    var draft = el.querySelector('#comment-input'), draftText = draft ? draft.value : '';
+    var comments = M.liveComments(p, r.id), revs = C.runs ? M.liveRevisions(p) : [];
+    var seg = '<div class="seg full rw-seg">' + M.REWORK_STATUS.map(function (s) {
+      return '<button class="rw-b-' + s + (r.status === s ? ' on' : '') + '" data-act="rw-status" data-val="' + s + '">' + RW_ICON[s] + M.REWORK_LABEL[s] + '</button>';
+    }).join('') + '</div>';
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Rework \u203a ' + esc(r.ref) + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<div class="row2"><div class="field"><label for="rw-ref">ID</label><input class="input" id="rw-ref" value="' + esc(r.ref) + '" data-rw-input="ref" maxlength="20"></div>' +
+      '<div class="field"><label for="rw-title">Title</label><input class="input" id="rw-title" value="' + esc(r.title) + '" data-rw-input="title" maxlength="300" placeholder="e.g. Relay coil drive"></div></div>' +
+      '<div class="field"><span class="field-label">Status</span>' + seg + '</div>' +
+      '<div class="field"><label for="rw-problem">What\u2019s wrong</label><textarea class="input" id="rw-problem" rows="3" data-rw-input="problem" maxlength="8000" placeholder="What was found, how, and what it measured">' + esc(r.problem) + '</textarea></div>' +
+      '<div class="field"><label for="rw-fix">The rework</label><textarea class="input" id="rw-fix" rows="3" data-rw-input="fix" maxlength="8000" placeholder="What was changed on the board, and what to do in the next revision">' + esc(r.fix) + '</textarea></div>' +
+      '<div class="row2"><div class="field"><label for="rw-parts">Parts</label><input class="input" id="rw-parts" value="' + esc(r.parts) + '" data-rw-input="parts" maxlength="1000" placeholder="R12, C40, U3"></div>' +
+      '<div class="field"><label for="rw-nets">Nets</label><input class="input" id="rw-nets" value="' + esc(r.nets) + '" data-rw-input="nets" maxlength="1000" placeholder="+3V3, VCAP"></div></div>' +
+      '<div class="row2"><div class="field"><label for="rw-by">Done by</label><input class="input" id="rw-by" value="' + esc(r.by) + '" data-rw-input="by" maxlength="100" placeholder="Who did it"></div>' +
+      '<div class="field"><label for="rw-date">Date</label><input class="input" type="date" id="rw-date" value="' + esc(r.doneAt) + '" data-rw-input="doneAt"></div></div>' +
+      (revs.length ? '<div class="field"><label for="rw-rev">On revision</label><select class="input" id="rw-rev" data-rw-input="revision"><option value="">Not set</option>' + revs.map(function (v) {
+        return '<option value="' + esc(v.id) + '"' + (v.id === r.revision ? ' selected' : '') + '>' + esc(v.label + (v.title ? ' \u00b7 ' + v.title : '')) + '</option>';
+      }).join('') + '</select></div>' : '') +
+      '<label class="rw-next"><input type="checkbox" data-act="rw-next"' + (r.next ? ' checked' : '') + '> Fix in the next revision <span class="muted">(listed under Revisions \u203a Next revision updates)</span></label>' +
+      rwPicsHtml(p, r) +
+      '<div class="meta-line">' + (r.createdAt ? 'Added ' + fmtDate(r.createdAt) : '') + (r.updatedBy ? ' \u00b7 last changed by ' + esc(r.updatedBy) + ', ' + relTime(r.updatedAt) : '') + '</div>' +
+      '<button class="btn btn-danger" data-act="rw-delete" style="margin-bottom:10px">Delete rework</button>' +
+      '<div class="thread"><div class="thread-title">Discussion <span class="note" style="margin:0">' + (comments.length || '') + '</span></div>' +
+      (comments.length ? comments.map(function (c) {
+        return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span title="' + esc(new Date(c.at).toLocaleString()) + '">' + relTime(c.at) + '</span>' +
+          (c.author === me() ? '<button class="cmt-del" data-act="del-comment" data-id="' + esc(c.id) + '">Delete</button>' : '') + '</div><div class="cmt-text">' + esc(c.text) + '</div></div></div>';
+      }).join('') : '<p class="note">No comments yet. Note measurements, scope captures, or what\u2019s left to check.</p>') + '</div></div>' +
+      '<div class="composer"><textarea class="input" id="comment-input" placeholder="Add a comment\u2026" rows="2">' + esc(draftText) + '</textarea>' +
+      composerFoot() + '</div>';
+    el.dataset.item = r.id;
+    if (keep) el.querySelector('.insp-body').scrollTop = keep.body;
+  }
+  function rwRandomId() { var a = new Uint8Array(8); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return (b % 36).toString(36); }).join(''); }
+  function rwSha256(bytes) {
+    return crypto.subtle.digest('SHA-256', bytes).then(function (d) { return Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); });
+  }
+  // One picture, scaled to 1920 px on its long side; a screenshot stays sharp as PNG, a photo goes as JPEG.
+  function rwReadImage(file) {
+    return new Promise(function (resolve, reject) {
+      if (!/^image\//.test(file.type)) { reject(new Error('Only pictures can be added.')); return; }
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var k = Math.min(1, RW_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+        var w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        var use = c.toDataURL('image/png'), type = 'image/png';
+        if (use.length * 0.75 > 900000) { use = c.toDataURL('image/jpeg', 0.86); type = 'image/jpeg'; }
+        var bin = atob(use.slice(use.indexOf(',') + 1)), bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        if (bytes.length > RW_MAX_BYTES) { reject(new Error('That picture is too large, even made smaller.')); return; }
+        var id = rwRandomId();
+        rwSha256(bytes).then(function (sha) {
+          resolve({ rec: { id: id, file: id + '.' + M.REWORK_PIC_TYPES[type], type: type, w: w, h: h, sha256: sha, name: String(file.name || '').slice(0, 200), at: M.now(), by: me() }, bytes: bytes, url: use });
+        }, reject);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('That picture couldn\u2019t be read.')); };
+      img.src = url;
+    });
+  }
+  function addReworkPics(files) {
+    var p = current(), r = reworkOf(p, selected);
+    files = Array.prototype.filter.call(files || [], function (f) { return f && /^image\//.test(f.type); });
+    if (!p || !r || !files.length) return;
+    if (HIST.compare.isCopy(p)) { touch(p); return; }
+    if (!DEMO && !getToken()) { toast('Sign in to GitHub to add pictures'); return; }
+    if (files.length > RW_MAX_PICS) { toast('Up to ' + RW_MAX_PICS + ' pictures at a time'); files = files.slice(0, RW_MAX_PICS); }
+    var pid = p.id, rid = r.id;
+    rwUploading[rid] = (rwUploading[rid] || 0) + files.length; renderInspector();
+    Promise.all(files.map(function (f) { return rwReadImage(f).catch(function (e) { toast(e.message); return null; }); })).then(function (list) {
+      list = list.filter(Boolean);
+      if (!list.length) return [];
+      if (DEMO) { list.forEach(function (x) { rwDemoUrls[x.rec.id] = x.url; }); return list; }
+      return workspace().store(homeOf(p)).putFiles(list.map(function (x) { return { path: rwPicPath(p, r, x.rec), bytes: x.bytes }; }),
+        { message: 'Signoff: rework pictures for ' + pid }).then(function () { return list; });
+    }).then(function (list) {
+      if (!list.length) return;
+      var cur = current();
+      if (!cur || cur.id !== pid || !cur.rework || !cur.rework[rid]) { toast('Pictures stored, but the rework is gone'); return; }
+      list.forEach(function (x) { rwPics[pid + '/' + rid + '/' + x.rec.id] = { state: 'ok', url: x.url }; });
+      var had = Array.isArray(cur.rework[rid].pics) ? cur.rework[rid].pics : [];
+      var keepSel = selected; selected = rid;
+      setRework(rid, { pics: had.concat(list.map(function (x) { return x.rec; })) });
+      selected = keepSel;
+      if (!DEMO) syncSoon();
+      if (DEMO) toast('In the demo, added pictures last until the page reloads');
+    }).catch(function (err) { toast('Couldn\u2019t store the pictures: ' + (err && err.message || err), null, 6000); })
+      .then(function () { rwUploading[rid] = Math.max(0, (rwUploading[rid] || 0) - files.length); if (selected === rid) renderInspector(); });
+  }
+  function openReworkPic(id) {
+    var p = current(), r = reworkOf(p, selected), pic = r && r.pics.filter(function (x) { return x.id === id; })[0];
+    if (!pic) return;
+    var s = loadRwPic(p, r, pic);
+    sheet('<div class="sheet-head"><h2>' + esc(r.ref + (r.title ? ' \u00b7 ' + r.title : '')) + '</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="rw-big">' + (s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '">' : '<p class="note">The picture isn\u2019t loaded.</p>') + '</div>' +
+      '<p class="note">' + esc([pic.name, pic.w && pic.h ? pic.w + ' \u00d7 ' + pic.h + ' px' : '', pic.by ? 'added by ' + pic.by : '', pic.at ? fmtDate(pic.at) : ''].filter(Boolean).join(' \u00b7 ')) + '</p>', { wide: true });
+  }
+
   function renderInspector() { var f = focusNow(); drawInspector(); restoreFocus(f); }
   function drawInspector() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
     var rq = reqOf(p, selected);
     if (rq) return renderReqInspector(p, rq);
+    var rw = reworkOf(p, selected);
+    if (rw) return renderReworkInspector(p, rw);
     if (specSel()) return renderSpecInspector(p);
     if (specBlockSel()) return renderSpecBlockInspector(p);
     if (specEdgeSel()) return renderSpecEdgeInspector(p);
@@ -2336,11 +2569,11 @@
   // browser hasn't synced yet comes first. Runs by one person fold into blocks (M.historyBlocks). A change
   // shows its diff; Revert writes the record as it was before as a new edit stamped now, refused when the
   // record changed since. The demo has no git, so it lists each record's latest change only.
-  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec', tag: 'tags' };
+  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec', tag: 'tags', rework: 'rework' };
   var HIST_NOUN = { meta: ['detail change', 'detail changes'], check: ['check', 'checks'], section: ['section set aside or back', 'sections set aside or back'], comment: ['comment', 'comments'],
-    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'], tag: ['version tag', 'version tags'] };
-  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL, tag: 'Version tag' };
-  var HIST_FILTERS = [['all', 'Everything'], ['spec', SPEC_LABEL], ['check', 'Checks'], ['comment', 'Comments'], ['req', 'Requirements']];
+    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'], tag: ['version tag', 'version tags'], rework: ['rework', 'reworks'] };
+  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL, tag: 'Version tag', rework: 'Rework' };
+  var HIST_FILTERS = [['all', 'Everything'], ['spec', SPEC_LABEL], ['check', 'Checks'], ['comment', 'Comments'], ['req', 'Requirements']].concat(C.rework ? [['rework', 'Rework']] : []);
   var histCache = {};   // per repo: { commits, blobs } for fileHistory, for as long as the page is open
   function histRecKey(r) { return r && typeof r === 'object' ? String(r.updatedAt || '') + '|' + String(r.updatedBy || '') : ''; }
   function histText(kind, r) {
@@ -2351,6 +2584,8 @@
     if (kind === 'check') return 'Status: ' + (r.status || 'to review') + (r.severity ? ', ' + r.severity : '') + (r.resolution ? ', ' + r.resolution : '');
     if (kind === 'section') return r.na ? 'Set aside (N/A)' : 'In review';
     if (kind === 'tag') return 'Version ' + String(r.commit || '').slice(0, 7) + ': ' + String(r.note || '');
+    if (kind === 'rework') { var w = M.cleanRework(r, ''); return [w.ref, w.title].filter(Boolean).join(' ') + '\nStatus: ' + M.REWORK_LABEL[w.status] + (w.next ? ', fix in the next revision' : '') +
+      (w.parts ? '\nParts: ' + w.parts : '') + (w.nets ? '\nNets: ' + w.nets : '') + (w.problem ? '\nWhat’s wrong: ' + w.problem : '') + (w.fix ? '\nThe rework: ' + w.fix : '') + (w.pics.length ? '\nPictures: ' + w.pics.length : ''); }
     if (kind === 'revision') return 'Revision ' + (r.label || '') + (r.status ? ' (' + r.status + ')' : '') + (r.title ? ': ' + r.title : '');
     if (kind === 'meta') return ['name', 'stage', 'revision'].map(function (k) { return r[k] ? cap(k) + ': ' + r[k] : ''; }).filter(Boolean).join('\n') +
       ((r.profile || []).length ? '\nProfile: ' + r.profile.join(', ') : '') + ((r.checklists || []).length ? '\nChecklists: ' + r.checklists.join(', ') : '');
@@ -2397,7 +2632,7 @@
         var diff = r.deleted ? '<del>' + esc(b || a) + '</del>' : specWordDiff(r.before ? b : '', a);
         // Removing what a change added is a tombstone, which only these kinds keep; the others revert
         // only to an earlier version.
-        var canRevert = r.kind !== 'meta' && r.kind !== 'tag' && !DEMO && (r.before || (!r.deleted && /^(spec|comment|req|custom)$/.test(r.kind)));
+        var canRevert = r.kind !== 'meta' && r.kind !== 'tag' && !DEMO && (r.before || (!r.deleted && /^(spec|comment|req|custom|rework)$/.test(r.kind)));
         return { title: HIST_KIND[r.kind] + ': ' + r.label, body: a || b ? '<div class="hist-diff">' + diff + '</div>' : '',
           acts: canRevert ? '<button class="btn btn-sm" data-h="revert" data-r="' + k + '">' + (r.before ? 'Revert…' : 'Remove…') + '</button>' : '' };
       },
@@ -3121,6 +3356,27 @@
     var z = e.target.closest && e.target.closest('[data-sdrop]');
     return z ? { el: z, parent: z.dataset.sdrop } : null;
   }
+  // Pictures for the rework open in the details pane: pasted anywhere on the page, or dropped on its picture box.
+  function rwOpen() { return $('#inspector').classList.contains('open') && !!reworkOf(current(), selected) && !$('#sheet'); }
+  document.addEventListener('paste', function (e) {
+    if (!rwOpen()) return;
+    var items = (e.clipboardData && e.clipboardData.items) || [], files = [];
+    for (var i = 0; i < items.length; i++) if (items[i].kind === 'file' && /^image\//.test(items[i].type)) files.push(items[i].getAsFile());
+    if (files.length) { e.preventDefault(); addReworkPics(files); }
+  });
+  document.addEventListener('dragover', function (e) {
+    var z = e.target.closest && e.target.closest('[data-rw-drop]');
+    if (z && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); z.classList.add('on'); }
+  });
+  document.addEventListener('dragleave', function (e) {
+    var z = e.target.closest && e.target.closest('[data-rw-drop]');
+    if (z && !z.contains(e.relatedTarget)) z.classList.remove('on');
+  });
+  document.addEventListener('drop', function (e) {
+    var z = e.target.closest && e.target.closest('[data-rw-drop]');
+    if (!z || !e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault(); z.classList.remove('on'); addReworkPics(e.dataTransfer.files);
+  });
   document.addEventListener('dragover', function (e) {
     var t = stTarget(e);
     document.querySelectorAll('.st-drop-on, .st-before').forEach(function (x) { if (!t || x !== t.el) { x.classList.remove('st-drop-on'); x.classList.remove('st-before'); } });
@@ -5456,6 +5712,24 @@
       case 'req-export': { var rp = current(); download(rp.slug + '-requirements.csv', M.reqsCsv(rp, checkIdx(rp)), 'text/csv'); break; }
       case 'req-filter': ui.reqFilter = el.dataset.filter; saveUi(); renderPage(); break;
       case 'select-req': openReq(id); break;
+      case 'rw-view': ui.reworkView = el.dataset.val === 'rework' ? 'rework' : 'checklist'; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
+      case 'rw-add': addRework(); break;
+      case 'rw-select': case 'open-rework': openRework(id); break;
+      case 'rw-filter': ui.rwFilter = el.dataset.filter; saveUi(); renderPage(); break;
+      case 'rw-status': setRework(selected, { status: M.oneOf(M.REWORK_STATUS, el.dataset.val, 'planned') }); break;
+      case 'rw-next': setRework(selected, { next: !!el.checked }); break;
+      case 'rw-pic-open': openReworkPic(id); break;
+      case 'rw-pic-del': {
+        var wp = current(), wr = wp && wp.rework && wp.rework[selected];
+        if (wr && Array.isArray(wr.pics) && confirm('Remove this picture from the rework? It stays in the ' + UNIT + '\u2019s repository history.')) setRework(selected, { pics: wr.pics.filter(function (x) { return !x || x.id !== id; }) });
+        break;
+      }
+      case 'rw-delete': {
+        var wd = reworkOf(current(), selected);
+        if (wd && confirm('Delete ' + (wd.ref || 'this rework') + '? Its discussion is kept in the ' + UNIT + ' history.')) { setRework(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); syncSoon(); }
+        break;
+      }
+      case 'close-sheet': closeSheet(); break;
       case 'open-req': ui.view = 'reqs'; saveUi(); openReq(id); break;
       case 'req-field': { var rf = {}; rf[el.dataset.key] = el.dataset.val; setReq(selected, rf); break; }
       case 'req-link': {
@@ -5591,6 +5865,12 @@
       renderPage();
       var s = $('#item-search'); s.focus(); s.setSelectionRange(pos, pos);
     }
+    if (e.target.id === 'rw-search') {
+      ui.rwQuery = e.target.value;
+      var wpos = e.target.selectionStart;
+      renderPage();
+      var ws2 = $('#rw-search'); ws2.focus(); ws2.setSelectionRange(wpos, wpos);
+    }
     if (e.target.id === 'req-search') {
       ui.reqQuery = e.target.value;
       var rpos = e.target.selectionStart;
@@ -5616,6 +5896,12 @@
   document.addEventListener('change', function (e) {
     var k = e.target.dataset && e.target.dataset.itemInput;
     if (k && selected) { var f = {}; f[k] = e.target.value.trim(); setItem(selected, f); }
+    var wk = e.target.dataset && e.target.dataset.rwInput;
+    if (wk && selected) {
+      var wcur = reworkOf(current(), selected), wv = e.target.value.trim();
+      if (wcur && wcur[wk] !== wv) { var wf = {}; wf[wk] = wv; setRework(selected, wf); }
+    }
+    if (e.target.id === 'rw-pic-file' && e.target.files.length) { addReworkPics(e.target.files); e.target.value = ''; }
     var rk = e.target.dataset && e.target.dataset.reqInput;
     if (rk && selected) {
       var rv = rk === 'text' || rk === 'evidence' ? e.target.value.trim() : e.target.value.trim();
@@ -5761,7 +6047,7 @@
     }
     var id = wantItem; wantItem = '';
     if (!id || !current()) return;
-    if (!itemDef(current(), id).retired) gotoItem(id);
+    if (!itemDef(current(), id).retired || reworkOf(current(), id)) gotoItem(id);
     else toast('That check isn’t in this ' + UNIT + '.');
   }
   // ── Tool updates ─────────────────────────────────────────

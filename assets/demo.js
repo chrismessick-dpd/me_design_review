@@ -123,6 +123,23 @@
         p.spec[r.id] = r;
       });
     }
+    // Bring-up reworks (config.rework), with pictures in assets/demo-previews/ and their discussion.
+    if (only.rework && only.rework.length && M.reworkOn(p)) {
+      p.rework = {};
+      only.rework.forEach(function (w, i) {
+        var id = 'w' + seed + '-' + i, when = at(w.at == null ? 0.5 : w.at), by = w.by || users[0];
+        var pics = (w.pics || []).map(function (x) {
+          return { id: x.id, file: x.id + '.' + M.REWORK_PIC_TYPES[x.type], type: x.type, w: x.w || 0, h: x.h || 0, sha256: '', name: x.name || '', at: when, by: by };
+        });
+        p.rework[id] = { id: id, ref: w.ref, title: w.title, problem: w.problem || '', fix: w.fix || '', parts: w.parts || '', nets: w.nets || '',
+          status: w.status, next: !!w.next, by: w.by || '', doneAt: w.done == null ? '' : at(w.done).slice(0, 10), revision: '', pics: pics,
+          createdAt: when, updatedAt: at(w.done == null ? w.at || 0.5 : w.done), updatedBy: by };
+        (w.comments || []).forEach(function (c, j) {
+          var cid = 'r' + seed + '-' + i + '-' + j, t = at(c.at == null ? 0.8 : c.at);
+          p.comments[cid] = { id: cid, item: id, author: c.by, at: t, text: c.text, updatedAt: t, updatedBy: c.by };
+        });
+      });
+    }
     p.meta.updatedAt = at(1);
     return p;
   }
@@ -130,14 +147,14 @@
   S.demo = {
     projects: function (templates) {
       return (D.projects || []).map(function (d) {
-        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec });
+        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, rework: d.rework });
         p.id = demoId(d.seed);
         return p;
       });
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 17
+    VERSION: 18
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.
