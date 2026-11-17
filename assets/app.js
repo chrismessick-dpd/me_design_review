@@ -1685,15 +1685,47 @@
       '<label class="rw-drop" data-rw-drop="1"><input type="file" id="rw-pic-file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>' +
       '<span>Paste (Ctrl+V), drop, or <u>pick</u> pictures</span></label></div>';
   }
+  // The rework pane widens by dragging its left edge (Chris, 2026-11-16: rework only). The width is kept
+  // in this browser (rwInspW); a double-click on the edge puts it back to 400 px. Phones keep the sheet.
+  var RW_INSP_MIN = 400;
+  function rwInspMax() { return Math.max(RW_INSP_MIN, Math.round(window.innerWidth * 0.8)); }
+  function rwInspWidth(w) {
+    var el = $('#inspector'); if (!el) return;
+    w = Math.max(RW_INSP_MIN, Math.min(rwInspMax(), Math.round(+w) || RW_INSP_MIN));
+    el.style.setProperty('--rw-insp-w', w + 'px');
+    return w;
+  }
+  document.addEventListener('pointerdown', function (e) {
+    var g = e.target.closest && e.target.closest('.rw-grip');
+    if (!g || e.button !== 0) return;
+    e.preventDefault();
+    var el = $('#inspector'); el.classList.add('rw-resizing');
+    try { g.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+    var last = el.getBoundingClientRect().width;
+    function move(ev) { last = rwInspWidth(window.innerWidth - ev.clientX - 12) || last; }
+    function up() {
+      g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
+      el.classList.remove('rw-resizing'); save('rwInspW', last);
+    }
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  });
+  document.addEventListener('dblclick', function (e) {
+    if (e.target.closest && e.target.closest('.rw-grip')) { rwInspWidth(RW_INSP_MIN); save('rwInspW', RW_INSP_MIN); }
+  });
+  window.addEventListener('resize', function () { var w = load('rwInspW', 0); if (w) rwInspWidth(w); });
+
   function renderReworkInspector(p, r) {
     var el = $('#inspector');
+    el.classList.add('is-rework');
+    rwInspWidth(load('rwInspW', RW_INSP_MIN));
     var keep = el.dataset.item === r.id ? { body: (el.querySelector('.insp-body') || {}).scrollTop || 0 } : null;
     var draft = el.querySelector('#comment-input'), draftText = draft ? draft.value : '';
     var comments = M.liveComments(p, r.id), revs = C.runs ? M.liveRevisions(p) : [];
     var seg = '<div class="seg full rw-seg">' + M.REWORK_STATUS.map(function (s) {
       return '<button class="rw-b-' + s + (r.status === s ? ' on' : '') + '" data-act="rw-status" data-val="' + s + '">' + RW_ICON[s] + M.REWORK_LABEL[s] + '</button>';
     }).join('') + '</div>';
-    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Rework \u203a ' + esc(r.ref) + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+    el.innerHTML = '<div class="rw-grip" title="Drag to widen (double-click: back to 400 px)" aria-hidden="true"></div>' +
+      '<div class="insp-head"><div class="insp-crumb">Rework \u203a ' + esc(r.ref) + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
       '<div class="row2"><div class="field"><label for="rw-ref">ID</label><input class="input" id="rw-ref" value="' + esc(r.ref) + '" data-rw-input="ref" maxlength="20"></div>' +
       '<div class="field"><label for="rw-title">Title</label><input class="input" id="rw-title" value="' + esc(r.title) + '" data-rw-input="title" maxlength="300" placeholder="e.g. Relay coil drive"></div></div>' +
@@ -1844,6 +1876,7 @@
   function drawInspector() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
+    el.classList.remove('is-rework');
     var rq = reqOf(p, selected);
     if (rq) return renderReqInspector(p, rq);
     var rw = reworkOf(p, selected);
