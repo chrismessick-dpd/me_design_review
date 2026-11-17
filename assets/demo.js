@@ -131,8 +131,13 @@
         var pics = (w.pics || []).map(function (x) {
           return { id: x.id, file: x.id + '.' + M.REWORK_PIC_TYPES[x.type], type: x.type, w: x.w || 0, h: x.h || 0, sha256: '', name: x.name || '', at: when, by: by };
         });
+        var steps = (w.steps || []).map(function (s, j) {
+          return { id: 's' + seed + 'r' + i + 'n' + j, text: s.text || '', pics: (s.pics || []).map(function (x) {
+            return { id: x.id, file: x.id + '.' + M.REWORK_PIC_TYPES[x.type], type: x.type, w: x.w || 0, h: x.h || 0, sha256: '', name: x.name || '', at: when, by: by };
+          }) };
+        });
         p.rework[id] = { id: id, ref: w.ref, title: w.title, problem: w.problem || '', fix: w.fix || '', parts: w.parts || '', nets: w.nets || '',
-          status: w.status, next: !!w.next, by: w.by || '', doneAt: w.done == null ? '' : at(w.done).slice(0, 10), revision: '', pics: pics,
+          status: w.status, next: !!w.next, by: w.by || '', doneAt: w.done == null ? '' : at(w.done).slice(0, 10), revision: '', pics: pics, steps: steps,
           createdAt: when, updatedAt: at(w.done == null ? w.at || 0.5 : w.done), updatedBy: by };
         (w.comments || []).forEach(function (c, j) {
           var cid = 'r' + seed + '-' + i + '-' + j, t = at(c.at == null ? 0.8 : c.at);
@@ -154,7 +159,7 @@
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 18
+    VERSION: 19
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

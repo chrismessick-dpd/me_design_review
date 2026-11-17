@@ -1673,18 +1673,53 @@
     }).catch(function () { rwPics[k] = { state: 'missing' }; }).then(function () { if (selected === r.id) renderInspector(); if (rwPrint && !$('#report').hidden) drawReworkPrint(); });
     return rwPics[k];
   }
-  function rwPicsHtml(p, r) {
-    var up = rwUploading[r.id] || 0;
-    return '<div class="field"><span class="field-label">Pictures</span><div class="rw-pics">' + r.pics.map(function (pic) {
+  // Pictures on the rework (step '') or on one of its tech steps: thumbnails, then a box to paste,
+  // drop, or pick more. Uploads in flight are counted per rework and step (rwUploading).
+  function rwThumbsHtml(p, r, pics, step) {
+    var up = rwUploading[r.id + '|' + (step || '')] || 0;
+    return '<div class="rw-pics">' + pics.map(function (pic) {
       var s = loadRwPic(p, r, pic);
       var inner = s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '" loading="lazy">'
         : '<span class="muted">' + (s.state === 'loading' ? 'Loading\u2026' : s.state === 'signin' ? 'Sign in to see it' : 'Not found') + '</span>';
       return '<div class="rw-thumb"><button class="rw-thumb-img" data-act="rw-pic-open" data-id="' + esc(pic.id) + '" title="' + esc((pic.name ? pic.name + ' \u00b7 ' : '') + (pic.by ? 'added by ' + pic.by : '')) + '">' + inner + '</button>' +
-        '<button class="rw-thumb-x" data-act="rw-pic-del" data-id="' + esc(pic.id) + '" title="Remove picture" aria-label="Remove picture">' + ICON.close + '</button></div>';
-    }).join('') + (up ? '<div class="rw-thumb rw-thumb-up"><span class="muted">Adding ' + plural(up, 'picture') + '\u2026</span></div>' : '') + '</div>' +
-      '<label class="rw-drop" data-rw-drop="1"><input type="file" id="rw-pic-file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>' +
-      '<span>Paste (Ctrl+V), drop, or <u>pick</u> pictures</span></label></div>';
+        '<button class="rw-thumb-x" data-act="rw-pic-del" data-id="' + esc(pic.id) + '" data-step="' + esc(step || '') + '" title="Remove picture" aria-label="Remove picture">' + ICON.close + '</button></div>';
+    }).join('') + (up ? '<div class="rw-thumb rw-thumb-up"><span class="muted">Adding ' + plural(up, 'picture') + '\u2026</span></div>' : '') + '</div>';
   }
+  function rwDropHtml(step, label) {
+    return '<label class="rw-drop' + (step ? ' rw-drop-sm' : '') + '" data-rw-drop="1" data-step="' + esc(step || '') + '"><input type="file" class="rw-pic-input" data-step="' + esc(step || '') + '" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>' +
+      '<span>' + label + '</span></label>';
+  }
+  function rwPicsHtml(p, r) {
+    return '<div class="field"><span class="field-label">Pictures</span>' + rwThumbsHtml(p, r, r.pics, '') + rwDropHtml('', 'Paste (Ctrl+V), drop, or <u>pick</u> pictures') + '</div>';
+  }
+  // Tech steps (Chris, 2026-11-16): step-by-step instructions for the technician under Rework details,
+  // each with its own pictures. Pasting while a step's text is focused adds the picture to that step.
+  function rwStepsHtml(p, r) {
+    var n = r.steps.length;
+    return '<div class="field rw-steps-field"><span class="field-label">Tech steps <span class="muted">step by step, for the technician\u2019s printout</span></span>' +
+      (n ? '<ol class="rw-steps">' + r.steps.map(function (s, i) {
+        return '<li class="rw-step" data-step="' + esc(s.id) + '"><div class="rw-step-row"><span class="rw-step-n">' + (i + 1) + '</span>' +
+          '<textarea class="input rw-step-text" rows="2" maxlength="4000" data-rw-step="' + esc(s.id) + '" placeholder="e.g. Remove L1 with hot air at 350 \u00b0C">' + esc(s.text) + '</textarea>' +
+          '<div class="rw-step-acts"><button class="icon-btn" data-act="rw-step-move" data-step="' + esc(s.id) + '" data-dir="-1" title="Move up" aria-label="Move step up"' + (i ? '' : ' disabled') + '>\u2191</button>' +
+          '<button class="icon-btn" data-act="rw-step-move" data-step="' + esc(s.id) + '" data-dir="1" title="Move down" aria-label="Move step down"' + (i < n - 1 ? '' : ' disabled') + '>\u2193</button>' +
+          '<button class="icon-btn" data-act="rw-step-del" data-step="' + esc(s.id) + '" title="Delete step" aria-label="Delete step">' + ICON.close + '</button></div></div>' +
+          (s.pics.length || rwUploading[r.id + '|' + s.id] ? rwThumbsHtml(p, r, s.pics, s.id) : '') + rwDropHtml(s.id, 'Add a picture to step ' + (i + 1)) + '</li>';
+      }).join('') + '</ol>' : '<p class="note" style="margin:0 0 8px">No steps yet. Without them, the technician\u2019s printout uses the Rework details.</p>') +
+      '<button class="btn btn-sm" data-act="rw-step-add">+ Add step</button></div>';
+  }
+  // The rework's steps as stored (a copy to change), so fields this version doesn't know survive.
+  function rwStepsRaw(rid) {
+    var p = current(), raw = p && p.rework && p.rework[rid];
+    return raw && Array.isArray(raw.steps) ? JSON.parse(JSON.stringify(raw.steps)) : [];
+  }
+  function rwStepEdit(fn) {
+    var p = current(), r = reworkOf(p, selected); if (!r) return;
+    var steps = rwStepsRaw(r.id), out = fn(steps);
+    if (out === false) return;
+    setRework(r.id, { steps: steps });
+    return out;
+  }
+
   // The rework pane widens by dragging its left edge (Chris, 2026-11-16: rework only). The width is kept
   // in this browser (rwInspW); a double-click on the edge puts it back to 400 px. Phones keep the sheet.
   var RW_INSP_MIN = 400;
@@ -1731,7 +1766,8 @@
       '<div class="field"><label for="rw-title">Title</label><input class="input" id="rw-title" value="' + esc(r.title) + '" data-rw-input="title" maxlength="300" placeholder="e.g. Relay coil drive"></div></div>' +
       '<div class="field"><span class="field-label">Status</span>' + seg + '</div>' +
       '<div class="field"><label for="rw-problem">What\u2019s wrong</label><textarea class="input" id="rw-problem" rows="3" data-rw-input="problem" maxlength="8000" placeholder="What was found, how, and what it measured">' + esc(r.problem) + '</textarea></div>' +
-      '<div class="field"><label for="rw-fix">The rework</label><textarea class="input" id="rw-fix" rows="3" data-rw-input="fix" maxlength="8000" placeholder="What was changed on the board, and what to do in the next revision">' + esc(r.fix) + '</textarea></div>' +
+      '<div class="field"><label for="rw-fix">Rework details</label><textarea class="input" id="rw-fix" rows="3" data-rw-input="fix" maxlength="8000" placeholder="What was changed on the board, and what to do in the next revision">' + esc(r.fix) + '</textarea></div>' +
+      rwStepsHtml(p, r) +
       '<div class="row2"><div class="field"><label for="rw-parts">Parts</label><input class="input" id="rw-parts" value="' + esc(r.parts) + '" data-rw-input="parts" maxlength="1000" placeholder="R12, C40, U3"></div>' +
       '<div class="field"><label for="rw-nets">Nets</label><input class="input" id="rw-nets" value="' + esc(r.nets) + '" data-rw-input="nets" maxlength="1000" placeholder="+3V3, VCAP"></div></div>' +
       '<div class="row2"><div class="field"><label for="rw-by">Done by</label><input class="input" id="rw-by" value="' + esc(r.by) + '" data-rw-input="by" maxlength="100" placeholder="Who did it"></div>' +
@@ -1754,9 +1790,11 @@
     if (keep) el.querySelector('.insp-body').scrollTop = keep.body;
   }
   // A printout for the tech at the bench (Chris, 2026-11-16): one rework from its pane, or the reworks
-  // the list shows (its filter and search), each with what's wrong, the rework, parts, nets, every
-  // picture full width, the discussion, and lines to sign it off. It uses the review report's paper
-  // (#report); pictures still loading redraw it when they arrive.
+  // the list shows (its filter and search). Detailed has everything: what's wrong, Rework details, the
+  // tech steps with their pictures, the rework's pictures, the discussion, and lines to sign. Technician
+  // instructions is only the steps with their pictures (or, with no steps, the Rework details and the
+  // rework's pictures), the parts and nets, and a Done line. The mode is kept in this browser
+  // (rwPrintMode). It uses the review report's paper (#report); pictures still loading redraw it.
   var rwPrint = null;   // { ids } while the printout is open
   function openReworkPrint(ids) {
     rwPrint = { ids: ids.slice() };
@@ -1766,33 +1804,54 @@
   function drawReworkPrint() {
     var p = current(), r = $('#report');
     if (!rwPrint || !p) return;
+    var tech = load('rwPrintMode', 'detailed') === 'tech';
     var list = rwPrint.ids.map(function (id) { return reworkOf(p, id); }).filter(Boolean), m = p.meta;
     var revs = C.runs ? M.liveRevisions(p) : [], revOf = function (id) { return revs.filter(function (v) { return v.id === id; })[0]; };
     var waiting = 0;
     var line = function (label, text) { return text ? '<div class="rwp-field"><span>' + label + '</span><div class="rwp-text">' + esc(text) + '</div></div>' : ''; };
-    var html = '<div class="report-bar"><b>Rework printout</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print / Save PDF</button></div></div>' +
-      '<div class="paper rwp-paper">' +
-      '<div class="r-head"><div><div class="r-brand">' + esc(C.product || 'Signoff') + ' \u00b7 BRING-UP REWORK</div>' +
+    function figs(w, pics) {
+      return pics.map(function (pic) {
+        var s = loadRwPic(p, w, pic);
+        if (s.state === 'loading') waiting++;
+        return '<figure class="rwp-pic">' + (s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '">' : '<div class="rwp-nopic">' + (s.state === 'loading' ? 'Loading picture\u2026' : 'Picture not available') + '</div>') +
+          (pic.name ? '<figcaption>' + esc(pic.name) + '</figcaption>' : '') + '</figure>';
+      }).join('');
+    }
+    function picsBlock(w, pics) { var f = figs(w, pics); return f ? '<div class="rwp-pics">' + f + '</div>' : ''; }
+    function stepsBlock(w) {
+      return '<ol class="rwp-steps">' + w.steps.map(function (s) {
+        return '<li><div class="rwp-step-text">' + (tech ? '<span class="rwp-box" aria-hidden="true">\u2610</span>' : '') + '<div class="rwp-text">' + esc(s.text || '') + '</div></div>' + picsBlock(w, s.pics) + '</li>';
+      }).join('') + '</ol>';
+    }
+    var seg = '<div class="seg rwp-mode" role="tablist" aria-label="Printout">' + [['detailed', 'Detailed'], ['tech', 'Technician instructions']].map(function (o) {
+      return '<button role="tab" class="' + ((tech ? 'tech' : 'detailed') === o[0] ? 'on' : '') + '" data-act="rw-print-mode" data-val="' + o[0] + '">' + o[1] + '</button>';
+    }).join('') + '</div>';
+    var html = '<div class="report-bar"><b>Rework printout</b>' + seg + '<div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print / Save PDF</button></div></div>' +
+      '<div class="paper rwp-paper' + (tech ? ' rwp-tech' : '') + '">' +
+      '<div class="r-head"><div><div class="r-brand">' + esc(C.product || 'Signoff') + ' \u00b7 ' + (tech ? 'TECHNICIAN INSTRUCTIONS' : 'BRING-UP REWORK') + '</div>' +
       '<h1 style="margin-top:14px">' + esc(m.name) + '</h1><div style="color:#515154">' + esc([m.client, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).join(' \u00b7 ')) + '</div></div>' +
       '<div style="text-align:right"><div style="font:600 30px var(--display);color:#004952">' + list.length + '</div><div style="color:#86868b;font-size:11px">' + (list.length === 1 ? 'rework' : 'reworks') + '</div></div></div>' +
       '<div class="r-meta"><div><span>Printed</span>' + fmtDate(M.now()) + '</div><div><span>By</span>' + esc(me() || '\u2014') + '</div><div><span>Board serial</span>&nbsp;</div><div><span>Tech</span>&nbsp;</div></div>' +
-      (list.length > 1 ? '<table class="rwp-index"><thead><tr><th>ID</th><th>Rework</th><th>Parts</th><th>Status</th></tr></thead><tbody>' + list.map(function (w) {
-        return '<tr><td>' + esc(w.ref) + '</td><td>' + esc(w.title) + '</td><td>' + esc(w.parts) + '</td><td>' + esc(M.REWORK_LABEL[w.status]) + '</td></tr>';
+      (list.length > 1 ? '<table class="rwp-index"><thead><tr><th>ID</th><th>Rework</th><th>Parts</th>' + (tech ? '<th>Steps</th>' : '<th>Status</th>') + '</tr></thead><tbody>' + list.map(function (w) {
+        return '<tr><td>' + esc(w.ref) + '</td><td>' + esc(w.title) + '</td><td>' + esc(w.parts) + '</td><td>' + (tech ? (w.steps.length || '\u2014') : esc(M.REWORK_LABEL[w.status])) + '</td></tr>';
       }).join('') + '</tbody></table>' : '') +
       list.map(function (w) {
+        var head = '<div class="rwp-head"><span class="rwp-ref">' + esc(w.ref) + '</span><h2>' + esc(w.title || 'Rework') + '</h2>' + (tech ? '' : '<span class="rwp-st">' + esc(M.REWORK_LABEL[w.status]) + '</span>') + '</div>';
+        if (tech) {
+          return '<section class="rwp-item">' + head +
+            '<div class="rwp-grid">' + line('Parts', w.parts) + line('Nets', w.nets) + '</div>' +
+            (w.steps.length ? '<div class="rwp-field"><span>Steps</span>' + stepsBlock(w) + '</div>'
+              : line('Instructions', w.fix || 'No instructions written yet.') + picsBlock(w, w.pics)) +
+            '<div class="rwp-sign rwp-sign-tech"><div>\u2610 Done \u2003 By</div><div>Date</div></div>' +
+            '<div class="rwp-notes">Notes</div></section>';
+        }
         var rev = w.revision && revOf(w.revision), cm = M.liveComments(p, w.id);
-        var pics = w.pics.map(function (pic) {
-          var s = loadRwPic(p, w, pic);
-          if (s.state === 'loading') waiting++;
-          return '<figure class="rwp-pic">' + (s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '">' : '<div class="rwp-nopic">' + (s.state === 'loading' ? 'Loading picture\u2026' : 'Picture not available') + '</div>') +
-            (pic.name ? '<figcaption>' + esc(pic.name) + '</figcaption>' : '') + '</figure>';
-        }).join('');
-        return '<section class="rwp-item">' +
-          '<div class="rwp-head"><span class="rwp-ref">' + esc(w.ref) + '</span><h2>' + esc(w.title || 'Rework') + '</h2><span class="rwp-st">' + esc(M.REWORK_LABEL[w.status]) + '</span></div>' +
+        return '<section class="rwp-item">' + head +
           '<div class="rwp-grid">' + line('Parts', w.parts) + line('Nets', w.nets) + (rev ? line('On revision', rev.label + (rev.title ? ' \u00b7 ' + rev.title : '')) : '') +
           (w.by || w.doneAt ? line('Done', [w.by, w.doneAt].filter(Boolean).join(', ')) : '') + (w.next ? line('Next revision', 'Fix in the next revision') : '') + '</div>' +
-          line('What\u2019s wrong', w.problem) + line('The rework', w.fix) +
-          (pics ? '<div class="rwp-pics">' + pics + '</div>' : '') +
+          line('What\u2019s wrong', w.problem) + line('Rework details', w.fix) +
+          (w.steps.length ? '<div class="rwp-field"><span>Tech steps</span>' + stepsBlock(w) + '</div>' : '') +
+          picsBlock(w, w.pics) +
           (cm.length ? '<div class="rwp-field"><span>Discussion</span>' + cm.map(function (c) { return '<div class="r-cmt">' + esc(c.author) + ' (' + fmtDate(c.at) + '): ' + esc(c.text) + '</div>'; }).join('') + '</div>' : '') +
           '<div class="rwp-sign"><div>\u2610 Done \u2003 By</div><div>Date</div><div>\u2610 Verified \u2003 By</div><div>Date</div></div>' +
           '<div class="rwp-notes">Notes</div></section>';
@@ -1834,15 +1893,17 @@
       img.src = url;
     });
   }
-  function addReworkPics(files) {
+  function addReworkPics(files, step) {
     var p = current(), r = reworkOf(p, selected);
+    step = step || '';
     files = Array.prototype.filter.call(files || [], function (f) { return f && /^image\//.test(f.type); });
     if (!p || !r || !files.length) return;
+    if (step && !r.steps.some(function (s) { return s.id === step; })) return;
     if (HIST.compare.isCopy(p)) { touch(p); return; }
     if (!DEMO && !getToken()) { toast('Sign in to GitHub to add pictures'); return; }
     if (files.length > RW_MAX_PICS) { toast('Up to ' + RW_MAX_PICS + ' pictures at a time'); files = files.slice(0, RW_MAX_PICS); }
-    var pid = p.id, rid = r.id;
-    rwUploading[rid] = (rwUploading[rid] || 0) + files.length; renderInspector();
+    var pid = p.id, rid = r.id, uk = rid + '|' + step;
+    rwUploading[uk] = (rwUploading[uk] || 0) + files.length; renderInspector();
     Promise.all(files.map(function (f) { return rwReadImage(f).catch(function (e) { toast(e.message); return null; }); })).then(function (list) {
       list = list.filter(Boolean);
       if (!list.length) return [];
@@ -1854,22 +1915,32 @@
       var cur = current();
       if (!cur || cur.id !== pid || !cur.rework || !cur.rework[rid]) { toast('Pictures stored, but the rework is gone'); return; }
       list.forEach(function (x) { rwPics[pid + '/' + rid + '/' + x.rec.id] = { state: 'ok', url: x.url }; });
-      var had = Array.isArray(cur.rework[rid].pics) ? cur.rework[rid].pics : [];
-      var keepSel = selected; selected = rid;
-      setRework(rid, { pics: had.concat(list.map(function (x) { return x.rec; })) });
+      var recs = list.map(function (x) { return x.rec; }), keepSel = selected;
+      selected = rid;
+      if (step) {
+        var steps = rwStepsRaw(rid), s = steps.filter(function (x) { return x && x.id === step; })[0];
+        if (!s) { selected = keepSel; toast('Pictures stored, but the step is gone'); return; }
+        s.pics = (Array.isArray(s.pics) ? s.pics : []).concat(recs);
+        setRework(rid, { steps: steps });
+      } else {
+        var had = Array.isArray(cur.rework[rid].pics) ? cur.rework[rid].pics : [];
+        setRework(rid, { pics: had.concat(recs) });
+      }
       selected = keepSel;
       if (!DEMO) syncSoon();
       if (DEMO) toast('In the demo, added pictures last until the page reloads');
     }).catch(function (err) { toast('Couldn\u2019t store the pictures: ' + (err && err.message || err), null, 6000); })
-      .then(function () { rwUploading[rid] = Math.max(0, (rwUploading[rid] || 0) - files.length); if (selected === rid) renderInspector(); });
+      .then(function () { rwUploading[uk] = Math.max(0, (rwUploading[uk] || 0) - files.length); if (selected === rid) renderInspector(); });
   }
   function openReworkPic(id) {
-    var p = current(), r = reworkOf(p, selected), pic = r && r.pics.filter(function (x) { return x.id === id; })[0];
+    var p = current(), r = reworkOf(p, selected); if (!r) return;
+    var where = '', pic = r.pics.filter(function (x) { return x.id === id; })[0];
+    r.steps.forEach(function (s, i) { var hit = s.pics.filter(function (x) { return x.id === id; })[0]; if (hit && !pic) { pic = hit; where = 'Step ' + (i + 1); } });
     if (!pic) return;
     var s = loadRwPic(p, r, pic);
     sheet('<div class="sheet-head"><h2>' + esc(r.ref + (r.title ? ' \u00b7 ' + r.title : '')) + '</h2><button class="icon-btn" data-act="close-sheet" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="rw-big">' + (s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '">' : '<p class="note">The picture isn\u2019t loaded.</p>') + '</div>' +
-      '<p class="note">' + esc([pic.name, pic.w && pic.h ? pic.w + ' \u00d7 ' + pic.h + ' px' : '', pic.by ? 'added by ' + pic.by : '', pic.at ? fmtDate(pic.at) : ''].filter(Boolean).join(' \u00b7 ')) + '</p>', { wide: true });
+      '<p class="note">' + esc([where, pic.name, pic.w && pic.h ? pic.w + ' \u00d7 ' + pic.h + ' px' : '', pic.by ? 'added by ' + pic.by : '', pic.at ? fmtDate(pic.at) : ''].filter(Boolean).join(' \u00b7 ')) + '</p>', { wide: true });
   }
 
   function renderInspector() { var f = focusNow(); drawInspector(); restoreFocus(f); }
@@ -2671,7 +2742,7 @@
     if (kind === 'section') return r.na ? 'Set aside (N/A)' : 'In review';
     if (kind === 'tag') return 'Version ' + String(r.commit || '').slice(0, 7) + ': ' + String(r.note || '');
     if (kind === 'rework') { var w = M.cleanRework(r, ''); return [w.ref, w.title].filter(Boolean).join(' ') + '\nStatus: ' + M.REWORK_LABEL[w.status] + (w.next ? ', fix in the next revision' : '') +
-      (w.parts ? '\nParts: ' + w.parts : '') + (w.nets ? '\nNets: ' + w.nets : '') + (w.problem ? '\nWhat’s wrong: ' + w.problem : '') + (w.fix ? '\nThe rework: ' + w.fix : '') + (w.pics.length ? '\nPictures: ' + w.pics.length : ''); }
+      (w.parts ? '\nParts: ' + w.parts : '') + (w.nets ? '\nNets: ' + w.nets : '') + (w.problem ? '\nWhat’s wrong: ' + w.problem : '') + (w.fix ? '\nRework details: ' + w.fix : '') + w.steps.map(function (s, i) { return '\nStep ' + (i + 1) + ': ' + s.text + (s.pics.length ? ' (' + plural(s.pics.length, 'picture') + ')' : ''); }).join('') + (w.pics.length ? '\nPictures: ' + w.pics.length : ''); }
     if (kind === 'revision') return 'Revision ' + (r.label || '') + (r.status ? ' (' + r.status + ')' : '') + (r.title ? ': ' + r.title : '');
     if (kind === 'meta') return ['name', 'stage', 'revision'].map(function (k) { return r[k] ? cap(k) + ': ' + r[k] : ''; }).filter(Boolean).join('\n') +
       ((r.profile || []).length ? '\nProfile: ' + r.profile.join(', ') : '') + ((r.checklists || []).length ? '\nChecklists: ' + r.checklists.join(', ') : '');
@@ -3448,7 +3519,7 @@
     if (!rwOpen()) return;
     var items = (e.clipboardData && e.clipboardData.items) || [], files = [];
     for (var i = 0; i < items.length; i++) if (items[i].kind === 'file' && /^image\//.test(items[i].type)) files.push(items[i].getAsFile());
-    if (files.length) { e.preventDefault(); addReworkPics(files); }
+    if (files.length) { e.preventDefault(); var ps = document.activeElement && document.activeElement.closest && document.activeElement.closest('.rw-step'); addReworkPics(files, ps ? ps.dataset.step : ''); }
   });
   document.addEventListener('dragover', function (e) {
     var z = e.target.closest && e.target.closest('[data-rw-drop]');
@@ -3461,7 +3532,7 @@
   document.addEventListener('drop', function (e) {
     var z = e.target.closest && e.target.closest('[data-rw-drop]');
     if (!z || !e.dataTransfer || !e.dataTransfer.files.length) return;
-    e.preventDefault(); z.classList.remove('on'); addReworkPics(e.dataTransfer.files);
+    e.preventDefault(); z.classList.remove('on'); addReworkPics(e.dataTransfer.files, z.dataset.step || '');
   });
   document.addEventListener('dragover', function (e) {
     var t = stTarget(e);
@@ -5809,10 +5880,30 @@
       case 'rw-next': setRework(selected, { next: !!el.checked }); break;
       case 'rw-pic-open': openReworkPic(id); break;
       case 'rw-pic-del': {
-        var wp = current(), wr = wp && wp.rework && wp.rework[selected];
-        if (wr && Array.isArray(wr.pics) && confirm('Remove this picture from the rework? It stays in the ' + UNIT + '\u2019s repository history.')) setRework(selected, { pics: wr.pics.filter(function (x) { return !x || x.id !== id; }) });
+        var wp = current(), wr = wp && wp.rework && wp.rework[selected], wstep = el.dataset.step || '';
+        if (!wr || !confirm('Remove this picture from the ' + (wstep ? 'step' : 'rework') + '? It stays in the ' + UNIT + '\u2019s repository history.')) break;
+        if (wstep) rwStepEdit(function (steps) { var s = steps.filter(function (x) { return x && x.id === wstep; })[0]; if (!s || !Array.isArray(s.pics)) return false; s.pics = s.pics.filter(function (x) { return !x || x.id !== id; }); });
+        else if (Array.isArray(wr.pics)) setRework(selected, { pics: wr.pics.filter(function (x) { return !x || x.id !== id; }) });
         break;
       }
+      case 'rw-step-add': {
+        var nid = rwRandomId();
+        rwStepEdit(function (steps) { steps.push({ id: nid, text: '', pics: [] }); });
+        setTimeout(function () { var t = document.querySelector('[data-rw-step="' + nid + '"]'); if (t) { t.focus(); t.scrollIntoView({ block: 'nearest' }); } }, 40);
+        break;
+      }
+      case 'rw-step-move': {
+        var mv = el.dataset.step, dir = +el.dataset.dir;
+        rwStepEdit(function (steps) { var i = steps.map(function (x) { return x && x.id; }).indexOf(mv), j = i + dir; if (i < 0 || j < 0 || j >= steps.length) return false; var t = steps[i]; steps[i] = steps[j]; steps[j] = t; });
+        break;
+      }
+      case 'rw-step-del': {
+        var ds = el.dataset.step, dr = reworkOf(current(), selected), dstep = dr && dr.steps.filter(function (x) { return x.id === ds; })[0];
+        if (!dstep || ((dstep.text || dstep.pics.length) && !confirm('Delete this step' + (dstep.pics.length ? ' and its ' + plural(dstep.pics.length, 'picture') : '') + '?'))) break;
+        rwStepEdit(function (steps) { for (var k = steps.length - 1; k >= 0; k--) if (steps[k] && steps[k].id === ds) steps.splice(k, 1); });
+        break;
+      }
+      case 'rw-print-mode': save('rwPrintMode', el.dataset.val === 'tech' ? 'tech' : 'detailed'); drawReworkPrint(); break;
       case 'rw-delete': {
         var wd = reworkOf(current(), selected);
         if (wd && confirm('Delete ' + (wd.ref || 'this rework') + '? Its discussion is kept in the ' + UNIT + ' history.')) { setRework(selected, { deleted: true }); selected = null; closeInspector(); renderPage(); syncSoon(); }
@@ -5990,7 +6081,14 @@
       var wcur = reworkOf(current(), selected), wv = e.target.value.trim();
       if (wcur && wcur[wk] !== wv) { var wf = {}; wf[wk] = wv; setRework(selected, wf); }
     }
-    if (e.target.id === 'rw-pic-file' && e.target.files.length) { addReworkPics(e.target.files); e.target.value = ''; }
+    if (e.target.classList && e.target.classList.contains('rw-pic-input') && e.target.files.length) { addReworkPics(e.target.files, e.target.dataset.step || ''); e.target.value = ''; }
+    var wsid = e.target.dataset && e.target.dataset.rwStep;
+    // A step's text is saved without redrawing the pane, so a click that ended the edit (+ Add step, a picture) still lands.
+    if (wsid && selected) {
+      var wsp = current(), wraw = wsp && wsp.rework && wsp.rework[selected], wsteps = rwStepsRaw(selected), wss = wsteps.filter(function (x) { return x && x.id === wsid; })[0], wsv = e.target.value.trim();
+      if (wraw && wss && wss.text !== wsv && !HIST.compare.isCopy(wsp)) { wss.text = wsv; wsp.rework[selected] = M.stamp(Object.assign({}, wraw, { steps: wsteps }), me()); touch(wsp); renderPage(); }
+      else if (HIST.compare.isCopy(wsp)) touch(wsp);
+    }
     var rk = e.target.dataset && e.target.dataset.reqInput;
     if (rk && selected) {
       var rv = rk === 'text' || rk === 'evidence' ? e.target.value.trim() : e.target.value.trim();
