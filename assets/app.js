@@ -1603,7 +1603,8 @@
       '<div class="page-sub"><span>' + plural(st.total, 'rework') + '</span>' +
       M.REWORK_STATUS.filter(function (s) { return st[s]; }).map(function (s) { return '<span class="sep">\u00b7</span><span>' + st[s] + ' ' + M.REWORK_LABEL[s].toLowerCase() + '</span>'; }).join('') +
       (st.next ? '<span class="sep">\u00b7</span><span>' + st.next + ' for the next revision</span>' : '') + '</div></div>' +
-      '<button class="btn btn-primary" data-act="rw-add">Add rework</button></div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + (all.length ? '<button class="btn" data-act="rw-print-list" title="Print the reworks shown, with their pictures, for the tech">Print</button>' : '') +
+      '<button class="btn btn-primary" data-act="rw-add">Add rework</button></div></div>';
     if (!all.length) {
       return html + '<div class="card empty"><div class="empty-art">' + ICON.clipboard + '</div><h2>No reworks yet</h2>' +
         '<p>Track each change made to the boards during bring-up: what was wrong, the rework, the parts and nets it touched, pictures, and whether it\u2019s been verified. Tick <b>Fix in the next revision</b> to list it with the next revision\u2019s updates.</p>' +
@@ -1669,7 +1670,7 @@
     (pic.sha256 ? store.readVerified(path, pic.sha256) : store.readBytes(path)).then(function (b) {
       if (!b) throw new Error('missing');
       rwPics[k] = { state: 'ok', url: URL.createObjectURL(new Blob([b], { type: pic.type })) };
-    }).catch(function () { rwPics[k] = { state: 'missing' }; }).then(function () { if (selected === r.id) renderInspector(); });
+    }).catch(function () { rwPics[k] = { state: 'missing' }; }).then(function () { if (selected === r.id) renderInspector(); if (rwPrint && !$('#report').hidden) drawReworkPrint(); });
     return rwPics[k];
   }
   function rwPicsHtml(p, r) {
@@ -1709,7 +1710,7 @@
       '<label class="rw-next"><input type="checkbox" data-act="rw-next"' + (r.next ? ' checked' : '') + '> Fix in the next revision <span class="muted">(listed under Revisions \u203a Next revision updates)</span></label>' +
       rwPicsHtml(p, r) +
       '<div class="meta-line">' + (r.createdAt ? 'Added ' + fmtDate(r.createdAt) : '') + (r.updatedBy ? ' \u00b7 last changed by ' + esc(r.updatedBy) + ', ' + relTime(r.updatedAt) : '') + '</div>' +
-      '<button class="btn btn-danger" data-act="rw-delete" style="margin-bottom:10px">Delete rework</button>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn" data-act="rw-print">Print for the tech</button><button class="btn btn-danger" data-act="rw-delete">Delete rework</button></div>' +
       '<div class="thread"><div class="thread-title">Discussion <span class="note" style="margin:0">' + (comments.length || '') + '</span></div>' +
       (comments.length ? comments.map(function (c) {
         return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span title="' + esc(new Date(c.at).toLocaleString()) + '">' + relTime(c.at) + '</span>' +
@@ -1720,6 +1721,58 @@
     el.dataset.item = r.id;
     if (keep) el.querySelector('.insp-body').scrollTop = keep.body;
   }
+  // A printout for the tech at the bench (Chris, 2026-11-16): one rework from its pane, or the reworks
+  // the list shows (its filter and search), each with what's wrong, the rework, parts, nets, every
+  // picture full width, the discussion, and lines to sign it off. It uses the review report's paper
+  // (#report); pictures still loading redraw it when they arrive.
+  var rwPrint = null;   // { ids } while the printout is open
+  function openReworkPrint(ids) {
+    rwPrint = { ids: ids.slice() };
+    drawReworkPrint();
+    $('#report').scrollTop = 0;
+  }
+  function drawReworkPrint() {
+    var p = current(), r = $('#report');
+    if (!rwPrint || !p) return;
+    var list = rwPrint.ids.map(function (id) { return reworkOf(p, id); }).filter(Boolean), m = p.meta;
+    var revs = C.runs ? M.liveRevisions(p) : [], revOf = function (id) { return revs.filter(function (v) { return v.id === id; })[0]; };
+    var waiting = 0;
+    var line = function (label, text) { return text ? '<div class="rwp-field"><span>' + label + '</span><div class="rwp-text">' + esc(text) + '</div></div>' : ''; };
+    var html = '<div class="report-bar"><b>Rework printout</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print / Save PDF</button></div></div>' +
+      '<div class="paper rwp-paper">' +
+      '<div class="r-head"><div><div class="r-brand">' + esc(C.product || 'Signoff') + ' \u00b7 BRING-UP REWORK</div>' +
+      '<h1 style="margin-top:14px">' + esc(m.name) + '</h1><div style="color:#515154">' + esc([m.client, m.board, m.revision && 'Rev ' + m.revision].filter(Boolean).join(' \u00b7 ')) + '</div></div>' +
+      '<div style="text-align:right"><div style="font:600 30px var(--display);color:#004952">' + list.length + '</div><div style="color:#86868b;font-size:11px">' + (list.length === 1 ? 'rework' : 'reworks') + '</div></div></div>' +
+      '<div class="r-meta"><div><span>Printed</span>' + fmtDate(M.now()) + '</div><div><span>By</span>' + esc(me() || '\u2014') + '</div><div><span>Board serial</span>&nbsp;</div><div><span>Tech</span>&nbsp;</div></div>' +
+      (list.length > 1 ? '<table class="rwp-index"><thead><tr><th>ID</th><th>Rework</th><th>Parts</th><th>Status</th></tr></thead><tbody>' + list.map(function (w) {
+        return '<tr><td>' + esc(w.ref) + '</td><td>' + esc(w.title) + '</td><td>' + esc(w.parts) + '</td><td>' + esc(M.REWORK_LABEL[w.status]) + '</td></tr>';
+      }).join('') + '</tbody></table>' : '') +
+      list.map(function (w) {
+        var rev = w.revision && revOf(w.revision), cm = M.liveComments(p, w.id);
+        var pics = w.pics.map(function (pic) {
+          var s = loadRwPic(p, w, pic);
+          if (s.state === 'loading') waiting++;
+          return '<figure class="rwp-pic">' + (s.state === 'ok' ? '<img src="' + esc(s.url) + '" alt="' + esc(pic.name || 'Rework picture') + '">' : '<div class="rwp-nopic">' + (s.state === 'loading' ? 'Loading picture\u2026' : 'Picture not available') + '</div>') +
+            (pic.name ? '<figcaption>' + esc(pic.name) + '</figcaption>' : '') + '</figure>';
+        }).join('');
+        return '<section class="rwp-item">' +
+          '<div class="rwp-head"><span class="rwp-ref">' + esc(w.ref) + '</span><h2>' + esc(w.title || 'Rework') + '</h2><span class="rwp-st">' + esc(M.REWORK_LABEL[w.status]) + '</span></div>' +
+          '<div class="rwp-grid">' + line('Parts', w.parts) + line('Nets', w.nets) + (rev ? line('On revision', rev.label + (rev.title ? ' \u00b7 ' + rev.title : '')) : '') +
+          (w.by || w.doneAt ? line('Done', [w.by, w.doneAt].filter(Boolean).join(', ')) : '') + (w.next ? line('Next revision', 'Fix in the next revision') : '') + '</div>' +
+          line('What\u2019s wrong', w.problem) + line('The rework', w.fix) +
+          (pics ? '<div class="rwp-pics">' + pics + '</div>' : '') +
+          (cm.length ? '<div class="rwp-field"><span>Discussion</span>' + cm.map(function (c) { return '<div class="r-cmt">' + esc(c.author) + ' (' + fmtDate(c.at) + '): ' + esc(c.text) + '</div>'; }).join('') + '</div>' : '') +
+          '<div class="rwp-sign"><div>\u2610 Done \u2003 By</div><div>Date</div><div>\u2610 Verified \u2003 By</div><div>Date</div></div>' +
+          '<div class="rwp-notes">Notes</div></section>';
+      }).join('') +
+      (list.length ? '' : '<p>No reworks to print.</p>') +
+      '<div class="r-foot"><span>Generated by ' + esc(C.product) + ' ' + esc((window.SIGNOFF_VERSION || {}).hash || '') + '</span><span>' + esc(m.name) + '</span></div></div>';
+    var keep = r.hidden ? 0 : r.scrollTop;
+    r.innerHTML = html; r.hidden = false; r.scrollTop = keep;
+    var pb = r.querySelector('[data-act="print"]');
+    if (pb) { pb.disabled = waiting > 0; pb.title = waiting ? 'Waiting for ' + plural(waiting, 'picture') : ''; }
+  }
+
   function rwRandomId() { var a = new Uint8Array(8); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return (b % 36).toString(36); }).join(''); }
   function rwSha256(bytes) {
     return crypto.subtle.digest('SHA-256', bytes).then(function (d) { return Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); });
@@ -5335,6 +5388,7 @@
   // ── Report ───────────────────────────────────────────────
   function openReport() {
     var p = current(); if (!p) return;
+    rwPrint = null;
     var st = M.projectStats(p, TEMPLATES);
     var f = allFindings(p);
     var reviewers = {};
@@ -5714,6 +5768,8 @@
       case 'select-req': openReq(id); break;
       case 'rw-view': ui.reworkView = el.dataset.val === 'rework' ? 'rework' : 'checklist'; selected = null; closeInspector(); saveUi(); renderPage(); $('#main').scrollTop = 0; break;
       case 'rw-add': addRework(); break;
+      case 'rw-print': if (reworkOf(current(), selected)) openReworkPrint([selected]); break;
+      case 'rw-print-list': { var wl = current(); if (wl) openReworkPrint(M.liveRework(wl).filter(function (w) { return rwMatches(wl, w); }).map(function (w) { return w.id; })); break; }
       case 'rw-select': case 'open-rework': openRework(id); break;
       case 'rw-filter': ui.rwFilter = el.dataset.filter; saveUi(); renderPage(); break;
       case 'rw-status': setRework(selected, { status: M.oneOf(M.REWORK_STATUS, el.dataset.val, 'planned') }); break;
@@ -5795,7 +5851,7 @@
         break;
 
       case 'report': openReport(); break;
-      case 'close-report': $('#report').hidden = true; break;
+      case 'close-report': $('#report').hidden = true; rwPrint = null; break;
       case 'print': window.print(); break;
       case 'export-csv': exportCsv(); break;
       case 'nav': toggleSidebar(); break;
@@ -5829,7 +5885,7 @@
     if (e.key === 'Escape') {
       if ($('#menu')) { closeMenu(); return; }
       if ($('#sheet')) { closeSheet(); applyTheme(settings.theme); return; }
-      if (!$('#report').hidden) { $('#report').hidden = true; return; }
+      if (!$('#report').hidden) { $('#report').hidden = true; rwPrint = null; return; }
       if (inField) { document.activeElement.blur(); return; }
       if ($('#inspector').classList.contains('open')) { closePanel(); return; }
       if (specExpanded) { specSetExpanded(false); return; }
