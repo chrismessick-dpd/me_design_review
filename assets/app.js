@@ -554,7 +554,7 @@
   // last sync started (model.changesSince). A project with no home repo was never synced, so
   // all of it is new. A project left dirty by a failed repo may have nothing newer than that;
   // it's listed without details. Nothing here touches dirty or sync.
-  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe', tag: 'Version tag', rework: 'Rework' };
+  var CHANGE_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: 'Scribe', tag: 'Version tag', rework: 'Rework', release: 'Release' };
   var CHANGES_SHOWN = 8;
   function slugOfId(id) { return Object.keys(projects).filter(function (k) { return projects[k].id === id; })[0] || ''; }
   function unsyncedList() {
@@ -621,12 +621,13 @@
     if (!p) return;
     var kind = el.dataset.kind, id = el.dataset.id, item = el.dataset.item, gone = !!el.dataset.deleted;
     ui.slug = slug; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = false; selected = null;
-    ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : kind === 'spec' && specOn(p) ? 'spec' : 'overview';
+    ui.view = kind === 'req' && reqsOn(p) ? 'reqs' : kind === 'revision' && C.runs ? 'revisions' : kind === 'release' && C.releases ? 'releases' : kind === 'spec' && specOn(p) ? 'spec' : 'overview';
     closeInspector(); saveUi(); render(); $('#app').classList.remove('nav-open');
     if (kind === 'req' && !gone && ui.view === 'reqs' && reqOf(p, id)) openReq(id);
     else if ((kind === 'rework' && !gone && reworkOf(p, id)) || (kind === 'comment' && item && reworkOf(p, item))) openRework(kind === 'rework' ? id : item);
     else if ((kind === 'check' || kind === 'custom' || kind === 'comment') && item && (!gone || kind === 'comment') && !itemDef(p, item).retired) gotoItem(item);
     else if (kind === 'spec' && !gone && ui.view === 'spec') specGoto(id);
+    else if (kind === 'release' && !gone && ui.view === 'releases') { relOpen[id] = true; renderPage(); }
     else $('#main').scrollTop = 0;
   }
 
@@ -672,6 +673,7 @@
     }));
     views.push({ id: 'findings', label: 'Findings', extra: st.issue ? '<span class="count">' + st.issue + '</span>' : '' });
     if (C.runs) views.push({ id: 'revisions', label: 'Revisions' });
+    if (C.releases) views.push({ id: 'releases', label: 'Releases' });
     if (views.map(function (v) { return v.id; }).indexOf(ui.view) < 0) ui.view = 'overview';
     var segLeft = seg.scrollLeft;   // a narrow window scrolls the tabs sideways; keep the place
     seg.innerHTML = views.map(function (v) {
@@ -703,6 +705,7 @@
     if (ui.view === 'overview') { page.innerHTML = overviewPage(p); loadPicture(p); }
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
     else if (ui.view === 'revisions') { loadRuns(p); page.innerHTML = revisionsPage(p); }
+    else if (ui.view === 'releases') page.innerHTML = releasesPage(p);
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
     else if (ui.view === 'spec') page.innerHTML = specPage(p);
     else if (reworkTab(p) && ui.reworkView === 'rework') page.innerHTML = reworkPage(p);
@@ -1455,6 +1458,197 @@
   // Fabcheck stored it in parts (readVerified joins them).
   function zipPaths(dir, zip) {
     return zip.parts ? zip.parts.map(function (x) { return dir + x.rel; }) : dir + zip.rel;
+  }
+
+  // ── Releases (config.releases, Signoff FW; fw_design_review/docs/releases.md) ──
+  // Builds of the target's firmware: the file and release.json in the review's repo (releases/<id>/<release>/,
+  // written once), the state in project.releases. FTEs publish; everyone on the review can download.
+  var relOpen = {};        // release id -> details shown
+  var relDemoFiles = {};   // the demo: release id -> the bytes uploaded in this tab (there's no repo)
+  var REL_MAX = 64 * 1048576;
+  function releaseOf(p, id) { return id ? M.liveReleases(p).filter(function (r) { return r.id === id; })[0] || null : null; }
+  function relLoadText(load) {
+    return (load.via === 'passthrough' ? 'Passthrough' : 'USB') + (load.board ? ', ' + load.board : '') + (load.base ? ' at ' + load.base : '');
+  }
+  function relChip(r) { return '<span class="chip rel-chip ' + r.state + '">' + esc(M.RELEASE_STATE_LABEL[r.state]) + '</span>'; }
+  function relPaths(p, r) {
+    var path = checkerDir(p, 'releases/') + r.id + '/' + r.file.name;
+    return r.file.parts ? M.fileParts(path, r.file.parts) : path;
+  }
+  function flasherUrl(p, r) {
+    return C.releases.flasher + '?' + (DEMO ? 'demo&' : '') + 'release=' + encodeURIComponent(p.id) + '/' + encodeURIComponent(r.id);
+  }
+  function setRelease(p, id, fields, msg) {
+    if (HIST.compare.isCopy(p)) { touch(p); return; }
+    p.releases[id] = M.stamp(Object.assign({}, p.releases[id], fields), me());
+    touch(p); renderPage(); if (msg) toast(msg); syncSoon();
+  }
+  function releasesPage(p) {
+    var all = M.liveReleases(p).slice().reverse(), latest = M.latestRelease(p), fte = isFte(), dl = M.cleanLoad(p.meta.load, '');
+    var html = '<div class="page"><div class="cl-head"><div><div class="eyebrow">' + esc(p.meta.name) + '</div><h1 class="page-title">Releases</h1>' +
+      '<div class="page-sub"><span>' + plural(all.length, 'release') + '</span>' + (latest ? '<span class="sep">·</span><span>Latest released ' + esc(latest.version) + '</span>' : '') +
+      '<span class="sep">·</span><span>Loads by ' + esc(relLoadText(dl)) + '</span>' + (fte ? ' <button class="btn btn-sm" data-act="edit-project">Change</button>' : '') + '</div></div>' +
+      (fte ? '<button class="btn btn-primary" data-act="rel-new">New release</button>' : '') + '</div>';
+    if (!all.length) return html + emptyCard('No releases yet', fte ? 'A release is one build of this ' + UNIT + '’s firmware: a .elf, .hex, or .bin file, its version, and how it loads. It’s kept with this ' + UNIT + ' in its private repository, and Flasher lists it for anyone who can open the ' + UNIT + '. Start as a draft to try it on the bench, then release it.'
+      : 'When an FTE releases a build of this ' + UNIT + '’s firmware, it’s listed here, and you can download it or open it in Flasher.') + '</div>';
+    if (DEMO) html += '<p class="note" style="margin:0 0 14px">In the demo, these releases are examples without files. A new release you add keeps its file in this tab only.</p>';
+    html += all.filter(function (r) { return fte || r.state !== 'draft'; }).map(function (r) {
+      var open = !!relOpen[r.id];
+      return '<section class="card sec rev-group rel-row' + (open ? '' : ' collapsed') + '">' +
+        '<div class="sec-head" data-act="rel-toggle" data-id="' + esc(r.id) + '">' + ICON.chev +
+        '<div class="rev-line"><div class="rev-name rel-version ' + r.state + '">' + esc(r.version || 'Release') + '</div>' +
+        '<div class="rev-meta muted">' + esc([r.file.name, fmtSize(r.file.size), relLoadText(r.load), fmtDate(r.createdAt), r.updatedBy].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<div class="rev-tag">' + relChip(r) + '</div></div>' +
+        (open ? '<div class="sec-body rev-body">' + releaseDetail(p, r, fte) + '</div>' : '') + '</section>';
+    }).join('');
+    return html + '</div>';
+  }
+  function releaseDetail(p, r, fte) {
+    var h = '<div class="rev-acts">' +
+      (C.releases.flasher ? '<a class="btn btn-primary" href="' + esc(flasherUrl(p, r)) + '">Open in Flasher</a>' : '') +
+      '<button class="btn" data-act="rel-download" data-id="' + esc(r.id) + '" title="SHA-256 ' + esc(r.file.sha256) + '">Download ' + esc(fmtSize(r.file.size)) + '</button>' +
+      (fte && r.state === 'draft' ? '<button class="btn" data-act="rel-release" data-id="' + esc(r.id) + '">Release</button>' : '') +
+      (fte && r.state === 'withdrawn' ? '<button class="btn" data-act="rel-release" data-id="' + esc(r.id) + '">Release again</button>' : '') +
+      (fte && r.state !== 'withdrawn' ? '<button class="btn" data-act="rel-withdraw" data-id="' + esc(r.id) + '">Withdraw</button>' : '') +
+      (fte ? '<button class="btn" data-act="rel-notes" data-id="' + esc(r.id) + '">Edit notes</button>' : '') +
+      (fte && r.state === 'draft' ? '<button class="btn btn-danger" data-act="rel-delete" data-id="' + esc(r.id) + '">Delete</button>' : '') + '</div>';
+    var src = [r.source.repo, r.source.sha && r.source.sha.slice(0, 10), r.source.dirty && 'built with uncommitted changes'].filter(Boolean).join(' · ');
+    h += '<div class="rev-info">' +
+      (r.state === 'withdrawn' ? '<div><b>Withdrawn</b>' + (r.withdrawnWhy ? ': ' + esc(r.withdrawnWhy) : '') + '</div>' : '') +
+      (r.state === 'draft' ? '<div>Draft: Flasher shows it to FTEs only, for the bench.</div>' : '') +
+      (r.releasedAt ? '<div>Released ' + esc(r.releasedAt) + '</div>' : '') +
+      (r.notes ? '<div class="rev-notes">' + esc(r.notes) + '</div>' : '') +
+      (src ? '<div>Built from ' + esc(src) + '</div>' : '') + '</div>' +
+      '<div class="rev-files"><div class="rev-folder"><b>' + esc(r.file.kind.toUpperCase()) + (r.file.parts ? ' · stored in ' + r.file.parts + ' parts' : '') + '</b>' +
+      '<div class="rev-file"><span>' + esc(r.file.name) + '</span><span class="muted">' + esc(fmtSize(r.file.size)) + '</span></div>' +
+      '<div class="rev-file"><span class="muted">SHA-256 ' + esc(r.file.sha256) + '</span></div></div></div>';
+    return h;
+  }
+
+  // New release (FTEs): pick or drop the file, then its version and how it loads. The file and release.json
+  // go up in one commit first; the record follows with the next sync.
+  function releaseSheet(p) {
+    if (HIST.compare.isCopy(p)) { touch(p); return; }
+    if (!DEMO && !getToken()) { toast('Sign in to GitHub to add a release'); return; }
+    var dl = M.cleanLoad(p.meta.load, ''), picked = null;
+    var w = sheet('<div class="sheet-head"><h2>New release</h2><p>One build of ' + esc(p.meta.name) + '. The file is kept with this ' + UNIT + ' and never changed; its state and notes can be.</p></div>' +
+      '<div class="sheet-body">' +
+      '<div class="field"><label for="rl-file">Firmware file (.elf, .hex, or .bin)</label><input class="input" type="file" id="rl-file" accept=".elf,.hex,.bin"><p class="note" id="rl-file-note"></p></div>' +
+      '<div class="row2"><div class="field"><label for="rl-version">Version</label><input class="input" id="rl-version" maxlength="40" value="' + esc(M.nextReleaseVersion(p)) + '"></div>' +
+      '<div class="field"><span class="field-label">Loads over</span><div class="seg" id="rl-via" role="group" aria-label="How it loads">' +
+        [['usb', 'Its own USB'], ['passthrough', 'A passthrough']].map(function (k) { return '<button type="button" data-via="' + k[0] + '" aria-pressed="' + (dl.via === k[0]) + '"' + (dl.via === k[0] ? ' class="on"' : '') + '>' + k[1] + '</button>'; }).join('') + '</div></div></div>' +
+      '<div class="row2"><div class="field"><label for="rl-board">Board</label><input class="input" id="rl-board" maxlength="48" value="' + esc(dl.board) + '" placeholder="Flasher’s board id, or the bootloader’s"></div>' +
+      '<div class="field"><label for="rl-base">Flash address (.bin only)</label><input class="input" id="rl-base" maxlength="10" value="' + esc(dl.base || '') + '" placeholder="e.g. 0x08000000"></div></div>' +
+      '<div class="row2"><div class="field"><label for="rl-repo">Built from (repo)</label><input class="input" id="rl-repo" maxlength="100" placeholder="Optional: owner/name"></div>' +
+      '<div class="field"><label for="rl-sha">Commit</label><input class="input" id="rl-sha" maxlength="40" placeholder="Optional"></div></div>' +
+      '<label class="rel-check"><input type="checkbox" id="rl-dirty"> Built with uncommitted changes</label>' +
+      '<div class="field"><label for="rl-notes">Notes</label><textarea class="input" id="rl-notes" maxlength="4000" placeholder="What changed in this build"></textarea></div>' +
+      '<label class="rel-check"><input type="checkbox" id="rl-now"> Release now (otherwise it starts as a draft, which Flasher shows to FTEs only)</label>' +
+      '</div><div class="sheet-foot"><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add release</button></div>');
+    var note = w.querySelector('#rl-file-note');
+    w.querySelector('#rl-file').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      picked = null; note.textContent = '';
+      if (!f) return;
+      if (f.size > REL_MAX) { note.textContent = f.name + ' is over 64 MB.'; return; }
+      f.arrayBuffer().then(function (buf) {
+        var bytes = new Uint8Array(buf), s = M.sniffFirmware(f.name, bytes);
+        if (s.error) { note.textContent = s.error; return; }
+        if (!/^[A-Za-z0-9_][A-Za-z0-9._-]{0,119}$/.test(f.name)) { note.textContent = 'Rename the file to letters, digits, dots, dashes, and underscores only.'; return; }
+        return S.github.sha256Hex(bytes).then(function (sha) {
+          picked = { name: f.name, kind: s.kind, bytes: bytes, sha256: sha };
+          note.textContent = s.kind.toUpperCase() + ', ' + fmtSize(bytes.length) + ', SHA-256 ' + sha.slice(0, 16) + '…';
+        });
+      }).catch(function (err) { note.textContent = 'Couldn’t read that file: ' + (err.message || err); });
+    });
+    w.addEventListener('click', function (e) {
+      var vb = e.target.closest('#rl-via button');
+      if (vb) { Array.prototype.forEach.call(w.querySelectorAll('#rl-via button'), function (x) { x.classList.toggle('on', x === vb); x.setAttribute('aria-pressed', String(x === vb)); }); return; }
+      var b = e.target.closest('[data-sheet]');
+      if (!b) return;
+      if (b.dataset.sheet === 'cancel') return closeSheet();
+      if (!picked) { toast('Pick the firmware file first'); return; }
+      var val = function (id) { return w.querySelector('#' + id).value.trim(); };
+      var version = val('rl-version');
+      if (!version) { w.querySelector('#rl-version').focus(); return; }
+      if (M.liveReleases(p).some(function (r) { return r.version === version; })) { toast('There’s already a release ' + version); return; }
+      var on = w.querySelector('#rl-via button.on'), load = M.cleanLoad({ via: on ? on.dataset.via : 'usb', board: val('rl-board'), base: val('rl-base') }, picked.kind);
+      if (val('rl-board') && !load.board) { toast(load.via === 'passthrough' ? 'The bootloader’s board id is up to 16 lowercase letters, digits, and dashes' : 'A board id is lowercase letters, digits, dashes, and underscores'); return; }
+      var problem = M.loadProblem(load, picked.kind);
+      if (problem) { toast(problem); return; }
+      var parts = DEMO ? null : S.GitHubStore.splitParts('x', picked.bytes);
+      var rec = M.newRelease({ version: version, state: w.querySelector('#rl-now').checked ? 'released' : 'draft',
+        file: { name: picked.name, size: picked.bytes.length, sha256: picked.sha256, parts: parts ? parts.length : 0 }, load: load,
+        source: { repo: val('rl-repo'), sha: val('rl-sha'), dirty: w.querySelector('#rl-dirty').checked }, notes: val('rl-notes') }, me());
+      closeSheet();
+      storeRelease(p, rec, picked.bytes);
+    });
+  }
+  function storeRelease(p, rec, bytes) {
+    var pid = p.id;
+    function add() {
+      var cur = current();
+      if (!cur || cur.id !== pid) { toast('Release stored, but the ' + UNIT + ' isn’t open any more. Open it and sync.'); return; }
+      cur.releases = cur.releases || {};
+      cur.releases[rec.id] = rec;
+      relOpen[rec.id] = true;
+      touch(cur); renderPage(); toast('Added ' + rec.version + (rec.state === 'draft' ? ' as a draft' : '')); syncSoon();
+    }
+    if (DEMO) { relDemoFiles[rec.id] = bytes; add(); return; }
+    var base = checkerDir(p, 'releases/').slice(0, -('releases/' + pid + '/').length);
+    var files = M.releaseFiles(base, pid, rec, bytes, settings.login, S.GitHubStore.splitParts);
+    var busy = busyCard('Storing release ' + rec.version);
+    busy.step('Uploading ' + rec.file.name + ' (' + fmtSize(bytes.length) + ')…', 0.05);
+    workspace().store(homeOf(p)).putFiles(files, {
+      message: 'Signoff: release ' + rec.version + ' for ' + pid,
+      onProgress: function (done, total) { busy.step('Uploading ' + rec.file.name + '… ' + done + ' of ' + total, 0.05 + 0.85 * done / Math.max(1, total)); },
+      onRetry: function (n) { busy.step('GitHub moved on; trying again (' + n + ')…'); }
+    }).then(function () {
+      busy.close(); add();
+    }, function (err) {
+      busy.stop('Nothing was added. ' + (err.message || err), [['Close', function () { busy.close(); }, true]], 'Couldn’t store the release');
+    });
+  }
+  function downloadRelease(p, r) {
+    if (!r) return;
+    if (DEMO) {
+      if (relDemoFiles[r.id]) download(r.file.name, relDemoFiles[r.id], 'application/octet-stream');
+      else toast('The demo’s releases are examples without a file');
+      return;
+    }
+    toast('Downloading ' + r.file.name + '…');
+    workspace().store(homeOf(p)).readVerified(relPaths(p, r), r.file.sha256).then(function (bytes) {
+      download(r.file.name, bytes, 'application/octet-stream');
+      toast('Saved ' + r.file.name + ' (SHA-256 checked)');
+    }, function (err) {
+      toast(err.code === 'mismatch' ? 'Not saved: the stored file doesn’t match its recorded SHA-256' : err.code === 'missing' ? 'Not saved: the file isn’t in the repository' : 'Not saved: ' + (err.message || err));
+    });
+  }
+  function releaseAct(act, id) {
+    var p = current(), r = p && releaseOf(p, id);
+    if (!r) return;
+    if (act === 'rel-toggle') { relOpen[id] = !relOpen[id]; renderPage(); return; }
+    if (act === 'rel-download') { downloadRelease(p, r); return; }
+    if (!isFte()) return;
+    if (act === 'rel-release') setRelease(p, id, { state: 'released', releasedAt: new Date().toISOString().slice(0, 10), withdrawnWhy: '' }, 'Released ' + r.version);
+    else if (act === 'rel-withdraw') {
+      var why = prompt('Withdraw ' + r.version + '? Flasher keeps listing it with a warning, and won’t pick it by default.\n\nWhy?', '');
+      if (why === null) return;
+      setRelease(p, id, { state: 'withdrawn', withdrawnWhy: why.trim().slice(0, 400) }, 'Withdrew ' + r.version);
+    } else if (act === 'rel-delete') {
+      if (r.state !== 'draft' || !confirm('Delete the draft ' + r.version + '? Its file stays in the ' + UNIT + '’s repository history.')) return;
+      setRelease(p, id, { deleted: true }, 'Deleted ' + r.version);
+    } else if (act === 'rel-notes') {
+      var w = sheet('<div class="sheet-head"><h2>Release ' + esc(r.version) + '</h2><p>' + esc(r.file.name) + '</p></div><div class="sheet-body">' +
+        '<div class="field"><label for="rl-enotes">Notes</label><textarea class="input" id="rl-enotes" maxlength="4000">' + esc(r.notes) + '</textarea></div></div>' +
+        '<div class="sheet-foot"><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Save</button></div>');
+      w.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-sheet]');
+        if (!b) return;
+        if (b.dataset.sheet === 'ok') { var t = w.querySelector('#rl-enotes').value.trim(); closeSheet(); setRelease(p, id, { notes: t }, 'Notes saved'); }
+        else closeSheet();
+      });
+    }
   }
 
   // Read a stored run and its zip with this tab's token and leave them for Fabcheck (S.handoff).
@@ -2730,11 +2924,11 @@
   // browser hasn't synced yet comes first. Runs by one person fold into blocks (M.historyBlocks). A change
   // shows its diff; Revert writes the record as it was before as a new edit stamped now, refused when the
   // record changed since. The demo has no git, so it lists each record's latest change only.
-  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec', tag: 'tags', rework: 'rework' };
+  var HIST_KEY = { meta: 'meta', check: 'items', section: 'sections', comment: 'comments', custom: 'custom', req: 'reqs', revision: 'revisions', spec: 'spec', tag: 'tags', rework: 'rework', release: 'releases' };
   var HIST_NOUN = { meta: ['detail change', 'detail changes'], check: ['check', 'checks'], section: ['section set aside or back', 'sections set aside or back'], comment: ['comment', 'comments'],
-    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'], tag: ['version tag', 'version tags'], rework: ['rework', 'reworks'] };
-  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL, tag: 'Version tag', rework: 'Rework' };
-  var HIST_FILTERS = [['all', 'Everything'], ['spec', SPEC_LABEL], ['check', 'Checks'], ['comment', 'Comments'], ['req', 'Requirements']].concat(C.rework ? [['rework', 'Rework']] : []);
+    custom: ['added check', 'added checks'], req: ['requirement', 'requirements'], revision: ['revision tag', 'revision tags'], spec: [SPEC_LABEL + ' edit', SPEC_LABEL + ' edits'], tag: ['version tag', 'version tags'], rework: ['rework', 'reworks'], release: ['release', 'releases'] };
+  var HIST_KIND = { meta: 'Details', check: 'Check', section: 'Section', comment: 'Comment', custom: 'Added check', req: 'Requirement', revision: 'Revision', spec: SPEC_LABEL, tag: 'Version tag', rework: 'Rework', release: 'Release' };
+  var HIST_FILTERS = [['all', 'Everything'], ['spec', SPEC_LABEL], ['check', 'Checks'], ['comment', 'Comments'], ['req', 'Requirements']].concat(C.rework ? [['rework', 'Rework']] : [], C.releases ? [['release', 'Releases']] : []);
   var histCache = {};   // per repo: { commits, blobs } for fileHistory, for as long as the page is open
   function histRecKey(r) { return r && typeof r === 'object' ? String(r.updatedAt || '') + '|' + String(r.updatedBy || '') : ''; }
   function histText(kind, r) {
@@ -2747,6 +2941,8 @@
     if (kind === 'tag') return 'Version ' + String(r.commit || '').slice(0, 7) + ': ' + String(r.note || '');
     if (kind === 'rework') { var w = M.cleanRework(r, ''); return [w.ref, w.title].filter(Boolean).join(' ') + '\nStatus: ' + M.REWORK_LABEL[w.status] + (w.next ? ', fix in the next revision' : '') +
       (w.parts ? '\nParts: ' + w.parts : '') + (w.nets ? '\nNets: ' + w.nets : '') + (w.problem ? '\nWhat’s wrong: ' + w.problem : '') + (w.fix ? '\nRework details: ' + w.fix : '') + w.steps.map(function (s, i) { return '\nStep ' + (i + 1) + ': ' + s.text + (s.pics.length ? ' (' + plural(s.pics.length, 'picture') + ')' : ''); }).join('') + (w.pics.length ? '\nPictures: ' + w.pics.length : ''); }
+    if (kind === 'release') { var rl = M.cleanRelease(r, ''); return 'Release ' + rl.version + ' (' + M.RELEASE_STATE_LABEL[rl.state] + ')\n' + rl.file.name + ', loads over ' + relLoadText(rl.load) +
+      (rl.withdrawnWhy ? '\nWithdrawn: ' + rl.withdrawnWhy : '') + (rl.notes ? '\nNotes: ' + rl.notes : ''); }
     if (kind === 'revision') return 'Revision ' + (r.label || '') + (r.status ? ' (' + r.status + ')' : '') + (r.title ? ': ' + r.title : '');
     if (kind === 'meta') return ['name', 'stage', 'revision'].map(function (k) { return r[k] ? cap(k) + ': ' + r[k] : ''; }).filter(Boolean).join('\n') +
       ((r.profile || []).length ? '\nProfile: ' + r.profile.join(', ') : '') + ((r.checklists || []).length ? '\nChecklists: ' + r.checklists.join(', ') : '');
@@ -4757,6 +4953,14 @@
       // Part or assembly, where the tool reviews both (config.assemblies, Signoff ME): meta.kind.
       (C.assemblies ? '<div class="field"><span class="field-label">This ' + UNIT + ' is</span><div class="seg" id="f-kind" role="group" aria-label="Part or assembly">' +
         [['', 'A single part'], ['assembly', 'An assembly']].map(function (k) { return '<button type="button" data-kind="' + k[0] + '" aria-pressed="' + ((m.kind === 'assembly' ? 'assembly' : '') === k[0]) + '"' + ((m.kind === 'assembly' ? 'assembly' : '') === k[0] ? ' class="on"' : '') + '>' + k[1] + '</button>'; }).join('') + '</div></div>' : '') +
+      // How its firmware loads, where the tool keeps releases (config.releases, Signoff FW): meta.load, copied into
+      // each new release.
+      (C.releases ? (function () {
+        var l = M.cleanLoad(m.load, '');
+        return '<div class="row2"><div class="field"><span class="field-label">Its firmware loads over</span><div class="seg" id="f-via" role="group" aria-label="How it loads">' +
+          [['usb', 'Its own USB'], ['passthrough', 'A passthrough']].map(function (k) { return '<button type="button" data-via="' + k[0] + '" aria-pressed="' + (l.via === k[0]) + '"' + (l.via === k[0] ? ' class="on"' : '') + '>' + k[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="field"><label for="f-lboard">Board</label><input class="input" id="f-lboard" maxlength="48" value="' + esc(l.board) + '" placeholder="Flasher’s board id, or the bootloader’s"></div></div>';
+      })() : '') +
       '<div class="row2">' +
       '<div class="field"><label for="f-board">' + esc(W.number) + '</label><input class="input" id="f-board" value="' + esc(m.board) + '" placeholder="' + esc(W.numberPlaceholder) + '"></div>' +
       '<div class="field"><label for="f-rev">Revision</label><input class="input" id="f-rev" value="' + esc(m.revision) + '" placeholder="e.g. 03"></div></div>' +
@@ -4794,6 +4998,8 @@
     w.addEventListener('click', function (e) {
       var pk = e.target.closest('.pick');
       if (pk) { pk.classList.toggle('on'); updateCount(); return; }
+      var vb = e.target.closest('#f-via button');
+      if (vb) { Array.prototype.forEach.call(w.querySelectorAll('#f-via button'), function (x) { x.classList.toggle('on', x === vb); x.setAttribute('aria-pressed', String(x === vb)); }); return; }
       var kb = e.target.closest('#f-kind button');
       if (kb) { Array.prototype.forEach.call(w.querySelectorAll('#f-kind button'), function (x) { x.classList.toggle('on', x === kb); x.setAttribute('aria-pressed', String(x === kb)); }); return; }
       var b = e.target.closest('[data-sheet]');
@@ -4810,6 +5016,11 @@
       if (!fields.checklists.length) { toast('Pick at least one checklist'); return; }
       // meta.kind is stored only for an assembly; a part leaves it out (undefined isn't written).
       if (C.assemblies) { var kon = w.querySelector('#f-kind button.on'); fields.kind = kon && kon.dataset.kind === 'assembly' ? 'assembly' : undefined; }
+      if (C.releases) {
+        var von = w.querySelector('#f-via button.on'), lb = w.querySelector('#f-lboard').value.trim();
+        fields.load = M.cleanLoad({ via: von ? von.dataset.via : 'usb', board: lb, base: m.load && m.load.base }, '');
+        if (lb && !fields.load.board) { toast(fields.load.via === 'passthrough' ? 'The bootloader’s board id is up to 16 lowercase letters, digits, and dashes' : 'A board id is lowercase letters, digits, dashes, and underscores'); return; }
+      }
       var people = w.querySelector('#f-people') ? picked('f-people') : null;
       function assign(projectId) {
         if (!people) return;
@@ -4840,6 +5051,7 @@
       if (editing) { assign(p.id); updateMeta(fields); closeSheet(); syncSoon(); return; }
       var doc = M.newProject(fields, me(), TEMPLATES);
       if (fields.kind === 'assembly') doc.meta.kind = 'assembly';
+      if (fields.load) doc.meta.load = fields.load;
       doc.meta.reqsDecided = true;
       if (SPEC) doc.meta.specDecided = true;
       if (from) doc.meta.plPart = { project: preset.plPart.project, node: preset.plPart.node, at: M.now() };   // at: PL's tie-break
@@ -5936,6 +6148,8 @@
       case 'open-fabcheck': openFabcheck(el); break;
       case 'open-pincheck': openPincheck(el); break;
       case 'runs-reload': { var rp = current(); if (rp) { loadRuns(rp, true); renderPage(); } break; }
+      case 'rel-new': { var np = current(); if (np && isFte()) releaseSheet(np); break; }
+      case 'rel-toggle': case 'rel-download': case 'rel-release': case 'rel-withdraw': case 'rel-delete': case 'rel-notes': releaseAct(act, el.dataset.id); break;
       case 'rev-toggle': revOpen[el.dataset.key] = !revOpen[el.dataset.key]; renderPage(); break;
       case 'rev-tag': { var tp = current(), tr = tp && runById(tp, el.dataset.run); if (tr) revisionSheet(tp, tr); break; }
       case 'run-download': { var dp = current(); if (dp) downloadRun(dp, runById(dp, el.dataset.run)); break; }
@@ -6238,6 +6452,7 @@
     }
     var id = wantItem; wantItem = '';
     if (!id || !current()) return;
+    if (C.releases && releaseOf(current(), id)) { ui.view = 'releases'; relOpen[id] = true; saveUi(); renderPage(); return; }
     if (!itemDef(current(), id).retired || reworkOf(current(), id)) gotoItem(id);
     else toast('That check isn’t in this ' + UNIT + '.');
   }

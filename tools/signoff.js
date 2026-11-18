@@ -752,7 +752,7 @@ async function cmdExport(ctx, args) {
 // the checkout's files, the stored file they were pulled from, the file on GitHub now, and the
 // name edits are stamped with, so what is committed is what the dry run showed.
 
-const MAP_KEYS = ['items', 'sections', 'comments', 'custom', 'reqs', 'revisions', 'spec', 'tags', 'rework'];
+const MAP_KEYS = ['items', 'sections', 'comments', 'custom', 'reqs', 'revisions', 'spec', 'tags', 'rework', 'releases'];
 
 function pushCode(co, remoteSha, user) {
   const h = require('crypto').createHash('sha256');

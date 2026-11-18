@@ -145,6 +145,19 @@
         });
       });
     }
+    // Firmware releases (config.releases): examples without files. { version, state, file, size, sha256, load,
+    // notes, at, released, withdrawnWhy, by }, times as fractions of the review period; only.load is the target's own.
+    if (M.releasesOn() && only.load) p.meta.load = M.cleanLoad(only.load, '');
+    if (M.releasesOn() && only.releases && only.releases.length) {
+      p.releases = {};
+      only.releases.forEach(function (r, i) {
+        var id = 'r' + seed + '-' + i, when = at(r.at == null ? 0.5 : r.at), kind = M.releaseKindOf(r.file);
+        p.releases[id] = { id: id, version: r.version, state: r.state, file: { name: r.file, kind: kind, size: r.size || 0, sha256: r.sha256, parts: 0 },
+          load: M.cleanLoad(r.load || only.load, kind), source: r.source || { repo: '', sha: '', dirty: false }, notes: r.notes || '',
+          releasedAt: r.released == null ? '' : at(r.released).slice(0, 10), withdrawnWhy: r.withdrawnWhy || '',
+          createdAt: when, updatedAt: at(r.updated == null ? (r.at == null ? 0.5 : r.at) : r.updated), updatedBy: r.by || users[0], deleted: false };
+      });
+    }
     p.meta.updatedAt = at(1);
     return p;
   }
@@ -152,14 +165,14 @@
   S.demo = {
     projects: function (templates) {
       return (D.projects || []).map(function (d) {
-        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, rework: d.rework });
+        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, rework: d.rework, releases: d.releases, load: d.load });
         p.id = demoId(d.seed);
         return p;
       });
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 19
+    VERSION: 20
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.
