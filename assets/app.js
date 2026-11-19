@@ -1323,8 +1323,19 @@
       var nexts = M.liveRework(p).filter(function (r) { return r.next; }).map(function (r) { return byItem[r.id] || { item: r.id, at: '', comments: [] }; });
       groups = nexts.concat(groups.filter(function (g) { return nexts.indexOf(g) < 0; }));
     }
-    var html = '<div class="section-title">Next revision updates' + (groups.length ? ' <span class="muted rev-notes-count">' + plural(groups.length, 'item') + '</span>' : '') + '</div>';
-    if (!groups.length) return html + '<div class="card empty rev-notes-empty"><p>Nothing noted yet. Write <b>@revnotes</b> in a comment on any check or issue' + (on ? ', or tick <b>Fix in the next revision</b> on a rework,' : '') + ' and it’s listed here for the next revision.</p></div>';
+    // Notes on the whole review (typed below, or @revnotes in a comment on the review) sit last, by the box.
+    var whole = groups.filter(function (g) { return !g.item; })[0];
+    groups = groups.filter(function (g) { return g.item; });
+    var count = groups.length + (whole ? whole.comments.length : 0);
+    var html = '<div class="section-title">Next revision updates' + (count ? ' <span class="muted rev-notes-count">' + plural(count, 'item') + '</span>' : '') + '</div>';
+    var add = '<div class="rev-note-add"><textarea class="input" id="revnote-input" rows="2" placeholder="Add an update for the next revision…" aria-label="Add an update for the next revision">' + esc(revDraftId === p.id ? revDraft : '') +'</textarea>' +
+      '<div class="rev-note-add-foot"><span class="muted">Saved as a note on the whole ' + esc(UNIT) + '. <b>@revnotes</b> in any comment' + (on ? ', or <b>Fix in the next revision</b> on a rework,' : '') + ' lists it here too. <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to add.</span>' +
+      '<button class="btn btn-primary btn-sm" data-act="revnote-add">Add</button></div></div>';
+    var mine = whole ? '<div class="rev-note rev-note-whole"><div class="rev-note-label muted">Notes on the whole ' + esc(UNIT) + '</div>' + whole.comments.map(function (c) {
+      return '<div class="cmt">' + avatar(c.author) + '<div><div class="cmt-head"><b>' + esc(c.author) + '</b><span>' + relTime(c.at) + '</span>' +
+        '<button class="icon-btn rev-note-del" data-act="del-comment" data-id="' + esc(c.id) + '" title="Delete this note" aria-label="Delete this note">' + ICON.close + '</button></div>' +
+        '<div class="cmt-text">' + esc(M.stripRevNote(c.text) || c.text) + '</div></div></div>';
+    }).join('') + '</div>' : '';
     return html + '<div class="card rev-notes-list">' + groups.map(function (g) {
       var w = g.item && reworkOf(p, g.item);
       if (w) return revNoteGroup('open-rework', g, '<span class="muted rev-note-cl">' + esc(w.ref || 'Rework') + '</span><span>' + esc(w.title || 'Rework') + '</span>' + rwChip(w.status));
@@ -1337,7 +1348,17 @@
       var title = d ? M.stripRevNote(d.def.text) || d.def.text : 'On the whole ' + UNIT;
       return revNoteGroup('goto-item', g, (d && d.template ? '<span class="muted rev-note-cl">' + esc(d.template.short || d.template.title || '') + '</span>' : '<span></span>') +
         '<span>' + esc(title) + '</span>' + chip);
-    }).join('') + '</div>';
+    }).join('') + mine + (count ? '' : '<p class="muted rev-notes-none">Nothing noted yet.</p>') + add + '</div>';
+  }
+  // The update being typed on the Revisions tab: kept across redraws until it's added.
+  var revDraft = '', revDraftId = '';
+  function addRevNote() {
+    var p = current(), text = p && revDraftId === p.id ? revDraft.trim() : '';
+    if (!p || !text) return;
+    var before = Object.keys(p.comments).length;
+    addComment(null, M.isRevNote(text) ? text : '@revnotes ' + text);
+    if (Object.keys((current() || p).comments).length > before) { revDraft = ''; renderPage(); }
+    var ta = $('#revnote-input'); if (ta) ta.focus();
   }
   function revNoteGroup(act, g, head) {
     return '<div class="rev-note">' +
@@ -5959,6 +5980,7 @@
       case 'close-insp': closePanel(); break;
       case 'post-comment': { var ta = $('#comment-input'); addComment(selected, ta.value); var t2 = $('#comment-input'); if (t2) { t2.value = ''; t2.focus(); } break; }
       case 'del-comment': if (confirm('Delete this comment?')) deleteComment(id); break;
+      case 'revnote-add': addRevNote(); break;
       case 'req-add': addReq(); break;
       case 'spec-view':
         // A block's panel belongs to the diagram and a sentence's to the document: switching closes them
@@ -6220,6 +6242,7 @@
     var inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); sync(); return; }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.activeElement.id === 'comment-input') { e.preventDefault(); $('[data-act="post-comment"]').click(); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.activeElement.id === 'revnote-input') { e.preventDefault(); addRevNote(); return; }
     if (document.activeElement.id === 'spec-editor') {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); specSaveEdit(); return; }
       if (e.key === 'Escape' && !$('#sheet')) { e.preventDefault(); specEditing = null; specDraft = ''; renderPage(); return; }
@@ -6257,6 +6280,7 @@
 
   document.addEventListener('input', function (e) {
     if (e.target.id === 'project-search') renderSidebar();
+    if (e.target.id === 'revnote-input') { revDraft = e.target.value; revDraftId = (current() || {}).id || ''; }
     if (e.target.id === 'item-search') {
       ui.query = e.target.value;
       var pos = e.target.selectionStart;
@@ -6476,7 +6500,7 @@
     var a = document.activeElement;
     var typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
     var draft = $('#comment-input');
-    return !syncing && !typing && !specEditing && !(draft && draft.value.trim()) && !$('#sheet') && !$('#busy-wrap') && !$('#menu')
+    return !syncing && !typing && !specEditing && !(draft && draft.value.trim()) && !revDraft.trim() && !$('#sheet') && !$('#busy-wrap') && !$('#menu')
       && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !HIST.compare.active() && !document.hidden;   // a Version comparison lives on the page too
   }
   function reloadWhenIdle() {
