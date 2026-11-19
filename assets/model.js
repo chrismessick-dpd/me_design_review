@@ -770,7 +770,7 @@
       var q = v[k]; if (n >= 100 || k.length > 120 || !q || typeof q !== 'object') return;
       var o = {};
       if (Array.isArray(q.v) && q.v.length <= 41 && q.v.every(function (x) { return isFinite(Number(x)); })) o.v = q.v.map(function (x) { return Math.max(-20000, Math.min(40000, Math.round(Number(x) * 10) / 10)); });
-      if (o.v) { o.a = oneOf(['l', 'r'], q.a, 'r'); o.b = oneOf(['l', 'r'], q.b, 'l'); }
+      if (o.v) { o.a = oneOf(['l', 'r'], q.a, 'r'); o.b = oneOf(['l', 'r'], q.b, 'l'); if (q.tr === true) o.tr = true; }   // tr: routed upright, x and y swapped
       if (q.mode === 'behind') o.mode = 'behind';
       if (o.v || o.mode) { out[k] = o; n++; }
     });

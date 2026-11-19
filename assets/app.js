@@ -3502,34 +3502,54 @@
       list.sort(function (u, v) { return horiz ? (u.o.x + u.o.w / 2) - (v.o.x + v.o.w / 2) : (u.o.y + u.o.h / 2) - (v.o.y + v.o.h / 2); });
       list.forEach(function (u, i) { u.p.t = (i + 1) / (list.length + 1); });
     });
-    // Two blocks side by side: an auto port alone on its side lines up with the other end, so the line
-    // runs straight instead of a small jog (as the old lines between neighbors did).
+    // Two blocks side by side (or one over the other): an auto port alone on its side lines up with the
+    // other end, so the line runs straight instead of a small jog (as the old lines between neighbors did).
+    var facing = { r: 'l', l: 'r', b: 't', t: 'b' };
     m.lines.forEach(function (L) {
       var w = want[L.key], pa = w.a, pb = w.b, A = R[L.a], B = R[L.b];
-      if (!pa.auto || !pb.auto || !((pa.side === 'r' && pb.side === 'l') || (pa.side === 'l' && pb.side === 'r'))) return;
-      var ya = A.y + A.h * pa.t, yb = B.y + B.h * pb.t, na = sides[L.a + '\n' + pa.side].length, nb = sides[L.b + '\n' + pb.side].length;
-      if (na === 1 && yb >= A.y + A.h * 0.1 && yb <= A.y + A.h * 0.9) pa.t = (yb - A.y) / A.h;
-      else if (nb === 1 && ya >= B.y + B.h * 0.1 && ya <= B.y + B.h * 0.9) pb.t = (ya - B.y) / B.h;
+      if (!pa.auto || !pb.auto || facing[pa.side] !== pb.side) return;
+      var lr = pa.side === 'l' || pa.side === 'r', o = lr ? 'y' : 'x', s = lr ? 'h' : 'w';
+      var va = A[o] + A[s] * pa.t, vb = B[o] + B[s] * pb.t, na = sides[L.a + '\n' + pa.side].length, nb = sides[L.b + '\n' + pb.side].length;
+      if (na === 1 && vb >= A[o] + A[s] * 0.1 && vb <= A[o] + A[s] * 0.9) pa.t = (vb - A[o]) / A[s];
+      else if (nb === 1 && va >= B[o] + B[s] * 0.1 && va <= B[o] + B[s] * 0.9) pb.t = (va - B[o]) / B[s];
     });
-    var rects = Object.keys(R).map(function (id) { var r = R[id]; return { id: id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }; });
-    var list = m.lines.map(function (L) {
-      var A = R[L.a], B = R[L.b], qa = specPortPt(A, want[L.key].a), qb = specPortPt(B, want[L.key].b), combos = [];
-      var ta = specTerms(A, L.a, qa, 'A', qb.x), tb = specTerms(B, L.b, qb, 'B', qa.x);
-      ta.forEach(function (x) { tb.forEach(function (y) { combos.push({ A: x, B: y }); }); });
-      // A kept shape its ends have moved away from (a block dragged past its first bend) would hook back
-      // into the block: it routes afresh instead. A shape being dragged (live) is drawn as it is.
-      var shape = L.shape || null;
-      if (shape && !L.live && Array.isArray(shape.v) && !combos.some(function (c) { return LM.route.fits(c.A, c.B, shape.v.map(Number), 8); })) shape = shape.mode ? { mode: shape.mode } : null;
-      return { key: L.key, weight: 1, combos: combos, half: 1, stub: 8, r: SPEC_RAD, shape: shape, qa: qa, qb: qb };
-    });
-    var res = C.routeAll(m.doc, rects, list, { grid: SPEC_GRID, fast: !!(opts && opts.fast), margin: 200 }), out = {};
-    list.forEach(function (o) {
-      var R0 = res.routes.get(o.key); if (!R0) return;
-      var dr = C.draw(R0), pts = dr && dr.pts ? dr.pts : dr;
-      out[o.key] = { R0: R0, pts: pts, d: C.pathD(pts), lane: C.lane(pts), qa: o.qa, qb: o.qb, pa: want[o.key].a, pb: want[o.key].b };
+    // The engine's terminals leave level, so a line whose ends are both on top or bottom edges would step
+    // out sideways and back (Chris, 2026-11-19: jogs on lines that were straight). Those route with x and y
+    // swapped, where their ends are level, and their drawing is swapped back; their kept shapes say so (tr).
+    var TR = { t: 'l', b: 'r', l: 't', r: 'b' }, swap = function (q) { return { x: q.y, y: q.x }; };
+    var groups = { h: [], v: [] };
+    m.lines.forEach(function (L) { var w = want[L.key]; groups[/[tb]/.test(w.a.side) && /[tb]/.test(w.b.side) ? 'v' : 'h'].push(L); });
+    var out = {};
+    ['h', 'v'].forEach(function (gk) {
+      var tr = gk === 'v', lines = groups[gk]; if (!lines.length) return;
+      var RR = {};
+      Object.keys(R).forEach(function (id) { var r = R[id]; RR[id] = tr ? { x: r.y, y: r.x, w: r.h, h: r.w } : r; });
+      var rects = Object.keys(RR).map(function (id) { var r = RR[id]; return { id: id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }; });
+      var list = lines.map(function (L) {
+        var w = want[L.key], A = RR[L.a], B = RR[L.b], combos = [];
+        var qa = specPortPt(A, tr ? { side: TR[w.a.side], t: w.a.t } : w.a), qb = specPortPt(B, tr ? { side: TR[w.b.side], t: w.b.t } : w.b);
+        var ta = specTerms(A, L.a, qa, 'A', qb.x), tb = specTerms(B, L.b, qb, 'B', qa.x);
+        ta.forEach(function (x) { tb.forEach(function (y) { combos.push({ A: x, B: y }); }); });
+        // A kept shape for the other orientation, or one its ends have moved away from (a block dragged past
+        // its first bend), would hook back into the block: it routes afresh instead. A shape being dragged
+        // (live) is drawn as it is.
+        var shape = L.shape || null;
+        if (shape && Array.isArray(shape.v) && (!!shape.tr !== tr || (!L.live && !combos.some(function (c) { return LM.route.fits(c.A, c.B, shape.v.map(Number), 8); })))) shape = shape.mode ? { mode: shape.mode } : null;
+        return { key: L.key, weight: 1, combos: combos, half: 1, stub: 8, r: SPEC_RAD, shape: shape,
+          qa: tr ? Object.assign(swap(qa), { dx: qa.dy, dy: qa.dx }) : qa, qb: tr ? Object.assign(swap(qb), { dx: qb.dy, dy: qb.dx }) : qb };
+      });
+      var res = C.routeAll(m.doc + '|' + gk, rects, list, { grid: SPEC_GRID, fast: !!(opts && opts.fast), margin: 200 });
+      list.forEach(function (o) {
+        var R0 = res.routes.get(o.key); if (!R0) return;
+        var dr = C.draw(R0), pts = dr && dr.pts ? dr.pts : dr;
+        if (tr) pts = pts.map(swap);
+        out[o.key] = { R0: R0, tr: tr, pts: pts, d: C.pathD(pts), lane: C.lane(pts), qa: o.qa, qb: o.qb, pa: want[o.key].a, pb: want[o.key].b };
+      });
     });
     return out;
   }
+  // A point in a line's routing space (x and y swapped for a line routed upright, rr.tr).
+  function specRouteSpace(rr, q) { return rr && rr.tr ? { x: q.y, y: q.x } : q; }
   // A route as a label rides it: { d, cd (its points, for the label's data-route), at(t) along it }.
   function specRt(rr) {
     var C = specRouter();
@@ -3539,6 +3559,7 @@
   // A kept shape moved with both its blocks (v alternates x, y, x, …).
   function specShiftShape(rec, dx, dy) {
     if (!rec || !Array.isArray(rec.v)) return rec;
+    if (rec.tr) { var t0 = dx; dx = dy; dy = t0; }   // an upright line's shape is in swapped axes
     return Object.assign({}, rec, { v: rec.v.map(function (x, i) { return Math.round((+x + (i % 2 ? dy : dx)) * 10) / 10; }) });
   }
   // Current along a line: beads that run its length while its block is selected or pointed at, after
@@ -3947,11 +3968,11 @@
     if (lineHit) {
       var L0 = last && C && specLine(lineHit.dataset.line), rr = L0 && last.routed[L0.key];
       if (!rr) return;
-      var q0 = local(e), run = C.runAt(rr.R0, q0);
+      var q0 = specRouteSpace(rr, local(e)), run = C.runAt(rr.R0, q0);
       if (!run) return;
-      var g = {}, rec0 = C.dragStart(g, run, L0.shape || {}, e.ctrlKey ? null : specSnap, e.shiftKey, q0);
+      var g = {}, rec0 = C.dragStart(g, run, L0.shape && !!L0.shape.tr === rr.tr ? L0.shape : {}, e.ctrlKey ? null : specSnap, e.shiftKey, q0);
       if (!rec0) return;
-      flowDrag = { svg: svg, local: local, start: q0, cx: e.clientX, cy: e.clientY, on: false, type: 'run', line: L0, g: g, rec: rec0, ctrl: e.ctrlKey };
+      flowDrag = { svg: svg, local: local, start: q0, cx: e.clientX, cy: e.clientY, on: false, type: 'run', line: L0, g: g, rec: rec0, ctrl: e.ctrlKey, tr: rr.tr, rr: rr };
       return;
     }
     var lab = e.target.closest('.spec-edge-label.drag');
@@ -4038,7 +4059,12 @@
       d.on = true; d.svg.classList.add('moving'); e.preventDefault();
       var pq = d.local(e), o = { shapes: {}, ports: {} };
       if (d.type === 'run') {
-        d.rec = specRouter().dragTo(d.g, pq, d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID);
+        var nrec = specRouter().dragTo(d.g, specRouteSpace(d.rr, pq), d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID);
+        // A run stops where the line still clears its blocks by a stub: past that it would hook back
+        // into the block, and the kept shape would be dropped when drawn.
+        if (!LM.route.fits(d.rr.R0.A, d.rr.R0.B, nrec.v, 8)) return;
+        d.rec = nrec;
+        if (d.tr) d.rec.tr = true; else delete d.rec.tr;
         o.shapes[d.line.key] = d.rec;
       } else {
         var bid = d.end === 'a' ? d.line.a : d.line.b;
@@ -4159,7 +4185,7 @@
       var rl = d.line, rres = d.live && d.live.res[rl.key], srec0 = p.spec[rl.srcA];
       if (!rres || !srec0 || !d.rec) { renderPage(); return; }
       var kept = specRouter().release(rres.R0, d.rec.v, d.rec), rts = Object.assign({}, srec0.routes || {});
-      rts[rl.rkey] = { v: kept.v, a: kept.a, b: kept.b }; if (kept.mode) rts[rl.rkey].mode = kept.mode;
+      rts[rl.rkey] = { v: kept.v, a: kept.a, b: kept.b }; if (kept.mode) rts[rl.rkey].mode = kept.mode; if (rres.tr) rts[rl.rkey].tr = true;
       specPutAll(p, [M.specStamp(Object.assign({}, srec0, { routes: rts }), me())]);
       return;
     }
@@ -6752,11 +6778,11 @@
     var L = hitEl && C && specLine(hitEl.dataset.line), rr = L && specFlowLast.routed[L.key], p = current();
     if (!rr || !p || !p.spec[L.srcA]) return;
     var svg = hitEl.ownerSVGElement, pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-    var run = C.runAt(rr.R0, pt.matrixTransform(svg.getScreenCTM().inverse())), rec = run && C.bend(run, specSnap, L.shape || {});
+    var run = C.runAt(rr.R0, specRouteSpace(rr, pt.matrixTransform(svg.getScreenCTM().inverse()))), rec = run && C.bend(run, specSnap, L.shape && !!L.shape.tr === rr.tr ? L.shape : {});
     if (!rec) return;
     e.preventDefault();
     var src = p.spec[L.srcA], rts = Object.assign({}, src.routes || {});
-    rts[L.rkey] = { v: rec.v, a: rec.a, b: rec.b }; if (rec.mode) rts[L.rkey].mode = rec.mode;
+    rts[L.rkey] = { v: rec.v, a: rec.a, b: rec.b }; if (rec.mode) rts[L.rkey].mode = rec.mode; if (rr.tr) rts[L.rkey].tr = true;
     specPutAll(p, [M.specStamp(Object.assign({}, src, { routes: rts }), me())]);
   });
   document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
