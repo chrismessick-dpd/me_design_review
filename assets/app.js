@@ -26,8 +26,9 @@
   function load(key, fallback) {
     try { var v = localStorage.getItem(NS + key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
   }
+  // True when it was saved. A full browser storage (every tool on this site shares it) makes it false.
   function save(key, value) {
-    try { localStorage.setItem(NS + key, JSON.stringify(value)); } catch (e) { toast('Couldn’t save in this browser: ' + e.message); }
+    try { localStorage.setItem(NS + key, JSON.stringify(value)); return true; } catch (e) { toast('Couldn’t save in this browser: ' + e.message); return false; }
   }
   // Tokens never contain spaces; copying one from a web page or document can pick up line
   // breaks or invisible characters, which GitHub then rejects as "Bad credentials".
@@ -6046,7 +6047,6 @@
         var bases = load('bases', {});
         Object.keys(st.projects).forEach(function (id) { if (failedRepos.indexOf(st.homes[id] || (settings.owner + '/' + settings.dataRepo)) < 0) bases[id] = M.specBase(st.projects[id]); });
         Object.keys(bases).forEach(function (id) { if (!st.projects[id]) delete bases[id]; });
-        save('bases', bases);
         Object.keys(started).forEach(function (k) {
           if (dirty[k] !== started[k]) return;
           var repo = k === 'roster' ? settings.owner + '/' + settings.dataRepo : st.homes[k] || (settings.owner + '/' + settings.dataRepo);
@@ -6060,7 +6060,14 @@
         if (window.SignoffInvites) window.SignoffInvites.refresh();
         if (res.pl) { plRead = res.pl; save('pl', plRead); save('plCache', res.plCache); }
         lastSync = { at: M.now(), startedAt: startedAt, version: res.version || (lastSync && lastSync.version), errors: res.errors };
-        save('cache2', cache); save('lastSync', lastSync); save('dataAccess', dataAccess); save('invitations', invitations); persist();
+        // The record of what this browser synced (cache2, bases) is saved only once the reviews it describes
+        // are (2026-11-19: a full browser storage kept the old reviews while the record said the new ones
+        // were here, so a later sync wrote an old copy over a newer file). When they can't be saved, the
+        // old record stays with the old reviews, and the next sync reads the files again.
+        var stored = save('projects', projects);
+        if (stored) { save('bases', bases); save('cache2', cache); }
+        save('lastSync', lastSync); save('dataAccess', dataAccess); save('invitations', invitations); persist();
+        if (!stored) toast('This browser’s storage is full, so the synced reviews couldn’t be kept here. They’re safe on GitHub, and this page shows them until you reload. Clear space for this site (old demos, or another tool’s data), then sync again.');
         lastError = res.errors.length ? res.errors[0].message : '';
         syncing = false;
         render();
