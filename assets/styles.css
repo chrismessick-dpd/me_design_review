@@ -1315,6 +1315,10 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .spec-group-g .spec-group { fill: var(--bg-sunk); fill-opacity: 0.6; stroke: var(--hair-2); stroke-width: 1.2; }
 .spec-group-g:hover .spec-group { stroke: var(--text-3); }
 .spec-group-g.sel .spec-group { stroke: var(--accent); stroke-width: 2; }
+.spec-grip { fill: transparent; stroke: none; }
+.spec-grip.g-n, .spec-grip.g-s { cursor: ns-resize; } .spec-grip.g-e, .spec-grip.g-w { cursor: ew-resize; }
+.spec-grip.g-nw, .spec-grip.g-se { cursor: nwse-resize; } .spec-grip.g-ne, .spec-grip.g-sw { cursor: nesw-resize; }
+svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-group-g.drop .spec-group, .spec-group-g.drop:hover .spec-group { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 6 4; fill: var(--accent-soft); fill-opacity: 1; }
 .spec-group-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; fill: var(--text-2); pointer-events: none; }
 .spec-flow .spec-node { cursor: grab; }

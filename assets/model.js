@@ -740,7 +740,21 @@
       pos: specPos(r.pos) };
     // Labels dragged off their place on this block's lines (Chris, 2026-11-13), only when there are any.
     if (labs) out.labels = labs;
+    // A section's box dragged bigger than its blocks need (Chris, 2026-11-18), only when it was.
+    var grow = specGrow(r.grow);
+    if (grow) out.grow = grow;
     return out;
+  }
+  // { l, t, r, b }: how far each edge of a section's box reaches past the fit around its blocks (0 or more).
+  function specGrow(v) {
+    if (!v || typeof v !== 'object') return null;
+    var out = {}, any = false;
+    ['l', 't', 'r', 'b'].forEach(function (k) {
+      var n = Number(v[k] || 0);
+      out[k] = isFinite(n) ? Math.max(0, Math.min(5000, Math.round(n))) : 0;
+      if (out[k]) any = true;
+    });
+    return any ? out : null;
   }
   // { '<other section id>|<link word>': { t, x, y } }: a dragged label's place along its line (0 to 1) and,
   // when it was pulled off the line, its offset from there (drawn with an arrow back to the line).

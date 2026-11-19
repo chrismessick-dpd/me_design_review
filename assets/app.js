@@ -3438,6 +3438,17 @@
   // Current along a line: beads that run its length while its block is selected or pointed at, after
   // Loom's pulse on a selected wire. Drawn right after its .spec-edge, which CSS keys on.
   function specPulse(d) { return '<path class="spec-pulse" d="' + d + '" pathLength="1"/>'; }
+  // Grips on a section box's edges and corners that resize it (Chris, 2026-11-18). The box never gets
+  // smaller than the fit around its blocks; how far each edge reaches past that is the section's grow.
+  function specGrips(b) {
+    var t = 10, c = 14, out = '';
+    function r(edge, x, y, w, h) { out += '<rect class="spec-grip g-' + edge + '" data-edge="' + edge + '" x="' + x + '" y="' + y + '" width="' + Math.max(0, w) + '" height="' + Math.max(0, h) + '"/>'; }
+    r('n', b.x + c / 2, b.y - t / 2, b.w - c, t); r('s', b.x + c / 2, b.y + b.h - t / 2, b.w - c, t);
+    r('w', b.x - t / 2, b.y + c / 2, t, b.h - c); r('e', b.x + b.w - t / 2, b.y + c / 2, t, b.h - c);
+    r('nw', b.x - c / 2, b.y - c / 2, c, c); r('ne', b.x + b.w - c / 2, b.y - c / 2, c, c);
+    r('sw', b.x - c / 2, b.y + b.h - c / 2, c, c); r('se', b.x + b.w - c / 2, b.y + b.h - c / 2, c, c);
+    return '<g class="spec-grips"><title>Drag to resize the section</title>' + out + '</g>';
+  }
   function specFlowHtml(p, a) {
     var T = specFlowTree(a), sel = specBlockSel(), show = ui.specBoxes !== false, head = show ? SPEC_HEAD : 0, pad = show ? SPEC_PAD : 0;
     var supWord = (M.specLinkWord('supplies') || '').toLowerCase();
@@ -3445,7 +3456,7 @@
     blocks.forEach(function (x) { isBlock[x.sec.id] = 1; });
     var frozen = blocks.some(function (x) { return x.sec.pos; });
     var bar = '<div class="spec-flow-add"><button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
-      (frozen || blocks.some(function (x) { return x.sec.labels; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
+      (frozen || T.items.some(function (x) { return x.sec.labels || x.sec.grow; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
       '<span class="spec-flow-hint">Drag on empty space to draw a section around blocks</span>' +
       '<label class="spec-boxes" title="Show section boxes"><input type="checkbox" data-act="spec-boxes"' + (show ? ' checked' : '') + '> Sections</label></div>';
     if (!blocks.length) {
@@ -3521,8 +3532,8 @@
       if (!bs.length) return null;
       var x0 = Math.min.apply(null, bs.map(function (b) { return b.x; })), y0 = Math.min.apply(null, bs.map(function (b) { return b.y; }));
       var x1 = Math.max.apply(null, bs.map(function (b) { return b.x + b.w; })), y1 = Math.max.apply(null, bs.map(function (b) { return b.y + b.h; }));
-      var bp = Math.max(pad, 12), bh = Math.max(head, 20);
-      return (R[x.sec.id] = { x: x0 - bp, y: y0 - bp - bh, w: x1 - x0 + 2 * bp, h: y1 - y0 + 2 * bp + bh });
+      var bp = Math.max(pad, 12), bh = Math.max(head, 20), g = x.sec.grow || { l: 0, t: 0, r: 0, b: 0 };
+      return (R[x.sec.id] = { x: x0 - bp - g.l, y: y0 - bp - bh - g.t, w: x1 - x0 + 2 * bp + g.l + g.r, h: y1 - y0 + 2 * bp + bh + g.t + g.b });
     }
     (T.ch[''] || []).forEach(boxOf);
     var rects = Object.keys(R).map(function (k) { return R[k]; });
@@ -3542,11 +3553,13 @@
     if (show) {
       T.items.filter(function (x) { return T.isSec(x) && R[x.sec.id]; }).sort(function (x, y) { return T.anc(x).length - T.anc(y).length; }).forEach(function (x) {
         var b = R[x.sec.id];
-        svg += '<g class="spec-group-g' + (sel === x.sec.id ? ' sel' : '') + (x.gaps ? ' gap' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-box="' + [b.x, b.y, b.w, b.h].join(' ') + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
-          '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.links.length ? '\n' + plural(x.links.length, 'requirement') + ' tied to the section itself' : '') + '\nDrag to move it with its blocks; click for its panel') + '</title>' +
+        var gw = x.sec.grow || {};
+        svg += '<g class="spec-group-g' + (sel === x.sec.id ? ' sel' : '') + (x.gaps ? ' gap' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-box="' + [b.x, b.y, b.w, b.h].join(' ') + '" data-grow="' + [gw.l || 0, gw.t || 0, gw.r || 0, gw.b || 0].join(' ') + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
+          '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.links.length ? '\n' + plural(x.links.length, 'requirement') + ' tied to the section itself' : '') + '\nDrag to move it with its blocks, or an edge to resize it; click for its panel') + '</title>' +
           '<rect class="spec-group" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="12"/>' +
           '<text class="spec-group-label" x="' + (b.x + 12) + '" y="' + (b.y + 16) + '">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 24) / 7) - (x.links.length || x.gaps ? 8 : 0))) + '</text>' +
-          (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') + '</g>';
+          (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') +
+          specGrips(b) + '</g>';
       });
     }
     // drag: { from, key, d, anchor, t } makes the label draggable (Chris, 2026-11-13): along its line, or off
@@ -3792,6 +3805,13 @@
         t0: lab.dataset.t != null && lab.dataset.t !== '' ? +lab.dataset.t : null };
       return;
     }
+    var grip = !node && box && e.target.closest('.spec-grip');
+    if (grip) {
+      e.preventDefault();
+      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'resize', id: box.dataset.id,
+        edge: grip.dataset.edge, el: box, box0: box.dataset.box.split(' ').map(Number) };
+      return;
+    }
     flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
       type: node ? 'block' : box ? 'section' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '' };
     if (flowDrag.type === 'draw') e.preventDefault();
@@ -3855,12 +3875,27 @@
       labelLead(d.el, nd.c, nd.a);
       return;
     }
+    if (d.type === 'resize') {
+      if (!d.on && Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 4) return;
+      d.on = true; d.svg.classList.add('moving'); e.preventDefault();
+      var rq = d.local(e), rs = flowResize(d, rq.x - d.start.x, rq.y - d.start.y), rb = rs.box, el = d.el;
+      var rr = el.querySelector('.spec-group'); rr.setAttribute('x', rb.x); rr.setAttribute('y', rb.y); rr.setAttribute('width', rb.w); rr.setAttribute('height', rb.h);
+      var tl = el.querySelector('.spec-group-label'); if (tl) { tl.setAttribute('x', rb.x + 12); tl.setAttribute('y', rb.y + 16); }
+      var tm = el.querySelector('.spec-group-meta'); if (tm) { tm.setAttribute('x', rb.x + rb.w - 12); tm.setAttribute('y', rb.y + 16); }
+      var gg = el.querySelector('.spec-grips'); if (gg) gg.style.display = 'none';
+      return;
+    }
     if (!d.on) {
       if (Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 6) return;
       d.on = true; d.svg.classList.add('moving');
       if (d.type === 'draw') { d.rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.rect.setAttribute('class', 'spec-draw'); d.svg.appendChild(d.rect); }
       else d.els = d.type === 'block' ? [d.svg.querySelector('.spec-node[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(d.id) + '"]')))
         : [d.svg.querySelector('.spec-group-g[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('[data-anc~="' + CSS.escape(d.id) + '"]')));
+      if (d.type !== 'draw') d.lines = flowLines(d);
+      // A section's blocks take their power flags along too.
+      if (d.type === 'section') Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) {
+        d.els = d.els.concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(g.dataset.id) + '"]')));
+      });
     }
     e.preventDefault();
     var q = d.local(e), dx = q.x - d.start.x, dy = q.y - d.start.y;
@@ -3870,6 +3905,53 @@
       return;
     }
     d.els.forEach(function (el) { if (el) el.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); });
+    flowLinesMove(d, dx, dy);
+  }
+  // A section box resized by its edge grip by (dx, dy): the new grow (never under 0) and box.
+  function flowResize(d, dx, dy) {
+    var b = d.box0, g0 = d.el.dataset.grow.split(' ').map(Number), e = d.edge;
+    var fit = { x: b[0] + g0[0], y: b[1] + g0[1], w: b[2] - g0[0] - g0[2], h: b[3] - g0[1] - g0[3] };
+    var g = { l: g0[0], t: g0[1], r: g0[2], b: g0[3] };
+    if (e.indexOf('w') >= 0) g.l = Math.max(0, g0[0] - dx);
+    if (e.indexOf('e') >= 0) g.r = Math.max(0, g0[2] + dx);
+    if (e.indexOf('n') >= 0) g.t = Math.max(0, g0[1] - dy);
+    if (e.indexOf('s') >= 0) g.b = Math.max(0, g0[3] + dy);
+    return { grow: g, box: { x: fit.x - g.l, y: fit.y - g.t, w: fit.w + g.l + g.r, h: fit.h + g.t + g.b } };
+  }
+  // The lines (and their labels) with an end on a block being dragged, so they follow it live (Chris,
+  // 2026-11-18: they stayed behind until the drop).
+  function flowLines(d) {
+    var moving = {}, svg = d.svg;
+    if (d.type === 'block') moving[d.id] = 1;
+    else Array.prototype.forEach.call(svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
+    var rect = {};
+    Array.prototype.forEach.call(svg.querySelectorAll('.spec-node'), function (g) { rect[g.dataset.id] = { x: +g.dataset.x, y: +g.dataset.y, w: SPEC_BW, h: SPEC_BH }; });
+    var out = [];
+    Array.prototype.forEach.call(svg.querySelectorAll('path.spec-edge'), function (p) {
+      var a = p.dataset.a, b = p.dataset.b;
+      if (!rect[a] || !rect[b] || !(moving[a] || moving[b])) return;
+      var pulse = p.nextElementSibling, hit = pulse && pulse.nextElementSibling, labs = [];
+      Array.prototype.forEach.call(svg.querySelectorAll('.spec-edge-label.drag'), function (l) {
+        if (l.dataset.from === a && l.dataset.key.split('|')[0] === b) labs.push({ el: l, route: labelRoute(l.dataset.route), t: l.dataset.t != null && l.dataset.t !== '' ? +l.dataset.t : 0.5 });
+      });
+      out.push({ path: p, pulse: pulse && pulse.classList.contains('spec-pulse') ? pulse : null, hit: hit && hit.classList.contains('spec-edge-hit') ? hit : null,
+        A: rect[a], B: rect[b], ma: !!moving[a], mb: !!moving[b], labs: labs });
+    });
+    return out;
+  }
+  function flowLinesMove(d, dx, dy) {
+    (d.lines || []).forEach(function (L) {
+      var A = L.ma ? { x: L.A.x + dx, y: L.A.y + dy, w: L.A.w, h: L.A.h } : L.A, B = L.mb ? { x: L.B.x + dx, y: L.B.y + dy, w: L.B.w, h: L.B.h } : L.B;
+      var rt = specRoute(A, B);
+      L.path.setAttribute('d', rt.d);
+      if (L.pulse) L.pulse.setAttribute('d', rt.d);
+      if (L.hit) L.hit.setAttribute('d', rt.d);
+      L.labs.forEach(function (l) {
+        if (!l.route) return;
+        var o = labelPt(l.route, l.t), n = rt.at(l.t);
+        l.el.setAttribute('transform', 'translate(' + (n.x - o.x) + ' ' + (n.y - o.y) + ')');
+      });
+    });
   }
   function flowUp(e) {
     var d = flowDrag; flowDrag = null;
@@ -3884,6 +3966,21 @@
       var labs = Object.assign({}, rec.labels || {});
       labs[d.key] = { t: Math.round(nd.t * 1000) / 1000, x: nd.x, y: nd.y };
       specPutAll(p, [M.specStamp(Object.assign({}, rec, { labels: labs }), me())]);
+      return;
+    }
+    if (d.type === 'resize') {
+      var sn = function (v) { return Math.round(v / 10) * 10; }, rs = flowResize(d, sn(q.x - d.start.x), sn(q.y - d.start.y)), srec = p.spec[d.id];
+      var old = (srec && srec.grow) || {}, ng = rs.grow;
+      if (!srec || ['l', 't', 'r', 'b'].every(function (k) { return (old[k] || 0) === ng[k]; })) { renderPage(); return; }
+      var nrec = Object.assign({}, srec);
+      if (ng.l || ng.t || ng.r || ng.b) nrec.grow = ng; else delete nrec.grow;
+      // Resizing arranges too: blocks without a kept place keep the one they're drawn at.
+      var rrecs = [M.specStamp(nrec, me())];
+      Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
+        var r0 = p.spec[g.dataset.id]; if (!r0 || r0.pos || g.dataset.id === d.id) return;
+        rrecs.push(M.specStamp(Object.assign({}, r0, { pos: { x: +g.dataset.x, y: +g.dataset.y } }), me()));
+      });
+      specPutAll(p, rrecs);
       return;
     }
     if (d.type === 'draw') {
@@ -3924,7 +4021,7 @@
   function T_title(p, id) { var s = M.liveSpec(p).filter(function (x) { return x.id === id; })[0]; return s ? s.title : 'It'; }
   function specAutoLayout() {
     var p = current(); if (!p) return;
-    var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; return M.specStamp(r, me()); });
+    var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels || s.grow; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; delete r.grow; return M.specStamp(r, me()); });
     if (recs.length) { specPutAll(p, recs); toast('Laid out again'); }
   }
   function cutText(t, n) { t = String(t || ''); return n > 1 && t.length > n ? t.slice(0, n - 1) + '…' : t; }
