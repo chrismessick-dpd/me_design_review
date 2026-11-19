@@ -233,6 +233,35 @@
     ui.slug = ''; ui.view = 'overview'; ui.page = ''; ui.query = ''; ui.filter = 'all'; ui.home = true; selected = null;
     closeInspector(); saveUi(); render(); $('#main').scrollTop = 0;
   }
+  // The home page (config.home, assets/home.js; EE only): tools and the team's standards, shown in place of the
+  // empty page once someone is signed in (any role: everyone reads the standards, FTEs edit them). The sidebar's
+  // logo opens it.
+  var HOME = C.home && window.SignoffHome ? window.SignoffHome : null;
+  function homeShown() { return !!HOME && !EMBED && (DEMO || (!signedOut() && !checking())); }
+  function homeCtx() {
+    // With no boards yet, the empty page's message and buttons stay, above the tools.
+    var none = !visibleProjects().length, note = '';
+    if (none && isFte()) note = '<p>No ' + UNITS + ' yet. Create a review, choose the checklists and what kind of ' + W.thing + ' it is, and Signoff builds a review tailored to it.</p><button class="btn btn-primary" data-act="new-project">New ' + UNIT + '</button>' + (DEMO ? '' : ' ' + syncNowButton('Pull from GitHub'));
+    else if (none) note = '<p>No ' + UNITS + ' shared with you yet. Signed in as <b>' + esc(settings.login) + '</b>. ' + (waitingInvites() ? 'Accept your invitation in the sidebar.' : 'Ask your Dovetail contact to add you to a ' + UNIT + ', then sync.') + '</p>' + syncNowButton('Sync now', true);
+    return { demo: DEMO, fte: isFte(), login: DEMO ? DEMO_USER : (settings.login || ''), toast: toast, goHome: goHome, note: note };
+  }
+  function setupHome() {
+    var brand = $('.brand');
+    if (!HOME || !brand) return;
+    brand.classList.add('brand-home');
+    ['.brand-mark', '.brand-text'].forEach(function (sel) {
+      var el = brand.querySelector(sel);
+      if (!el) return;
+      el.setAttribute('role', 'link'); el.setAttribute('tabindex', '0'); el.title = 'Home';
+      if (sel === '.brand-mark') el.removeAttribute('aria-hidden');
+      el.setAttribute('aria-label', 'Home');
+      function open(e) { e.preventDefault(); HOME.reset(); goHome(); if (narrow.matches) $('#app').classList.remove('nav-open'); }
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') open(e); });
+    });
+    // A link or reload into a standards deck (#standards/<deck>) opens the home page, not a board.
+    if (/^#standards\//.test(location.hash)) { ui.slug = ''; ui.home = true; }
+  }
   // The sidebar slides over the page on narrow windows; on wide ones it collapses away and
   // stays that way until opened again.
   var narrow = window.matchMedia ? window.matchMedia('(max-width: 860px)') : { matches: false };
@@ -717,7 +746,8 @@
     drawPeople();
     if (EMBED) { page.innerHTML = peopleOrNotice(); return; }
     ui.page = '';
-    if (!p) { page.innerHTML = emptyPage(); renderToolbar(); return; }
+    if (!p) { if (homeShown()) HOME.mount(page, homeCtx()); else page.innerHTML = emptyPage(); renderToolbar(); return; }
+    if (HOME) HOME.leave();
     renderToolbar();
     if (ui.view === 'overview') { page.innerHTML = overviewPage(p); loadPicture(p); }
     else if (ui.view === 'findings') page.innerHTML = findingsPage(p);
@@ -6936,7 +6966,7 @@
     var typing = a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable);
     var draft = $('#comment-input');
     return !syncing && !typing && !specEditing && !(draft && draft.value.trim()) && !revDraft.trim() && !$('#sheet') && !$('#busy-wrap') && !$('#menu')
-      && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !HIST.compare.active() && !document.hidden;   // a Version comparison lives on the page too
+      && !document.querySelector('.tk-wrap, .tk-new, #people-pop') && !HIST.compare.active() && !(HOME && HOME.busy()) && !document.hidden;   // a Version comparison lives on the page too
   }
   function reloadWhenIdle() {
     if (!updateWaiting) return;
@@ -6973,6 +7003,7 @@
   // left in localStorage is taken in; then the page draws and syncs as it always has.
   function start() {
     if (!DEMO) noticeToken();
+    setupHome();
     if (window.SignoffTickets) window.SignoffTickets.where(function () {
       var p = current();
       if (!p) return {};
