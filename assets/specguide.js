@@ -259,7 +259,7 @@
         setup: function () { var a = A(); a.open('map'); var s = a.section(mineOr('USB-C service port')); if (s) a.block(s.id); },
         spot: function () { return ['#spec-editor', '#spec-link-search', '#inspector [data-act="spec-edit"]']; } },
       { title: 'Connect blocks',
-        text: 'Each block has a dot on its right edge. Drag from it to another block: a signal block now connects to it, and a power block now supplies it. Click a line for its panel: name its signal there, set its direction (out, in, or both ways), or {Delete line}; Undo in the message puts it back. Two blocks that name each other draw one line, both ways.',
+        text: 'Each block has a dot on its top-right corner. Drag from it to another block: a signal block now connects to it, and a power block now supplies it. Click a line for its panel: name its signal there, set its direction (out, in, or both ways), or {Delete line}; Undo in the message puts it back. Two blocks that name each other draw one line, both ways.',
         do: 'Drag from your protection block’s dot to MCU. Then click the old line from USB-C service port to MCU and {Delete line}, so USB runs through the protection.',
         phone: 'On a touch screen the dots always show; drag from one to another block.',
         setup: function () { A().open('map'); },

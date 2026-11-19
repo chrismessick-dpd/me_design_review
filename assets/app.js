@@ -3268,7 +3268,7 @@
     var fit = String(live.dataset.fit || '').split(' ').map(Number);
     if (fit.length !== 4 || fit.some(function (n) { return !isFinite(n); })) { var b = live.viewBox.baseVal; fit = [b.x, b.y, b.width, b.height]; }
     var c = live.cloneNode(true);
-    Array.prototype.forEach.call(c.querySelectorAll('.spec-handle, .spec-edge-hit, .spec-lead-hit, .spec-pulse, title'), function (el) { el.remove(); });
+    Array.prototype.forEach.call(c.querySelectorAll('.spec-handle, .spec-edge-hit, .spec-lead-hit, .spec-pulse, .spec-grips, .spec-port, title'), function (el) { el.remove(); });
     c.classList.remove('focus', 'moving', 'moving-label');
     Array.prototype.forEach.call(c.querySelectorAll('.sel, .on'), function (el) { el.classList.remove('sel', 'on'); });
     c.setAttribute('viewBox', fit.join(' '));
@@ -3435,9 +3435,115 @@
       mx: bez(p1x, c1x, c2x, p2x, 0.7), my: bez(p1y, c1y, c2y, p2y, 0.7),
       at: function (t) { return { x: bez(p1x, c1x, c2x, p2x, t), y: bez(p1y, c1y, c2y, p2y, t) }; } };
   }
+  // ── Routed lines in the block diagram (Chris, 2026-11-18) ──
+  // Lines route at right angles with rounded corners round the blocks, with Loom's engine (Loom owns it;
+  // assets/vendor/route.js and connect.js, copied by tools/sync_routing.py). Each end of a line has its
+  // own port on its block's edge: placed on the side facing the other block and spread along it, or
+  // where it was dragged (the block's ports['<other id>|<word>'] = { side, t }). A line's straight runs
+  // drag as Loom's wires do, and its shape is kept on its from-block (routes['<to id>|<word>'], Loom's
+  // record { v, a, b, mode }). Nothing derived is written: auto ports and routes stay in memory.
+  var SPEC_GRID = 10, SPEC_LSTUB = 16, SPEC_RAD = 10, specFlowLast = null;
+  function specRouter() { return window.LM && LM.connect && LM.route ? LM.connect : null; }
+  // The side of block A facing block B (as specRoute picks).
+  function specPortSide(A, B) {
+    if (B.x >= A.x + A.w + 12) return 'r';
+    if (A.x >= B.x + B.w + 12) return 'l';
+    if (B.y > A.y + A.h) return 'b';
+    if (B.y + B.h < A.y) return 't';
+    return 'b';
+  }
+  function specPortPt(r, p) {
+    var t = Math.max(0.04, Math.min(0.96, p.t == null ? 0.5 : p.t));
+    if (p.side === 'l') return { x: r.x, y: r.y + r.h * t, dx: -1, dy: 0 };
+    if (p.side === 'r') return { x: r.x + r.w, y: r.y + r.h * t, dx: 1, dy: 0 };
+    if (p.side === 't') return { x: r.x + r.w * t, y: r.y, dx: 0, dy: -1 };
+    return { x: r.x + r.w * t, y: r.y + r.h, dx: 0, dy: 1 };
+  }
+  // The port nearest a point on block r's edge, its place on the grid.
+  function specPortAt(r, q) {
+    var d = [['l', Math.abs(q.x - r.x)], ['r', Math.abs(q.x - r.x - r.w)], ['t', Math.abs(q.y - r.y)], ['b', Math.abs(q.y - r.y - r.h)]].sort(function (u, v) { return u[1] - v[1]; })[0][0];
+    var horiz = d === 't' || d === 'b', len = horiz ? r.w : r.h, along = horiz ? q.x - r.x : q.y - r.y;
+    along = Math.round(along / SPEC_GRID) * SPEC_GRID;
+    return { side: d, t: Math.round(Math.max(0.04, Math.min(0.96, along / len)) * 1000) / 1000 };
+  }
+  // A stub that reaches a line of the search grid, where the engine turns first (as Loom's onGrid: one
+  // short of it makes the route give up and run straight).
+  function specOnGrid(x, out, need) { var g = SPEC_GRID; return Math.abs((out > 0 ? Math.ceil((x + need) / g) : Math.floor((x - need) / g)) * g - x); }
+  // A port's terminals for the engine, whose terminals are level: a port on a left or right edge leaves
+  // level; one on the top or bottom runs out to a lead point past the edge and turns level there, either
+  // way, the cheaper winning (Loom's termsRect).
+  function specTerms(r, id, q, end, toward) {
+    if (q.dx) {
+      var T = { x: q.x, y: q.y, pins: true, node: id, side: q.dx > 0 ? 'r' : 'l', conn: false, stub: specOnGrid(q.x, q.dx, SPEC_LSTUB) };
+      T[end === 'A' ? 'out' : 'in'] = end === 'A' ? q.dx : -q.dx;
+      return [T];
+    }
+    var ly = q.dy < 0 ? r.y - SPEC_LSTUB : r.y + r.h + SPEC_LSTUB, from = { x: q.x, y: q.y }, first = toward >= q.x ? 1 : -1;
+    return [first, -first].map(function (o) {
+      var T = { x: q.x, y: ly, pins: true, node: id, side: o > 0 ? 'r' : 'l', conn: true, stub: specOnGrid(q.x, o, SPEC_RAD) };
+      if (end === 'A') { T.out = o; T.from = from; } else { T.in = -o; T.to = from; }
+      return T;
+    });
+  }
+  // Every line's route. m: { doc, R (block rects by id), lines: [{ key, a, b, shape, pa, pb }] } (pa, pb: a
+  // dragged port, else null). Returns { <key>: { R0, pts, d, lane, qa, qb, pa, pb } }.
+  function specRouteSet(m, opts) {
+    var C = specRouter(), R = m.R, want = {}, sides = {};
+    m.lines.forEach(function (L) {
+      var A = R[L.a], B = R[L.b];
+      var pa = L.pa ? Object.assign({}, L.pa) : { side: specPortSide(A, B), auto: true }, pb = L.pb ? Object.assign({}, L.pb) : { side: specPortSide(B, A), auto: true };
+      want[L.key] = { a: pa, b: pb };
+      if (pa.auto) (sides[L.a + '\n' + pa.side] = sides[L.a + '\n' + pa.side] || []).push({ p: pa, o: B });
+      if (pb.auto) (sides[L.b + '\n' + pb.side] = sides[L.b + '\n' + pb.side] || []).push({ p: pb, o: A });
+    });
+    // Auto ports on one side spread along it, in the order of the blocks they go to.
+    Object.keys(sides).forEach(function (k) {
+      var side = k.split('\n')[1], list = sides[k], horiz = side === 't' || side === 'b';
+      list.sort(function (u, v) { return horiz ? (u.o.x + u.o.w / 2) - (v.o.x + v.o.w / 2) : (u.o.y + u.o.h / 2) - (v.o.y + v.o.h / 2); });
+      list.forEach(function (u, i) { u.p.t = (i + 1) / (list.length + 1); });
+    });
+    // Two blocks side by side: an auto port alone on its side lines up with the other end, so the line
+    // runs straight instead of a small jog (as the old lines between neighbors did).
+    m.lines.forEach(function (L) {
+      var w = want[L.key], pa = w.a, pb = w.b, A = R[L.a], B = R[L.b];
+      if (!pa.auto || !pb.auto || !((pa.side === 'r' && pb.side === 'l') || (pa.side === 'l' && pb.side === 'r'))) return;
+      var ya = A.y + A.h * pa.t, yb = B.y + B.h * pb.t, na = sides[L.a + '\n' + pa.side].length, nb = sides[L.b + '\n' + pb.side].length;
+      if (na === 1 && yb >= A.y + A.h * 0.1 && yb <= A.y + A.h * 0.9) pa.t = (yb - A.y) / A.h;
+      else if (nb === 1 && ya >= B.y + B.h * 0.1 && ya <= B.y + B.h * 0.9) pb.t = (ya - B.y) / B.h;
+    });
+    var rects = Object.keys(R).map(function (id) { var r = R[id]; return { id: id, x0: r.x, y0: r.y, x1: r.x + r.w, y1: r.y + r.h }; });
+    var list = m.lines.map(function (L) {
+      var A = R[L.a], B = R[L.b], qa = specPortPt(A, want[L.key].a), qb = specPortPt(B, want[L.key].b), combos = [];
+      var ta = specTerms(A, L.a, qa, 'A', qb.x), tb = specTerms(B, L.b, qb, 'B', qa.x);
+      ta.forEach(function (x) { tb.forEach(function (y) { combos.push({ A: x, B: y }); }); });
+      // A kept shape its ends have moved away from (a block dragged past its first bend) would hook back
+      // into the block: it routes afresh instead. A shape being dragged (live) is drawn as it is.
+      var shape = L.shape || null;
+      if (shape && !L.live && Array.isArray(shape.v) && !combos.some(function (c) { return LM.route.fits(c.A, c.B, shape.v.map(Number), 8); })) shape = shape.mode ? { mode: shape.mode } : null;
+      return { key: L.key, weight: 1, combos: combos, half: 1, stub: 8, r: SPEC_RAD, shape: shape, qa: qa, qb: qb };
+    });
+    var res = C.routeAll(m.doc, rects, list, { grid: SPEC_GRID, fast: !!(opts && opts.fast), margin: 200 }), out = {};
+    list.forEach(function (o) {
+      var R0 = res.routes.get(o.key); if (!R0) return;
+      var dr = C.draw(R0), pts = dr && dr.pts ? dr.pts : dr;
+      out[o.key] = { R0: R0, pts: pts, d: C.pathD(pts), lane: C.lane(pts), qa: o.qa, qb: o.qb, pa: want[o.key].a, pb: want[o.key].b };
+    });
+    return out;
+  }
+  // A route as a label rides it: { d, cd (its points, for the label's data-route), at(t) along it }.
+  function specRt(rr) {
+    var C = specRouter();
+    return { d: rr.d, cd: rr.pts.map(function (q) { return Math.round(q.x * 10) / 10 + ' ' + Math.round(q.y * 10) / 10; }).join(' '),
+      at: function (t) { return C.laneAt(rr.lane, t); } };
+  }
+  // A kept shape moved with both its blocks (v alternates x, y, x, …).
+  function specShiftShape(rec, dx, dy) {
+    if (!rec || !Array.isArray(rec.v)) return rec;
+    return Object.assign({}, rec, { v: rec.v.map(function (x, i) { return Math.round((+x + (i % 2 ? dy : dx)) * 10) / 10; }) });
+  }
   // Current along a line: beads that run its length while its block is selected or pointed at, after
   // Loom's pulse on a selected wire. Drawn right after its .spec-edge, which CSS keys on.
-  function specPulse(d) { return '<path class="spec-pulse" d="' + d + '" pathLength="1"/>'; }
+  function specPulse(d, key) { return '<path class="spec-pulse"' + (key ? ' data-line="' + esc(key) + '"' : '') + ' d="' + d + '" pathLength="1"/>'; }
   // Grips on a section box's edges and corners that resize it (Chris, 2026-11-18). The box never gets
   // smaller than the fit around its blocks; how far each edge reaches past that is the section's grow.
   function specGrips(b) {
@@ -3456,7 +3562,7 @@
     blocks.forEach(function (x) { isBlock[x.sec.id] = 1; });
     var frozen = blocks.some(function (x) { return x.sec.pos; });
     var bar = '<div class="spec-flow-add"><button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
-      (frozen || T.items.some(function (x) { return x.sec.labels || x.sec.grow; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
+      (frozen || T.items.some(function (x) { return x.sec.labels || x.sec.grow || x.sec.ports || x.sec.routes; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
       '<span class="spec-flow-hint">Drag on empty space to draw a section around blocks</span>' +
       '<label class="spec-boxes" title="Show section boxes"><input type="checkbox" data-act="spec-boxes"' + (show ? ' checked' : '') + '> Sections</label></div>';
     if (!blocks.length) {
@@ -3571,7 +3677,7 @@
         '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
         '<circle class="spec-lead-hit" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="8"/><circle class="spec-lead-pt" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="3"/></g>' : '';
       return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' +
-        (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
+        (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (drag.line ? ' data-line="' + esc(drag.line) + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
         '<g class="spec-pill">' + (drag ? '<title>Drag along its line, or off it</title>' : '') +
         '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g></g>';
     }
@@ -3582,24 +3688,17 @@
       var an = rt.at(k.t);
       return { q: { x: an.x + k.x, y: an.y + k.y }, anchor: an, t: k.t };
     }
-    function hit(e, d, L) {
+    function hit(e, d, L, key) {
       var a = T.byId[e.a].sec.title, b = T.byId[e.b].sec.title, label = L ? L.labels.join(' / ') : e.label;
       var says = L && L.ab && L.ba ? a + ' and ' + b + ' connect both ways' : L && L.ba && !L.ab ? (L.a === e.a ? b + ' ' + linkVerb(e.word) + ' ' + a : a + ' ' + linkVerb(e.word) + ' ' + b) : a + ' ' + linkVerb(e.word) + ' ' + b;
-      return '<path class="spec-edge-hit" data-act="spec-edge" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(says + (label ? ' (' + label + ')' : '') + ', click for its panel') + '</title></path>';
+      return '<path class="spec-edge-hit" data-act="spec-edge"' + (key ? ' data-line="' + esc(key) + '"' : '') + ' data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(says + (label ? ' (' + label + ')' : '') + ', click for its panel') + '</title></path>';
     }
     // Supplies between neighbors in one section draw as arrows; every other supply is a power flag.
-    var flagged = [];
+    var flagged = [], arrows = [];
     sup.forEach(function (e) {
       var A = R[e.a], B = R[e.b];
-      if (T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) {
-        var rt = specRoute(A, B);
-        svg += '<path class="spec-edge supply' + on(e) + '" data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d) + hit(e, rt.d);
-        if (e.label) {
-          var skey = e.b + '|' + e.word.toLowerCase(), kept = keptLabel(e.a, skey, rt);
-          var sq = kept ? kept.q : { x: (A.x + A.w + B.x) / 2, y: Math.min(A.y, B.y) + SPEC_BH / 2 - 14 };
-          svg += pill(sq.x, sq.y, e.label, { from: e.a, key: skey, d: rt.cd, anchor: kept && kept.anchor, t: kept ? kept.t : null });
-        }
-      } else flagged.push(e);
+      if (e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) arrows.push(e);
+      else flagged.push(e);
     });
     // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
     // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
@@ -3629,14 +3728,42 @@
       var onLine = q === mid || i < tries.length;
       return { q: q, anchor: onLine ? null : mid, t: onLine ? (i >= 0 ? tries[i] : 0.5) : 0.5 };
     }
-    lines.forEach(function (L) {
-      var rt = specRoute(R[L.a], R[L.b]), e = { a: L.a, b: L.b, word: L.word };
+    // Every drawn line, routed together: supply arrows, then connections.
+    var rlines = arrows.map(function (e) { return { key: e.a + '>' + e.b + '|' + e.word.toLowerCase(), a: e.a, b: e.b, word: e.word, src: e, sup: e }; })
+      .concat(lines.filter(function (L) { return L.a !== L.b; }).map(function (L) { return { key: L.a + '>' + L.b + '|' + L.word.toLowerCase(), a: L.a, b: L.b, word: L.word, src: L.src, L: L }; }));
+    var blockR = {}; blocks.forEach(function (x) { blockR[x.sec.id] = R[x.sec.id]; });
+    var model = { doc: 'scribe|' + p.id, R: blockR, lines: rlines.map(function (l) {
+      var w = l.word.toLowerCase(), A = T.byId[l.a].sec, B = T.byId[l.b].sec, S = T.byId[l.src.a].sec;
+      return { key: l.key, a: l.a, b: l.b, word: l.word, srcA: l.src.a, rkey: l.src.b + '|' + w,
+        shape: (S.routes || {})[l.src.b + '|' + w] || null, pa: (A.ports || {})[l.b + '|' + w] || null, pb: (B.ports || {})[l.a + '|' + w] || null };
+    }) };
+    var routed = specRouter() ? specRouteSet(model) : {};
+    specFlowLast = { model: model, routed: routed };
+    // The frame takes in lines routed past the blocks (round the top block, say).
+    var rx0 = minX, ry0 = minY, rx1 = minX + VW, ry1 = minY + VH;
+    Object.keys(routed).forEach(function (k) { routed[k].pts.forEach(function (q) { rx0 = Math.min(rx0, q.x - 24); ry0 = Math.min(ry0, q.y - 30); rx1 = Math.max(rx1, q.x + 24); ry1 = Math.max(ry1, q.y + 30); }); });
+    if (rx0 < minX || ry0 < minY || rx1 > minX + VW || ry1 > minY + VH) {
+      var vbOld = specVBAttr(minX + ' ' + minY + ' ' + VW + ' ' + VH), bgOld = 'x="' + minX + '" y="' + minY + '" width="' + VW + '" height="' + VH + '"/>';
+      svg = svg.replace(vbOld, specVBAttr(rx0 + ' ' + ry0 + ' ' + (rx1 - rx0) + ' ' + (ry1 - ry0))).replace(bgOld, 'x="' + rx0 + '" y="' + ry0 + '" width="' + (rx1 - rx0) + '" height="' + (ry1 - ry0) + '"/>');
+    }
+    rlines.forEach(function (l) {
+      var rr = routed[l.key], rt = rr ? specRt(rr) : specRoute(R[l.a], R[l.b]), dl = ' data-line="' + esc(l.key) + '"';
+      if (l.sup) {
+        var e = l.sup;
+        svg += '<path class="spec-edge supply' + on(e) + '"' + dl + ' data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" d="' + rt.d + '" marker-end="url(#spec-arrow)"/>' + specPulse(rt.d, l.key) + hit(e, rt.d, null, l.key);
+        if (e.label) {
+          var skey = e.b + '|' + e.word.toLowerCase(), sk = keptLabel(e.a, skey, rt) || labelAt(rt, e.label);
+          svg += pill(sk.q.x, sk.q.y, e.label, { from: e.a, key: skey, d: rt.cd, anchor: sk.anchor, t: sk.t, line: l.key });
+        }
+        return;
+      }
+      var L = l.L;
       var cls = specEdgeIs(L.a, L.b, L.word) || specEdgeIs(L.b, L.a, L.word) ? ' on sel' : isBlock[sel] && (L.a === sel || L.b === sel) ? ' on' : '';
-      svg += '<path class="spec-edge uses' + cls + (L.ab && L.ba ? ' both' : '') + '" data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '"' +
-        (L.ab ? ' marker-end="url(#spec-arrow)"' : '') + (L.ba ? ' marker-start="url(#spec-arrow)"' : '') + '/>' + specPulse(rt.d) + hit(L.src, rt.d, L);
+      svg += '<path class="spec-edge uses' + cls + (L.ab && L.ba ? ' both' : '') + '"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '"' +
+        (L.ab ? ' marker-end="url(#spec-arrow)"' : '') + (L.ba ? ' marker-start="url(#spec-arrow)"' : '') + '/>' + specPulse(rt.d, l.key) + hit(L.src, rt.d, L, l.key);
       if (L.labels.length) {
         var lt = L.labels.join(' / '), key = L.src.b + '|' + L.word.toLowerCase(), kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt);
-        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t });
+        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t, line: l.key });
       }
     });
     blocks.forEach(function (x) {
@@ -3648,7 +3775,8 @@
         (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' : '') +
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + (sub ? 23 : 31)) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', chars)) + '</text>' +
         (sub ? '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 40) + '" text-anchor="middle">' + esc(cutText(sub, chars + 4)) + '</text>' : '') +
-        '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w) + '" cy="' + (b.y + b.h / 2) + '" r="7"><title>Drag to a block this one connects to</title></circle></g>';
+                // At the top-right corner, clear of the ports (Chris, 2026-11-18).
+        '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w) + '" cy="' + b.y + '" r="7"><title>Drag to a block this one connects to</title></circle></g>';
       var right = b.x + b.w - 6;
       flagged.filter(function (e) { return e.b === x.sec.id; }).forEach(function (e) {
         var name = e.label || T.byId[e.a].sec.title, fw = Math.min(110, 22 + name.length * 6.2), fx = right - fw, fy = b.y - 15;
@@ -3659,8 +3787,16 @@
           '<text x="' + (fx + 17) + '" y="' + (fy + 9) + '">' + esc(cutText(name, Math.floor((fw - 20) / 6.2))) + '</text></g>';
       });
     });
+    // Each line's ports, over the blocks: drag one round its block's edge.
+    rlines.forEach(function (l) {
+      var rr = routed[l.key]; if (!rr) return;
+      [['a', rr.qa, rr.pa], ['b', rr.qb, rr.pb]].forEach(function (o) {
+        svg += '<g class="spec-port' + (o[2] && !o[2].auto ? ' pinned' : '') + '" data-line="' + esc(l.key) + '" data-end="' + o[0] + '"><title>Drag round the block to move where the line meets it</title>' +
+          '<circle class="spec-port-hit" cx="' + o[1].x + '" cy="' + o[1].y + '" r="8"/><circle class="spec-port-dot" cx="' + o[1].x + '" cy="' + o[1].y + '" r="3.5"/></g>';
+      });
+    });
     svg += '</svg>';
-    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram; drag on empty space to draw a new section around blocks. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s right edge to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
+    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
@@ -3792,10 +3928,32 @@
   var flowDrag = null;
   function flowDown(e) {
     var svg = e.target.closest && e.target.closest('svg.spec-flow');
-    if (!svg || e.button !== 0 || e.target.closest('.spec-handle, .spec-edge-hit, .spec-flag')) return;
+    if (!svg || e.button !== 0 || e.target.closest('.spec-handle, .spec-flag')) return;
     var node = e.target.closest('.spec-node'), box = e.target.closest('.spec-group-g');
     var m = svg.getScreenCTM().inverse(), pt = svg.createSVGPoint();
     function local(ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); }
+    var last = specFlowLast, C = specRouter();
+    // A line's port: it slides round its block's edge.
+    var port = e.target.closest('.spec-port');
+    if (port && last && C) {
+      var PL = specLine(port.dataset.line); if (!PL) return;
+      e.preventDefault(); e.stopPropagation();
+      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'port', line: PL, end: port.dataset.end };
+      return;
+    }
+    // A line's straight run: it drags sideways, as Loom's wires (Shift breaks it at the grab). A click
+    // without moving still opens the line's panel.
+    var lineHit = e.target.closest('.spec-edge-hit');
+    if (lineHit) {
+      var L0 = last && C && specLine(lineHit.dataset.line), rr = L0 && last.routed[L0.key];
+      if (!rr) return;
+      var q0 = local(e), run = C.runAt(rr.R0, q0);
+      if (!run) return;
+      var g = {}, rec0 = C.dragStart(g, run, L0.shape || {}, e.ctrlKey ? null : specSnap, e.shiftKey, q0);
+      if (!rec0) return;
+      flowDrag = { svg: svg, local: local, start: q0, cx: e.clientX, cy: e.clientY, on: false, type: 'run', line: L0, g: g, rec: rec0, ctrl: e.ctrlKey };
+      return;
+    }
     var lab = e.target.closest('.spec-edge-label.drag');
     if (lab) {
       e.preventDefault();
@@ -3826,20 +3984,20 @@
     });
     return best;
   }
-  // A label's line as a cubic (the d of specRoute: M x y C x y x y x y), and the nearest point on it.
+  // A label's line as a lane (its routed points, "x y x y …", with the distance along it; 2026-11-18,
+  // routed lines: a kept t is now a share of the line's length, where it was the curve's parameter), and
+  // the nearest point on it.
   function labelRoute(d) {
-    var n = String(d || '').match(/-?[\d.]+(?:e-?\d+)?/g); n = n ? n.map(Number) : [];
-    return n.length === 8 ? n : null;
+    var C = specRouter(), n = String(d || '').match(/-?[\d.]+(?:e-?\d+)?/g); n = n ? n.map(Number) : [];
+    if (!C || n.length < 4) return null;
+    var pts = []; for (var i = 0; i + 1 < n.length; i += 2) pts.push({ x: n[i], y: n[i + 1] });
+    return C.lane(pts);
   }
   function labelSnap(r, q) {
-    var best = null;
-    for (var i = 0; i <= 100; i++) {
-      var t = i / 100, x = bez(r[0], r[2], r[4], r[6], t), y = bez(r[1], r[3], r[5], r[7], t), dd = Math.hypot(q.x - x, q.y - y);
-      if (!best || dd < best.dd) best = { t: t, x: x, y: y, dd: dd };
-    }
-    return best;
+    var C = specRouter(), t = C.laneT(r, q), p = C.laneAt(r, t);
+    return { t: t, x: p.x, y: p.y, dd: Math.hypot(q.x - p.x, q.y - p.y) };
   }
-  function labelPt(r, t) { return { t: t, x: bez(r[0], r[2], r[4], r[6], t), y: bez(r[1], r[3], r[5], r[7], t) }; }
+  function labelPt(r, t) { var p = specRouter().laneAt(r, t); return { t: t, x: p.x, y: p.y }; }
   // Where a label being dragged goes: on its line when within 16 units of it, else where it's dropped, with
   // its dot kept where the label last sat on the line (t0), or the nearest point when it never had a place.
   // c is the label's middle, a its dot (null on the line).
@@ -3875,6 +4033,22 @@
       labelLead(d.el, nd.c, nd.a);
       return;
     }
+    if (d.type === 'run' || d.type === 'port') {
+      if (!d.on && Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 4) return;
+      d.on = true; d.svg.classList.add('moving'); e.preventDefault();
+      var pq = d.local(e), o = { shapes: {}, ports: {} };
+      if (d.type === 'run') {
+        d.rec = specRouter().dragTo(d.g, pq, d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID);
+        o.shapes[d.line.key] = d.rec;
+      } else {
+        var bid = d.end === 'a' ? d.line.a : d.line.b;
+        d.port = specPortAt(specFlowLast.model.R[bid], pq);
+        o.ports[d.line.key] = {}; o.ports[d.line.key][d.end] = d.port;
+        o.shapes[d.line.key] = null;   // a moved port routes its line afresh
+      }
+      flowLiveSoon(d, o);
+      return;
+    }
     if (d.type === 'resize') {
       if (!d.on && Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 4) return;
       d.on = true; d.svg.classList.add('moving'); e.preventDefault();
@@ -3891,7 +4065,7 @@
       if (d.type === 'draw') { d.rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.rect.setAttribute('class', 'spec-draw'); d.svg.appendChild(d.rect); }
       else d.els = d.type === 'block' ? [d.svg.querySelector('.spec-node[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(d.id) + '"]')))
         : [d.svg.querySelector('.spec-group-g[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('[data-anc~="' + CSS.escape(d.id) + '"]')));
-      if (d.type !== 'draw') d.lines = flowLines(d);
+      if (d.type !== 'draw') d.moving = flowMoving(d);
       // A section's blocks take their power flags along too.
       if (d.type === 'section') Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) {
         d.els = d.els.concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(g.dataset.id) + '"]')));
@@ -3905,7 +4079,13 @@
       return;
     }
     d.els.forEach(function (el) { if (el) el.setAttribute('transform', 'translate(' + dx + ' ' + dy + ')'); });
-    flowLinesMove(d, dx, dy);
+    flowLiveSoon(d, { moving: d.moving, dx: dx, dy: dy });
+  }
+  // Live re-routing at most once a frame (a big diagram's route set can take longer than a pointer event);
+  // flowUp settles a pending one first.
+  function flowLiveSoon(d, o) {
+    d.liveO = o;
+    if (!d.raf) d.raf = requestAnimationFrame(function () { d.raf = 0; d.live = flowLive(d.svg, d.liveO); });
   }
   // A section box resized by its edge grip by (dx, dy): the new grow (never under 0) and box.
   function flowResize(d, dx, dy) {
@@ -3918,44 +4098,51 @@
     if (e.indexOf('s') >= 0) g.b = Math.max(0, g0[3] + dy);
     return { grow: g, box: { x: fit.x - g.l, y: fit.y - g.t, w: fit.w + g.l + g.r, h: fit.h + g.t + g.b } };
   }
-  // The lines (and their labels) with an end on a block being dragged, so they follow it live (Chris,
-  // 2026-11-18: they stayed behind until the drop).
-  function flowLines(d) {
-    var moving = {}, svg = d.svg;
+  // The blocks a block or section drag moves.
+  function flowMoving(d) {
+    var moving = {};
     if (d.type === 'block') moving[d.id] = 1;
-    else Array.prototype.forEach.call(svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
-    var rect = {};
-    Array.prototype.forEach.call(svg.querySelectorAll('.spec-node'), function (g) { rect[g.dataset.id] = { x: +g.dataset.x, y: +g.dataset.y, w: SPEC_BW, h: SPEC_BH }; });
-    var out = [];
-    Array.prototype.forEach.call(svg.querySelectorAll('path.spec-edge'), function (p) {
-      var a = p.dataset.a, b = p.dataset.b;
-      if (!rect[a] || !rect[b] || !(moving[a] || moving[b])) return;
-      var pulse = p.nextElementSibling, hit = pulse && pulse.nextElementSibling, labs = [];
-      Array.prototype.forEach.call(svg.querySelectorAll('.spec-edge-label.drag'), function (l) {
-        if (l.dataset.from === a && l.dataset.key.split('|')[0] === b) labs.push({ el: l, route: labelRoute(l.dataset.route), t: l.dataset.t != null && l.dataset.t !== '' ? +l.dataset.t : 0.5 });
-      });
-      out.push({ path: p, pulse: pulse && pulse.classList.contains('spec-pulse') ? pulse : null, hit: hit && hit.classList.contains('spec-edge-hit') ? hit : null,
-        A: rect[a], B: rect[b], ma: !!moving[a], mb: !!moving[b], labs: labs });
-    });
-    return out;
+    else Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
+    return moving;
   }
-  function flowLinesMove(d, dx, dy) {
-    (d.lines || []).forEach(function (L) {
-      var A = L.ma ? { x: L.A.x + dx, y: L.A.y + dy, w: L.A.w, h: L.A.h } : L.A, B = L.mb ? { x: L.B.x + dx, y: L.B.y + dy, w: L.B.w, h: L.B.h } : L.B;
-      var rt = specRoute(A, B);
-      L.path.setAttribute('d', rt.d);
-      if (L.pulse) L.pulse.setAttribute('d', rt.d);
-      if (L.hit) L.hit.setAttribute('d', rt.d);
-      L.labs.forEach(function (l) {
-        if (!l.route) return;
-        var o = labelPt(l.route, l.t), n = rt.at(l.t);
-        l.el.setAttribute('transform', 'translate(' + (n.x - o.x) + ' ' + (n.y - o.y) + ')');
+  function specSnap(v) { return Math.round(v / SPEC_GRID) * SPEC_GRID; }
+  function specLine(key) { var m = specFlowLast && specFlowLast.model; return m ? m.lines.filter(function (L) { return L.key === key; })[0] || null : null; }
+  // The lines routed again as they stand mid-drag, and drawn so (Chris, 2026-11-18: lines follow a dragged
+  // block). o: { moving (block ids), dx, dy, shapes: { key: record or null }, ports: { key: { a, b } } }. A
+  // line with both blocks moving carries its kept shape along. Labels ride along at their place on the line.
+  function flowLive(svg, o) {
+    var last = specFlowLast, C = specRouter(); if (!last || !C) return null;
+    var m = last.model, mv = o.moving || {}, dx = o.dx || 0, dy = o.dy || 0, R = {};
+    Object.keys(m.R).forEach(function (id) { var r = m.R[id]; R[id] = mv[id] ? { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h } : r; });
+    var lines = m.lines.map(function (L) {
+      var x = Object.assign({}, L);
+      if (mv[L.a] && mv[L.b]) x.shape = specShiftShape(L.shape, dx, dy);
+      if (o.shapes && L.key in o.shapes) { x.shape = o.shapes[L.key]; x.live = true; }
+      var pp = o.ports && o.ports[L.key];
+      if (pp && pp.a) x.pa = pp.a;
+      if (pp && pp.b) x.pb = pp.b;
+      return x;
+    });
+    var res = specRouteSet({ doc: m.doc, R: R, lines: lines }, { fast: true });
+    Object.keys(res).forEach(function (key) {
+      var rr = res[key], sel = '[data-line="' + CSS.escape(key) + '"]';
+      Array.prototype.forEach.call(svg.querySelectorAll('path' + sel), function (el) { el.setAttribute('d', rr.d); });
+      Array.prototype.forEach.call(svg.querySelectorAll('.spec-port' + sel), function (g) {
+        var q = g.dataset.end === 'a' ? rr.qa : rr.qb;
+        Array.prototype.forEach.call(g.querySelectorAll('circle'), function (c) { c.setAttribute('cx', q.x); c.setAttribute('cy', q.y); });
+      });
+      Array.prototype.forEach.call(svg.querySelectorAll('.spec-edge-label' + sel), function (l) {
+        var old = labelRoute(l.dataset.route); if (!old) return;
+        var t = l.dataset.t != null && l.dataset.t !== '' ? +l.dataset.t : 0.5, a = labelPt(old, t), b = C.laneAt(rr.lane, t);
+        l.setAttribute('transform', 'translate(' + (b.x - a.x) + ' ' + (b.y - a.y) + ')');
       });
     });
+    return { res: res, lines: lines };
   }
   function flowUp(e) {
     var d = flowDrag; flowDrag = null;
     if (!d || !d.on) return;
+    if (d.raf) { cancelAnimationFrame(d.raf); d.raf = 0; d.live = flowLive(d.svg, d.liveO); }
     d.svg.classList.remove('moving', 'moving-label');
     specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 0);
     var p = current(); if (!p) return;
@@ -3966,6 +4153,30 @@
       var labs = Object.assign({}, rec.labels || {});
       labs[d.key] = { t: Math.round(nd.t * 1000) / 1000, x: nd.x, y: nd.y };
       specPutAll(p, [M.specStamp(Object.assign({}, rec, { labels: labs }), me())]);
+      return;
+    }
+    if (d.type === 'run') {
+      var rl = d.line, rres = d.live && d.live.res[rl.key], srec0 = p.spec[rl.srcA];
+      if (!rres || !srec0 || !d.rec) { renderPage(); return; }
+      var kept = specRouter().release(rres.R0, d.rec.v, d.rec), rts = Object.assign({}, srec0.routes || {});
+      rts[rl.rkey] = { v: kept.v, a: kept.a, b: kept.b }; if (kept.mode) rts[rl.rkey].mode = kept.mode;
+      specPutAll(p, [M.specStamp(Object.assign({}, srec0, { routes: rts }), me())]);
+      return;
+    }
+    if (d.type === 'port') {
+      var pl = d.line, w = pl.word.toLowerCase(), bid = d.end === 'a' ? pl.a : pl.b, other = d.end === 'a' ? pl.b : pl.a, brec = p.spec[bid];
+      if (!brec || !d.port) { renderPage(); return; }
+      var prts = Object.assign({}, brec.ports || {}), out = {};
+      prts[other + '|' + w] = { side: d.port.side, t: d.port.t };
+      out[bid] = Object.assign({}, brec, { ports: prts });
+      // A moved port routes its line afresh: its kept shape goes.
+      var sr = out[pl.srcA] || p.spec[pl.srcA];
+      if (sr && sr.routes && sr.routes[pl.rkey]) {
+        var r2 = Object.assign({}, sr.routes); delete r2[pl.rkey];
+        out[pl.srcA] = Object.assign({}, sr, { routes: r2 });
+        if (!Object.keys(r2).length) delete out[pl.srcA].routes;
+      }
+      specPutAll(p, Object.keys(out).map(function (k) { return M.specStamp(out[k], me()); }));
       return;
     }
     if (d.type === 'resize') {
@@ -4013,6 +4224,13 @@
       if (was && was.x === x && was.y === y) return;
       upd[id] = Object.assign({}, p.spec[id], { pos: { x: x, y: y } }); view.spec[id] = upd[id];
     });
+    // A shaped line between two moved blocks moves with them (its shape is absolute).
+    if (dx || dy) ((specFlowLast && specFlowLast.model.lines) || []).forEach(function (L) {
+      if (!L.shape || !moving[L.a] || !moving[L.b]) return;
+      var r0 = upd[L.srcA] || p.spec[L.srcA]; if (!r0) return;
+      var rts = Object.assign({}, r0.routes || {}); rts[L.rkey] = specShiftShape(L.shape, dx, dy);
+      upd[L.srcA] = Object.assign({}, r0, { routes: rts });
+    });
     Object.keys(upd).forEach(function (id) { upd[id] = M.specStamp(upd[id], me()); });
     var recs = Object.keys(upd).map(function (k) { return upd[k]; });
     if (!recs.length) { renderPage(); return; }
@@ -4021,7 +4239,7 @@
   function T_title(p, id) { var s = M.liveSpec(p).filter(function (x) { return x.id === id; })[0]; return s ? s.title : 'It'; }
   function specAutoLayout() {
     var p = current(); if (!p) return;
-    var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels || s.grow; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; delete r.grow; return M.specStamp(r, me()); });
+    var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels || s.grow || s.ports || s.routes; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; delete r.grow; delete r.ports; delete r.routes; return M.specStamp(r, me()); });
     if (recs.length) { specPutAll(p, recs); toast('Laid out again'); }
   }
   function cutText(t, n) { t = String(t || ''); return n > 1 && t.length > n ? t.slice(0, n - 1) + '…' : t; }
@@ -4421,8 +4639,28 @@
       '<p class="note">It’s the <code>' + esc(L.word) + ':</code> line in ' + esc(L.from.title || 'its block') + '’s text' +
         (L.back ? ', and ' + esc(L.to.title || 'the other block') + '’s names it too, so the diagram draws one line both ways. Delete removes both.' : '.') + '</p>' +
       '<div class="spec-acts"><button class="btn" data-act="spec-goto" data-id="' + esc(L.s.a) + '">Show in document</button>' +
+      (specEdgeShaped(p, L.s) ? '<button class="btn" data-act="spec-edge-reset" title="Forget its shape and where its ends meet the blocks">Reset route</button>' : '') +
       '<button class="btn btn-danger" data-act="spec-edge-delete">Delete line</button></div></div>';
     el.dataset.item = selected;
+  }
+  // Whether a line was shaped or had a port moved, and Reset route, which forgets both.
+  function specEdgeShaped(p, s) {
+    var w = String(s.word || '').toLowerCase(), A = p.spec[s.a], B = p.spec[s.b];
+    return !!((A && A.routes && A.routes[s.b + '|' + w]) || (A && A.ports && A.ports[s.b + '|' + w]) || (B && B.ports && B.ports[s.a + '|' + w]));
+  }
+  function specEdgeReset() {
+    var p = current(), s = specEdgeSel(); if (!p || !s) return;
+    var w = String(s.word || '').toLowerCase(), out = [];
+    [[s.a, s.b], [s.b, s.a]].forEach(function (o, i) {
+      var r = p.spec[o[0]], k = o[1] + '|' + w; if (!r) return;
+      var n = Object.assign({}, r), ch = false;
+      if (r.ports && r.ports[k]) { n.ports = Object.assign({}, r.ports); delete n.ports[k]; ch = true; }
+      if (!i && r.routes && r.routes[k]) { n.routes = Object.assign({}, r.routes); delete n.routes[k]; ch = true; }
+      if (n.ports && !Object.keys(n.ports).length) delete n.ports;
+      if (n.routes && !Object.keys(n.routes).length) delete n.routes;
+      if (ch) out.push(M.specStamp(n, me()));
+    });
+    if (out.length) specPutAll(p, out);
   }
   function specEdgeLabel(value) {
     var p = current(), L = specEdgeItem(p); if (!L) return;
@@ -6134,6 +6372,7 @@
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
       case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
       case 'spec-edge-delete': specEdgeDelete(); break;
+      case 'spec-edge-reset': specEdgeReset(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
       case 'spec-auto-layout': specAutoLayout(); break;
       case 'spec-expand': specSetExpanded(!specExpanded); break;
@@ -6507,6 +6746,19 @@
     specHoverMap(n && n.dataset.id ? n : null);
   });
   document.addEventListener('pointerup', function (e) { if (specZp && specZp.pts[e.pointerId]) { specZpUp(e); return; } if (specDrag) specDragEnd(); else if (specMove) specMoveUp(); else if (flowDrag) flowUp(e); });
+  // A double-click on a diagram line adds a bend where it was clicked (Loom's bend), kept as its shape.
+  document.addEventListener('dblclick', function (e) {
+    var hitEl = e.target.closest && e.target.closest('svg.spec-flow .spec-edge-hit'), C = specRouter();
+    var L = hitEl && C && specLine(hitEl.dataset.line), rr = L && specFlowLast.routed[L.key], p = current();
+    if (!rr || !p || !p.spec[L.srcA]) return;
+    var svg = hitEl.ownerSVGElement, pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    var run = C.runAt(rr.R0, pt.matrixTransform(svg.getScreenCTM().inverse())), rec = run && C.bend(run, specSnap, L.shape || {});
+    if (!rec) return;
+    e.preventDefault();
+    var src = p.spec[L.srcA], rts = Object.assign({}, src.routes || {});
+    rts[L.rkey] = { v: rec.v, a: rec.a, b: rec.b }; if (rec.mode) rts[L.rkey].mode = rec.mode;
+    specPutAll(p, [M.specStamp(Object.assign({}, src, { routes: rts }), me())]);
+  });
   document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });

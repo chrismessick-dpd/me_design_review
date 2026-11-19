@@ -72,6 +72,11 @@ def main(argv):
     sync = ROOT / "tools" / "sync_engine.py"
     if sync.exists() and subprocess.call([sys.executable, str(sync), "--check"]) != 0:
         return 1
+    # Signoff EE vendors Loom's routing engine (assets/vendor/route.js, connect.js) for Scribe's diagram.
+    routing = ROOT / "tools" / "sync_routing.py"
+    if not sync.exists() and routing.exists() and subprocess.call([sys.executable, str(routing), "--check"], stdout=subprocess.DEVNULL) != 0:
+        subprocess.call([sys.executable, str(routing), "--check"])
+        return 1
     if subprocess.call([sys.executable, str(ROOT / "tools" / "validate_templates.py")], stdout=subprocess.DEVNULL) != 0:
         subprocess.call([sys.executable, str(ROOT / "tools" / "validate_templates.py")])
         return 1
