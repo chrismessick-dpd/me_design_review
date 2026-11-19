@@ -2759,7 +2759,7 @@
       '<p class="note">Moving a block into another section moves its heading in the text; the hierarchy under the diagram does that by dragging.</p>' +
       '<h3>How blocks connect</h3>' + rows([
         ['Connects: Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one sends signals to, with the signal or bus in brackets. Write it in the direction signals go; it draws the diagram’s labeled arrows. Add a direction after the signal for one that comes in or goes both ways: (UART, in), (I2C, both ways). Two blocks that name each other draw one line, both ways.'],
-        ['Supplies: MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. Each block fed shows a power flag with the rail’s name.'],
+        ['Supplies: MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. Each block fed shows a power flag with the rail’s name, and a block in the same section also gets a line.'],
         ['Parts: U7, L1, C1–C3, C12', 'The reference designators the block covers, with ranges. Shown as chips on the block; not traced.']
       ]) +
       '<p class="note">Blocks are named by their heading, so <code>Connects: MCU</code> needs a heading called MCU. Rename a heading and every Connects and Supplies line follows.</p>'
@@ -3715,13 +3715,11 @@
       var says = L && L.ab && L.ba ? a + ' and ' + b + ' connect both ways' : L && L.ba && !L.ab ? (L.a === e.a ? b + ' ' + linkVerb(e.word) + ' ' + a : a + ' ' + linkVerb(e.word) + ' ' + b) : a + ' ' + linkVerb(e.word) + ' ' + b;
       return '<path class="spec-edge-hit" data-act="spec-edge"' + (key ? ' data-line="' + esc(key) + '"' : '') + ' data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(says + (label ? ' (' + label + ')' : '') + ', click for its panel') + '</title></path>';
     }
-    // Supplies between neighbors in one section draw as arrows; every other supply is a power flag.
-    var flagged = [], arrows = [];
-    sup.forEach(function (e) {
-      var A = R[e.a], B = R[e.b];
-      if (e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]) && (B.x >= A.x + A.w + 12 || A.x >= B.x + B.w + 12) && Math.abs(A.y - B.y) < SPEC_BH) arrows.push(e);
-      else flagged.push(e);
-    });
+    // Supplies within one section draw as routed arrows; every supply also gets a power flag.
+    // Chris, 2026-11-19: a supply between two blocks in one section is a routed line wherever they sit (it
+    // used to be a line only while they stood side by side, so dragging one turned it into a flag), and every
+    // supply also keeps its rail flag on the block it feeds.
+    var flagged = sup.slice(), arrows = sup.filter(function (e) { return e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]); });
     // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
     // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
     // other (the default), in to it, or both ways; both blocks naming each other is both ways too.
@@ -3818,7 +3816,7 @@
       });
     });
     svg += '</svg>';
-    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
+    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds, and a line to each one in the same section. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
