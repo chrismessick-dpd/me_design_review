@@ -3642,7 +3642,9 @@
   // drags something; then every block's position is kept (pos) and boxes fit their blocks. Connects
   // lines carry their signals; Supplies show as a power flag on each block fed, or an arrow between
   // neighbors in one section.
-  var SPEC_BW = 156, SPEC_BH = 54, SPEC_PAD = 14, SPEC_HEAD = 24, SPEC_GAP = 44, SPEC_ROWGAP = 60;
+  // Whole steps of the routing grid (SPEC_GRID, 10), so blocks, their ports, and the lines between them all sit
+  // on it (Chris, 2026-11-19: everything snaps on a grid).
+  var SPEC_BW = 160, SPEC_BH = 60, SPEC_PAD = 20, SPEC_HEAD = 20, SPEC_GAP = 40, SPEC_ROWGAP = 60;
   function specFlowTree(a) {
     var kids = {}, hidden = {}, byId = {};
     a.sections.forEach(function (x) { byId[x.sec.id] = x; var pid = x.parent || ''; (kids[pid] = kids[pid] || []).push(x); });
@@ -3867,7 +3869,7 @@
   // where it was dragged (the block's ports['<other id>|<word>'] = { side, t }). A line's straight runs
   // drag as Loom's wires do, and its shape is kept on its from-block (routes['<to id>|<word>'], Loom's
   // record { v, a, b, mode }). Nothing derived is written: auto ports and routes stay in memory.
-  var SPEC_GRID = 10, SPEC_LSTUB = 16, SPEC_RAD = 10, specFlowLast = null, specPtLast = null;
+  var SPEC_GRID = 10, SPEC_LSTUB = 20, SPEC_RAD = 10, specFlowLast = null, specPtLast = null;
   // Two diagrams share the drag code (Chris, 2026-11-19): the block diagram ('flow'), whose arrangement sits on
   // each section record (pos, ports, routes, labels), and the power tree ('ptree'), whose sits under its ptree.
   function svgView(svg) { return svg && svg.getAttribute && svg.getAttribute('data-view') === 'ptree' ? 'ptree' : 'flow'; }
@@ -3891,19 +3893,109 @@
     if (B.y + B.h < A.y) return 't';
     return 'b';
   }
+  // Ports sit on the grid (Chris, 2026-11-19: snap ports to a grid): a side has a grid point every SPEC_GRID
+  // in from its corners, its slots 1 to specSlots, and a port takes the slot nearest its t. Blocks sit on
+  // the grid and are whole steps in size, so every port is on a grid line.
+  function specSideLen(r, side) { return side === 't' || side === 'b' ? r.w : r.h; }
+  function specSlots(r, side) { return Math.max(1, Math.floor(specSideLen(r, side) / SPEC_GRID) - 1); }
+  function specSlot(r, p) {
+    var L = specSideLen(r, p.side);
+    return Math.max(1, Math.min(specSlots(r, p.side), Math.round(L * (p.t == null ? 0.5 : p.t) / SPEC_GRID)));
+  }
   function specPortPt(r, p) {
-    var t = Math.max(0.04, Math.min(0.96, p.t == null ? 0.5 : p.t));
-    if (p.side === 'l') return { x: r.x, y: r.y + r.h * t, dx: -1, dy: 0 };
-    if (p.side === 'r') return { x: r.x + r.w, y: r.y + r.h * t, dx: 1, dy: 0 };
-    if (p.side === 't') return { x: r.x + r.w * t, y: r.y, dx: 0, dy: -1 };
-    return { x: r.x + r.w * t, y: r.y + r.h, dx: 0, dy: 1 };
+    var L = specSideLen(r, p.side), a = L < 2 * SPEC_GRID ? L / 2 : specSlot(r, p) * SPEC_GRID;
+    if (p.side === 'l') return { x: r.x, y: r.y + a, dx: -1, dy: 0 };
+    if (p.side === 'r') return { x: r.x + r.w, y: r.y + a, dx: 1, dy: 0 };
+    if (p.side === 't') return { x: r.x + a, y: r.y, dx: 0, dy: -1 };
+    return { x: r.x + a, y: r.y + r.h, dx: 0, dy: 1 };
   }
   // The port nearest a point on block r's edge, its place on the grid.
   function specPortAt(r, q) {
     var d = [['l', Math.abs(q.x - r.x)], ['r', Math.abs(q.x - r.x - r.w)], ['t', Math.abs(q.y - r.y)], ['b', Math.abs(q.y - r.y - r.h)]].sort(function (u, v) { return u[1] - v[1]; })[0][0];
     var horiz = d === 't' || d === 'b', len = horiz ? r.w : r.h, along = horiz ? q.x - r.x : q.y - r.y;
-    along = Math.round(along / SPEC_GRID) * SPEC_GRID;
-    return { side: d, t: Math.round(Math.max(0.04, Math.min(0.96, along / len)) * 1000) / 1000 };
+    along = Math.max(SPEC_GRID, Math.min(len - SPEC_GRID, Math.round(along / SPEC_GRID) * SPEC_GRID));
+    return { side: d, t: Math.round(Math.max(0.01, Math.min(0.99, along / len)) * 1000) / 1000 };
+  }
+  // A block grows so each line on a side gets its own grid point (Chris, 2026-11-19: expand parts to
+  // accommodate). lines: [{ a, b, pa, pb }] (pa, pb: a kept port, else null; an auto port takes the side
+  // facing the other block). R's block rects are widened or deepened in place, keeping their top-left corner.
+  function specGrow(R, lines) {
+    // A kept port counts once per grid point it holds (a power tree rail's pin is shared by all its loads).
+    var n = {}, kept = {};
+    function add(id, p, side) {
+      var k = id + '\n' + side;
+      if (p) { var sl = specSlot(R[id], p); kept[k] = kept[k] || {}; if (kept[k][sl]) return; kept[k][sl] = 1; }
+      n[k] = (n[k] || 0) + 1;
+    }
+    lines.forEach(function (L) {
+      var A = R[L.a], B = R[L.b]; if (!A || !B || L.a === L.b) return;
+      add(L.a, L.pa && L.pa.side ? L.pa : null, (L.pa && L.pa.side) || specPortSide(A, B));
+      add(L.b, L.pb && L.pb.side ? L.pb : null, (L.pb && L.pb.side) || specPortSide(B, A));
+    });
+    Object.keys(R).forEach(function (id) {
+      var r = R[id], c = function (s) { return n[id + '\n' + s] || 0; };
+      r.w = Math.max(r.w, (Math.max(c('t'), c('b')) + 1) * SPEC_GRID);
+      r.h = Math.max(r.h, (Math.max(c('l'), c('r')) + 1) * SPEC_GRID);
+    });
+  }
+  // The x of a terminal's lead-in when it runs straight out of a port on a top or bottom edge (the lead-in's
+  // edge point straight above or below it), else null.
+  function specLeadX(T, lead) { return lead && Math.abs(lead.x - T.x) < 0.5 && Math.abs(lead.y - T.y) > 0.5 ? T.x : null; }
+  // Whether shape v fits ends A and B: route.js fits, or the same but for an end's vertical run in line with
+  // its lead-in, heading on away from its block (Chris, 2026-11-19: a line couldn't be dragged under its port).
+  // There the lead-in and the run are one, and the line drops straight out of the port (route.js shape drops
+  // the run of no length between them).
+  function specFits(A, B, v) {
+    if (LM.route.fits(A, B, v, 8)) return true;
+    if (!Array.isArray(v) || !v.length || v.length % 2 === 0 || v.some(function (x) { return !isFinite(+x); })) return false;
+    v = v.map(Number);
+    var n = v.length, ax = specLeadX(A, A.from), bx = specLeadX(B, B.to), sa = A.stub != null ? A.stub : 8, sb = B.stub != null ? B.stub : 8;
+    var a1 = n > 1 ? v[1] : B.y, b1 = n > 1 ? v[n - 2] : A.y;
+    var okA = (ax != null && Math.abs(v[0] - ax) < 0.5 && (a1 - A.y) * (A.y - A.from.y) > 0.5) || (v[0] - A.x) * A.out >= sa - 0.5;
+    var okB = (bx != null && Math.abs(v[n - 1] - bx) < 0.5 && (b1 - B.y) * (B.y - B.to.y) > 0.5) || (B.x - v[n - 1]) * B.in >= sb - 0.5;
+    return okA && okB;
+  }
+  // An engine route out of a top or bottom port leaves level from its lead point, so it always steps aside
+  // before heading on, a jog right at the port. Its first (or last) vertical run moved under the port drops it
+  // straight out instead, when that fits, clears every block, and lies along no other line. Returns the new v,
+  // or null. rects: { id, x0, y0, x1, y1 }; routes: the other routes in the same space (a Map).
+  function specDrop(R0, rects, routes) {
+    var RTm = LM.route, v = R0.v.map(Number), n = v.length, done = false;
+    if (!n || R0.kept || R0.behind) return null;
+    function blocked(w) {
+      return RTm.runs(R0.A, R0.B, w).some(function (r) {
+        if (Math.abs(r.a.x - r.b.x) + Math.abs(r.a.y - r.b.y) < 0.5) return false;
+        return rects.some(function (rc) {
+          if (r.k < 0 && (rc.id === R0.A.node || rc.id === R0.B.node)) return false;
+          var m = 4, x0 = rc.x0 - m, y0 = rc.y0 - m, x1 = rc.x1 + m, y1 = rc.y1 + m;
+          return Math.abs(r.a.y - r.b.y) < 0.01 ? r.a.y > y0 && r.a.y < y1 && Math.max(r.a.x, r.b.x) > x0 && Math.min(r.a.x, r.b.x) < x1
+            : r.a.x > x0 && r.a.x < x1 && Math.max(r.a.y, r.b.y) > y0 && Math.min(r.a.y, r.b.y) < y1;
+        });
+      });
+    }
+    function along(w) {
+      var mine = RTm.runs(R0.A, R0.B, w);
+      return Array.from(routes.values()).some(function (o) {
+        if (o.key === R0.key) return false;
+        return RTm.runs(o.A, o.B, o.v).some(function (s) {
+          return mine.some(function (r) {
+            if (r.axis !== s.axis) return false;
+            var lv = r.axis === 'h', gap = Math.abs(lv ? r.a.y - s.a.y : r.a.x - s.a.x);
+            var lo = lv ? Math.max(Math.min(r.a.x, r.b.x), Math.min(s.a.x, s.b.x)) : Math.max(Math.min(r.a.y, r.b.y), Math.min(s.a.y, s.b.y));
+            var hi = lv ? Math.min(Math.max(r.a.x, r.b.x), Math.max(s.a.x, s.b.x)) : Math.min(Math.max(r.a.y, r.b.y), Math.max(s.a.y, s.b.y));
+            return gap < 6 && hi - lo > 1;
+          });
+        });
+      });
+    }
+    [[R0.A, R0.A.from, 0], [R0.B, R0.B.to, n - 1]].forEach(function (e) {
+      var lx = specLeadX(e[0], e[1]);
+      if (lx == null || Math.abs(v[e[2]] - lx) < 0.5) return;
+      var w = v.slice(); w[e[2]] = lx;
+      if (!specFits(R0.A, R0.B, w) || blocked(w) || along(w)) return;
+      v = w; done = true;
+    });
+    return done ? v : null;
   }
   // A stub that reaches a line of the search grid, where the engine turns first (as Loom's onGrid: one
   // short of it makes the route give up and run straight).
@@ -3935,11 +4027,24 @@
       if (pa.auto) (sides[L.a + '\n' + pa.side] = sides[L.a + '\n' + pa.side] || []).push({ p: pa, o: B });
       if (pb.auto) (sides[L.b + '\n' + pb.side] = sides[L.b + '\n' + pb.side] || []).push({ p: pb, o: A });
     });
-    // Auto ports on one side spread along it, in the order of the blocks they go to.
+    // Auto ports on one side spread along it, in the order of the blocks they go to, each on a free grid point
+    // (a kept port holds its own).
+    var taken = {};
+    m.lines.forEach(function (L) {
+      var w = want[L.key];
+      [[L.a, w.a], [L.b, w.b]].forEach(function (e) { if (e[1].auto) return; var k = e[0] + '\n' + e[1].side; (taken[k] = taken[k] || {})[specSlot(R[e[0]], e[1])] = 1; });
+    });
     Object.keys(sides).forEach(function (k) {
-      var side = k.split('\n')[1], list = sides[k], horiz = side === 't' || side === 'b';
+      var id = k.split('\n')[0], side = k.split('\n')[1], list = sides[k], horiz = side === 't' || side === 'b';
+      var S = specSlots(R[id], side), L0 = specSideLen(R[id], side), used = Object.assign({}, taken[k] || {}), prev = 0;
       list.sort(function (u, v) { return horiz ? (u.o.x + u.o.w / 2) - (v.o.x + v.o.w / 2) : (u.o.y + u.o.h / 2) - (v.o.y + v.o.h / 2); });
-      list.forEach(function (u, i) { u.p.t = (i + 1) / (list.length + 1); });
+      list.forEach(function (u, i) {
+        var ideal = Math.round((i + 1) * (S + 1) / (list.length + 1)), best = null;
+        for (var s = prev + 1; s <= S; s++) if (!used[s] && (best == null || Math.abs(s - ideal) < Math.abs(best - ideal))) best = s;
+        if (best == null) best = Math.max(1, Math.min(S, ideal));
+        used[best] = 1; prev = best;
+        u.p.t = best * SPEC_GRID / L0;
+      });
     });
     // Two blocks side by side (or one over the other): an auto port alone on its side lines up with the
     // other end, so the line runs straight instead of a small jog (as the old lines between neighbors did).
@@ -3948,9 +4053,9 @@
       var w = want[L.key], pa = w.a, pb = w.b, A = R[L.a], B = R[L.b];
       if (!pa.auto || !pb.auto || facing[pa.side] !== pb.side) return;
       var lr = pa.side === 'l' || pa.side === 'r', o = lr ? 'y' : 'x', s = lr ? 'h' : 'w';
-      var va = A[o] + A[s] * pa.t, vb = B[o] + B[s] * pb.t, na = sides[L.a + '\n' + pa.side].length, nb = sides[L.b + '\n' + pb.side].length;
-      if (na === 1 && vb >= A[o] + A[s] * 0.1 && vb <= A[o] + A[s] * 0.9) pa.t = (vb - A[o]) / A[s];
-      else if (nb === 1 && va >= B[o] + B[s] * 0.1 && va <= B[o] + B[s] * 0.9) pb.t = (va - B[o]) / B[s];
+      var va = specPortPt(A, pa)[o], vb = specPortPt(B, pb)[o], na = sides[L.a + '\n' + pa.side].length, nb = sides[L.b + '\n' + pb.side].length;
+      if (na === 1 && vb >= A[o] + SPEC_GRID && vb <= A[o] + A[s] - SPEC_GRID) pa.t = (vb - A[o]) / A[s];
+      else if (nb === 1 && va >= B[o] + SPEC_GRID && va <= B[o] + B[s] - SPEC_GRID) pb.t = (va - B[o]) / B[s];
     });
     // The engine's terminals leave level, so a line whose ends are both on top or bottom edges would step
     // out sideways and back (Chris, 2026-11-19: jogs on lines that were straight). Those route with x and y
@@ -3973,16 +4078,22 @@
         // its first bend), would hook back into the block: it routes afresh instead. A shape being dragged
         // (live) is drawn as it is.
         var shape = L.shape || null;
-        if (shape && Array.isArray(shape.v) && (!!shape.tr !== tr || (!L.live && !combos.some(function (c) { return LM.route.fits(c.A, c.B, shape.v.map(Number), 8); })))) shape = shape.mode ? { mode: shape.mode } : null;
+        if (shape && Array.isArray(shape.v) && (!!shape.tr !== tr || (!L.live && !combos.some(function (c) { return specFits(c.A, c.B, shape.v.map(Number)); })))) shape = shape.mode ? { mode: shape.mode } : null;
         return { key: L.key, weight: 1, combos: combos, half: 1, stub: 8, r: SPEC_RAD, shape: shape,
           qa: tr ? Object.assign(swap(qa), { dx: qa.dy, dy: qa.dx }) : qa, qb: tr ? Object.assign(swap(qb), { dx: qb.dy, dy: qb.dx }) : qb };
       });
       var res = C.routeAll(m.doc + '|' + gk, rects, list, { grid: SPEC_GRID, fast: !!(opts && opts.fast), margin: 200 });
+      // Lines out of top or bottom ports (only level ends route upright, so here) drop straight out of them
+      // where they can (Chris, 2026-11-19: lines met their ports off to one side).
+      if (!tr) list.forEach(function (o) {
+        var R0 = res.routes.get(o.key), dv = R0 && specDrop(R0, rects, res.routes);
+        if (dv) res.routes.set(o.key, Object.assign({}, R0, { v: dv }));
+      });
       list.forEach(function (o) {
         var R0 = res.routes.get(o.key); if (!R0) return;
         var dr = C.draw(R0), pts = dr && dr.pts ? dr.pts : dr;
         if (tr) pts = pts.map(swap);
-        out[o.key] = { R0: R0, tr: tr, pts: pts, d: C.pathD(pts), lane: C.lane(pts), qa: o.qa, qb: o.qb, pa: want[o.key].a, pb: want[o.key].b };
+        out[o.key] = { R0: R0, tr: tr, pts: pts, d: C.pathD(pts), lane: C.lane(pts), qa: o.qa, qb: o.qb, pa: want[o.key].a, pb: want[o.key].b, combos: o.combos };
       });
     });
     return out;
@@ -4088,7 +4199,8 @@
       Y += h + SPEC_ROWGAP;
     });
     var R = {};
-    blocks.forEach(function (x) { if (x.sec.pos) R[x.sec.id] = { x: x.sec.pos.x, y: x.sec.pos.y, w: SPEC_BW, h: SPEC_BH }; });
+    // A kept place is drawn on the grid (places kept before 2026-11-19 may sit off it); a drag then keeps it there.
+    blocks.forEach(function (x) { if (x.sec.pos) R[x.sec.id] = { x: specSnap(x.sec.pos.x), y: specSnap(x.sec.pos.y), w: SPEC_BW, h: SPEC_BH }; });
     // Once the diagram is arranged, a block added later has no place of its own, and the automatic one
     // can sit on a block that was moved (ticket 5, 2026-11-13). It goes right of the last block in its
     // section instead, then further right or down until it covers nothing.
@@ -4115,13 +4227,41 @@
       }
       R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: SPEC_BH };
     });
+    // Supplies within one section draw as routed arrows; every supply also gets a power flag.
+    // Chris, 2026-11-19: a supply between two blocks in one section is a routed line wherever they sit (it
+    // used to be a line only while they stood side by side, so dragging one turned it into a flag), and every
+    // supply also keeps its rail flag on the block it feeds.
+    var flagged = sup.slice(), arrows = sup.concat(pw).filter(function (e) { return e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]); });
+    // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
+    // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
+    // other (the default), in to it, or both ways; both blocks naming each other is both ways too.
+    var lines = [], pairs = {};
+    conn.forEach(function (e) {
+      var k = [e.a, e.b].sort().join('|') + '|' + e.word.toLowerCase(), L = pairs[k];
+      if (!L) lines.push(L = pairs[k] = { a: e.a, b: e.b, word: e.word, labels: [], ab: false, ba: false, src: e });
+      var fwd = L.a === e.a, out = e.dir !== 'in', inn = e.dir === 'in' || e.dir === 'both';
+      if (e.dir === 'both') { L.ab = L.ba = true; }
+      else if (fwd ? out : inn) L.ab = true; else L.ba = true;
+      if (e.label && L.labels.map(function (t) { return t.toLowerCase(); }).indexOf(e.label.toLowerCase()) < 0) L.labels.push(e.label);
+    });
+    // Every drawn line, routed together: supply arrows, then connections.
+    var rlines = arrows.map(function (e) { return { key: e.a + '>' + e.b + '|' + e.word.toLowerCase(), a: e.a, b: e.b, word: e.word, src: e, sup: e }; })
+      .concat(lines.filter(function (L) { return L.a !== L.b; }).map(function (L) { return { key: L.a + '>' + L.b + '|' + L.word.toLowerCase(), a: L.a, b: L.b, word: L.word, src: L.src, L: L }; }));
+    var blockR = {}; blocks.forEach(function (x) { blockR[x.sec.id] = R[x.sec.id]; });
+    var model = { doc: 'scribe|' + p.id, R: blockR, lines: rlines.map(function (l) {
+      var w = l.word.toLowerCase(), A = T.byId[l.a].sec, B = T.byId[l.b].sec, S = T.byId[l.src.a].sec;
+      return { key: l.key, a: l.a, b: l.b, word: l.word, srcA: l.src.a, rkey: l.src.b + '|' + w,
+        shape: (S.routes || {})[l.src.b + '|' + w] || null, pa: (A.ports || {})[l.b + '|' + w] || null, pb: (B.ports || {})[l.a + '|' + w] || null };
+    }) };
+    // Each block grows so every line on a side gets its own grid point, before the sections fit round them.
+    specGrow(R, model.lines);
     function boxOf(x) {
       if (!T.isSec(x)) return R[x.sec.id];
       var bs = T.ch[x.sec.id].map(boxOf).filter(Boolean);
       if (!bs.length) return null;
       var x0 = Math.min.apply(null, bs.map(function (b) { return b.x; })), y0 = Math.min.apply(null, bs.map(function (b) { return b.y; }));
       var x1 = Math.max.apply(null, bs.map(function (b) { return b.x + b.w; })), y1 = Math.max.apply(null, bs.map(function (b) { return b.y + b.h; }));
-      var bp = Math.max(pad, 12), bh = Math.max(head, 20), g = x.sec.grow || { l: 0, t: 0, r: 0, b: 0 };
+      var bp = Math.max(pad, 20), bh = Math.max(head, 20), g = x.sec.grow || { l: 0, t: 0, r: 0, b: 0 };
       return (R[x.sec.id] = { x: x0 - bp - g.l, y: y0 - bp - bh - g.t, w: x1 - x0 + 2 * bp + g.l + g.r, h: y1 - y0 + 2 * bp + bh + g.t + g.b });
     }
     (T.ch[''] || []).forEach(boxOf);
@@ -4163,23 +4303,6 @@
       var says = L && L.ab && L.ba ? a + ' and ' + b + ' connect both ways' : L && L.ba && !L.ab ? (L.a === e.a ? b + ' ' + linkVerb(e.word) + ' ' + a : a + ' ' + linkVerb(e.word) + ' ' + b) : a + ' ' + linkVerb(e.word) + ' ' + b;
       return '<path class="spec-edge-hit" data-act="spec-edge"' + (key ? ' data-line="' + esc(key) + '"' : '') + ' data-a="' + esc(e.a) + '" data-b="' + esc(e.b) + '" data-word="' + esc(e.word) + '" d="' + d + '"><title>' + esc(says + (label ? ' (' + label + ')' : '') + ', click for its panel') + '</title></path>';
     }
-    // Supplies within one section draw as routed arrows; every supply also gets a power flag.
-    // Chris, 2026-11-19: a supply between two blocks in one section is a routed line wherever they sit (it
-    // used to be a line only while they stood side by side, so dragging one turned it into a flag), and every
-    // supply also keeps its rail flag on the block it feeds.
-    var flagged = sup.slice(), arrows = sup.concat(pw).filter(function (e) { return e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]); });
-    // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
-    // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
-    // other (the default), in to it, or both ways; both blocks naming each other is both ways too.
-    var lines = [], pairs = {};
-    conn.forEach(function (e) {
-      var k = [e.a, e.b].sort().join('|') + '|' + e.word.toLowerCase(), L = pairs[k];
-      if (!L) lines.push(L = pairs[k] = { a: e.a, b: e.b, word: e.word, labels: [], ab: false, ba: false, src: e });
-      var fwd = L.a === e.a, out = e.dir !== 'in', inn = e.dir === 'in' || e.dir === 'both';
-      if (e.dir === 'both') { L.ab = L.ba = true; }
-      else if (fwd ? out : inn) L.ab = true; else L.ba = true;
-      if (e.label && L.labels.map(function (t) { return t.toLowerCase(); }).indexOf(e.label.toLowerCase()) < 0) L.labels.push(e.label);
-    });
     // A label goes at the middle of its line, or the nearest place along it that covers no block (ticket 7).
     // A line too short for its label (two blocks side by side) puts it just above or below them.
     // Each block's rect reaches up over its power flags.
@@ -4196,15 +4319,6 @@
       var onLine = q === mid || i < tries.length;
       return { q: q, anchor: onLine ? null : mid, t: onLine ? (i >= 0 ? tries[i] : 0.5) : 0.5 };
     }
-    // Every drawn line, routed together: supply arrows, then connections.
-    var rlines = arrows.map(function (e) { return { key: e.a + '>' + e.b + '|' + e.word.toLowerCase(), a: e.a, b: e.b, word: e.word, src: e, sup: e }; })
-      .concat(lines.filter(function (L) { return L.a !== L.b; }).map(function (L) { return { key: L.a + '>' + L.b + '|' + L.word.toLowerCase(), a: L.a, b: L.b, word: L.word, src: L.src, L: L }; }));
-    var blockR = {}; blocks.forEach(function (x) { blockR[x.sec.id] = R[x.sec.id]; });
-    var model = { doc: 'scribe|' + p.id, R: blockR, lines: rlines.map(function (l) {
-      var w = l.word.toLowerCase(), A = T.byId[l.a].sec, B = T.byId[l.b].sec, S = T.byId[l.src.a].sec;
-      return { key: l.key, a: l.a, b: l.b, word: l.word, srcA: l.src.a, rkey: l.src.b + '|' + w,
-        shape: (S.routes || {})[l.src.b + '|' + w] || null, pa: (A.ports || {})[l.b + '|' + w] || null, pb: (B.ports || {})[l.a + '|' + w] || null };
-    }) };
     var routed = specRouter() ? specRouteSet(model) : {};
     specFlowLast = { model: model, routed: routed };
     // The frame takes in lines routed past the blocks (round the top block, say).
@@ -4293,7 +4407,7 @@
   // tree rail feeds every tree block that uses it, one line per rail, labeled with it. Laid out left to
   // right from sources to loads; the blocks' input rails sit on their left edge and outputs on their right.
   // Dragging arranges it as the block diagram does, kept apart under each section's ptree (specLay).
-  var SPEC_PT_COL = 130, SPEC_PT_PIN = 16;
+  var SPEC_PT_COL = 130, SPEC_PT_PIN = 20;
   function specPtModel(T) {
     var blocks = T.items.filter(function (x) { return !T.isSec(x) && (x.power || []).some(function (r) { return r.tree; }); });
     var pins = {};
@@ -4318,9 +4432,9 @@
     });
     return { blocks: blocks, pins: pins, lines: lines };
   }
-  // Where a rail's pin sits on its block's edge (t, 0 to 1 down it), and the block's height.
-  function specPtHeight(pn) { return Math.max(SPEC_BH, 34 + SPEC_PT_PIN * Math.max(pn.ins.length, pn.outs.length, 1)); }
-  function specPtPinY(i) { return 32 + SPEC_PT_PIN * i + SPEC_PT_PIN / 2 - 2; }
+  // The block's height, and where a rail's pin sits down its edge: on the grid, a step apart, under the title.
+  function specPtHeight(pn) { return Math.max(SPEC_BH, 40 + SPEC_PT_PIN * Math.max(pn.ins.length, pn.outs.length, 1)); }
+  function specPtPinY(i) { return 40 + SPEC_PT_PIN * i; }
   function specPtreeHtml(p, T) {
     var M0 = specPtModel(T), blocks = M0.blocks, pins = M0.pins, sel = specBlockSel(), ps = specPtSel();
     var arranged = blocks.some(function (x) { return x.sec.ptree; });
@@ -4356,7 +4470,7 @@
       });
     });
     // Kept places win; once any block is placed, a newcomer goes below everything in its column.
-    blocks.forEach(function (x) { var q = x.sec.ptree && x.sec.ptree.pos; if (q) R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: R[x.sec.id].h }; });
+    blocks.forEach(function (x) { var q = x.sec.ptree && x.sec.ptree.pos; if (q) R[x.sec.id] = { x: specSnap(q.x), y: specSnap(q.y), w: SPEC_BW, h: R[x.sec.id].h }; });
     if (blocks.some(function (x) { return x.sec.ptree && x.sec.ptree.pos; })) {
       var bottom = Math.max.apply(null, blocks.filter(function (x) { return x.sec.ptree && x.sec.ptree.pos; }).map(function (x) { var r = R[x.sec.id]; return r.y + r.h; }).concat([0]));
       blocks.forEach(function (x) { if (x.sec.ptree && x.sec.ptree.pos) return; R[x.sec.id].y = bottom + 40; bottom += R[x.sec.id].h + 40; });
@@ -4372,6 +4486,7 @@
       return Object.assign({}, L, { shape: (la.routes || {})[L.rkey] || null,
         pa: ka || { side: 'r', t: pinT(L.a, L.rail, 'r'), pin: true }, pb: kb || { side: 'l', t: pinT(L.b, L.rail, 'l'), pin: true } });
     }) };
+    specGrow(R, model.lines);
     var routed = specRouter() ? specRouteSet(model) : {};
     specPtLast = { model: model, routed: routed };
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -4702,8 +4817,10 @@
       if (d.type === 'run') {
         var nrec = specRouter().dragTo(d.g, specRouteSpace(d.rr, pq), d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID);
         // A run stops where the line still clears its blocks by a stub: past that it would hook back
-        // into the block, and the kept shape would be dropped when drawn.
-        if (!LM.route.fits(d.rr.R0.A, d.rr.R0.B, nrec.v, 8)) return;
+        // into the block, and the kept shape would be dropped when drawn. Any of the line's end pairs will
+        // do (a run next to a top or bottom port crosses under it to the other side), and so will a run in
+        // line with such a port, where the line drops straight out of it (specFits).
+        if (!(d.rr.combos || [{ A: d.rr.R0.A, B: d.rr.R0.B }]).some(function (c) { return specFits(c.A, c.B, nrec.v); })) return;
         d.rec = nrec;
         if (d.tr) d.rec.tr = true; else delete d.rec.tr;
         o.shapes[d.line.key] = d.rec;
@@ -4887,7 +5004,8 @@
     var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) }), upd = {};
     Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
       var id = g.dataset.id, x = +g.dataset.x + (moving[id] ? dx : 0), y = +g.dataset.y + (moving[id] ? dy : 0), was = stored[id];
-      if (was && was.x === x && was.y === y) return;
+      // A place kept off the grid (before 2026-11-19) draws snapped; unmoved, it isn't rewritten (or stamped).
+      if (was && specSnap(was.x) === x && specSnap(was.y) === y) return;
       upd[id] = specWithLay(p.spec[id], d.view, { pos: { x: x, y: y } }); view.spec[id] = upd[id];
     });
     // A shaped line between two moved blocks moves with them (its shape is absolute).
