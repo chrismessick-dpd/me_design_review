@@ -610,16 +610,20 @@
   // each source rail, and a connection that carries a rail the far block sinks (or this one sources) is a power
   // link: a line within one section, the flags alone across sections.
   function specPowerOn() { return !!specCfg().power; }
+  // A rail may also be marked "tree" (Chris, 2026-11-19): "16.4V (sink, tree)" puts the block in the power tree
+  // for that rail (tree: true on the item).
   function specPowerItems(text) {
     return specLinkItems(text).map(function (it) {
-      var role = /^\s*source\s*$/i.test(it.label || '') ? 'source' : 'sink';
-      return { rail: it.name.trim(), role: role };
+      var words = String(it.label || '').split(',').map(function (w) { return w.trim().toLowerCase(); });
+      var o = { rail: it.name.trim(), role: words.indexOf('source') >= 0 ? 'source' : 'sink' };
+      if (words.indexOf('tree') >= 0) o.tree = true;
+      return o;
     }).filter(function (x) { return x.rail; });
   }
   function specPowerText(items) {
     var seen = {};
     return items.filter(function (x) { var k = x.rail.toLowerCase() + '|' + x.role; if (!x.rail || seen[k]) return false; seen[k] = 1; return true; })
-      .map(function (x) { return (/[,()"]/.test(x.rail) ? '"' + x.rail.replace(/"/g, '') + '"' : x.rail) + ' (' + (x.role === 'source' ? 'source' : 'sink') + ')'; }).join(', ');
+      .map(function (x) { return (/[,()"]/.test(x.rail) ? '"' + x.rail.replace(/"/g, '') + '"' : x.rail) + ' (' + (x.role === 'source' ? 'source' : 'sink') + (x.tree ? ', tree' : '') + ')'; }).join(', ');
   }
   function specPowerOf(body) {
     var m = specPowerOn() && String(body || '').split('\n').filter(function (l) { return /^\s*power\s*:/i.test(l); })[0];
@@ -831,7 +835,21 @@
     var ports = specPorts(r.ports), routes = specRoutes(r.routes);
     if (ports) out.ports = ports;
     if (routes) out.routes = routes;
+    // The power tree's own arrangement (Chris, 2026-11-19), apart from the block diagram's, only when there is one.
+    var pt = specTreeLayout(r.ptree);
+    if (pt) out.ptree = pt;
     return out;
+  }
+  // { pos, ports, routes, labels }: where the block sits in the power tree and its lines there, keyed by
+  // '<other section id>|power'. Null when empty.
+  function specTreeLayout(v) {
+    if (!v || typeof v !== 'object') return null;
+    var out = {}, pos = specPos(v.pos), ports = specPorts(v.ports), routes = specRoutes(v.routes), labs = specLabels(v.labels);
+    if (pos) out.pos = pos;
+    if (ports) out.ports = ports;
+    if (routes) out.routes = routes;
+    if (labs) out.labels = labs;
+    return Object.keys(out).length ? out : null;
   }
   // { '<other section id>|<link word>': { side ('l', 'r', 't', 'b'), t (0 to 1 along it) } }.
   function specPorts(v) {

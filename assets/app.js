@@ -1064,7 +1064,7 @@
   // label, flag, or + (those carry data-act, so they never get here), and not the end of a drag.
   function specBlankClick(e) {
     return !!e.target.closest('svg.spec-map') && !e.target.closest('.spec-handle') && !specDragJustEnded &&
-      ($('#inspector').classList.contains('open') || !!specBlockSel() || !!specEdgeSel());
+      ($('#inspector').classList.contains('open') || !!specBlockSel() || !!specEdgeSel() || !!specPtSel());
   }
   // Show a check in its checklist (even if its section is collapsed or set aside) and open it.
   function gotoItem(id) {
@@ -2414,6 +2414,7 @@
     if (specSel()) return renderSpecInspector(p);
     if (specBlockSel()) return renderSpecBlockInspector(p);
     if (specEdgeSel()) return renderSpecEdgeInspector(p);
+    if (specPtSel()) return renderSpecPtInspector(p);
     var d = itemDef(p, selected);
     var st = p.items[selected] || {};
     var row = null;
@@ -3662,16 +3663,20 @@
   var specExpanded = false, specZoom = null, specZp = null;
   var ICON_EXPAND = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5h4.5V8M8 16.5H3.5V12M16.5 3.5l-5 5M3.5 16.5l5-5"/></svg>';
   var ICON_SHRINK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8H12V3.5M3.5 12H8v4.5M12 8l4.5-4.5M8 12l-4.5 4.5"/></svg>';
-  function specVBAttr(fit) { return 'viewBox="' + (specExpanded && specZoom ? specZoom.join(' ') : fit) + '" data-fit="' + fit + '"'; }
+  // specExpanded names the expanded card (Chris, 2026-11-19: the power tree is a second diagram on the page):
+  // 'map' for the block diagram or FW's map, 'ptree' for the power tree, or false.
+  function specVBAttr(fit, card) { return 'viewBox="' + (specExpanded === (card || 'map') && specZoom ? specZoom.join(' ') : fit) + '" data-fit="' + fit + '"'; }
   // tools: buttons shown at the top left only while the diagram is expanded (Chris, 2026-11-19: Add block and
   // Auto layout full screen too).
-  function specCard(svg, tools) {
-    return '<div class="card spec-map-card' + (specExpanded ? ' expanded' : '') + '">' +
-      (specExpanded && tools ? '<div class="spec-view-tools">' + tools + '</div>' : '') +
-      '<div class="spec-view-acts">' + (specExpanded ? '<button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
+  function specCard(svg, tools, card) {
+    card = card || 'map';
+    var ex = specExpanded === card;
+    return '<div class="card spec-map-card' + (ex ? ' expanded' : '') + '" data-card="' + card + '">' +
+      (ex && tools ? '<div class="spec-view-tools">' + tools + '</div>' : '') +
+      '<div class="spec-view-acts">' + (ex ? '<button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
       '<button class="icon-btn spec-expand" data-act="spec-export" title="Save the diagram as a picture or a PDF" aria-label="Export the diagram" aria-haspopup="menu">' + ICON_SAVE + '</button>' +
-      '<button class="icon-btn spec-expand" data-act="spec-expand" title="' + (specExpanded ? 'Back to the page (Esc)' : 'Expand the diagram: zoom and pan') + '" aria-label="' + (specExpanded ? 'Collapse the diagram' : 'Expand the diagram') + '">' + (specExpanded ? ICON_SHRINK : ICON_EXPAND) + '</button></div>' +
-      (specExpanded ? '<div class="spec-zoom-hint"><span class="hint-mouse">Scroll to zoom · middle or right drag to pan · Esc to close</span><span class="hint-touch">Pinch to zoom · drag empty space to pan</span></div>' : '') +
+      '<button class="icon-btn spec-expand" data-act="spec-expand" data-card="' + card + '" title="' + (ex ? 'Back to the page (Esc)' : 'Expand the diagram: zoom and pan') + '" aria-label="' + (ex ? 'Collapse the diagram' : 'Expand the diagram') + '">' + (ex ? ICON_SHRINK : ICON_EXPAND) + '</button></div>' +
+      (ex ? '<div class="spec-zoom-hint"><span class="hint-mouse">Scroll to zoom · middle or right drag to pan · Esc to close</span><span class="hint-touch">Pinch to zoom · drag empty space to pan</span></div>' : '') +
       svg + '</div>';
   }
   var ICON_SAVE = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5v9M6 9l4 4 4-4M4 15.5h12"/></svg>';
@@ -3680,8 +3685,8 @@
   // hit areas, current beads, or selection. Styles are copied inline so the file stands alone.
   var SPEC_EXPORT_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-opacity', 'stroke-linecap', 'stroke-linejoin',
     'opacity', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing'];
-  function specExportSvg() {
-    var live = document.querySelector('svg.spec-map'); if (!live) return null;
+  function specExportSvg(live) {
+    live = live || document.querySelector('svg.spec-map'); if (!live) return null;
     var fit = String(live.dataset.fit || '').split(' ').map(Number);
     if (fit.length !== 4 || fit.some(function (n) { return !isFinite(n); })) { var b = live.viewBox.baseVal; fit = [b.x, b.y, b.width, b.height]; }
     var c = live.cloneNode(true);
@@ -3720,8 +3725,8 @@
     c.insertBefore(bgRect, c.firstChild);
     return { svg: new XMLSerializer().serializeToString(c), w: fit[2], h: fit[3], bg: bg };
   }
-  function specExportName(p, ext) {
-    return (String(p.meta.name || p.slug || 'diagram').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'diagram') + ' block diagram.' + ext;
+  function specExportName(p, ext, what) {
+    return (String(p.meta.name || p.slug || 'diagram').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'diagram') + ' ' + (what || 'block diagram') + '.' + ext;
   }
   function specSaveBlob(name, blob) {
     var a = document.createElement('a');
@@ -3730,9 +3735,12 @@
   }
   function specExport(anchor) {
     var p = current(); if (!p) return;
+    var card = anchor && anchor.closest && anchor.closest('.spec-map-card'), live = card && card.querySelector('svg.spec-map');
+    var what = card && card.dataset.card === 'ptree' ? 'power tree' : 'block diagram';
     menu(anchor, [['png', 'PNG picture'], ['svg', 'SVG drawing'], ['pdf', 'PDF, landscape, with a title block']]).then(function (ch) {
-      var x = specExportSvg(); if (!x) { toast('Nothing to export yet'); return; }
-      if (ch === 'svg') { specSaveBlob(specExportName(p, 'svg'), new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + x.svg], { type: 'image/svg+xml' })); return; }
+      var x = specExportSvg(live); if (!x) { toast('Nothing to export yet'); return; }
+      x.what = what;
+      if (ch === 'svg') { specSaveBlob(specExportName(p, 'svg', what), new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + x.svg], { type: 'image/svg+xml' })); return; }
       if (ch === 'png') {
         var img = new Image(), url = URL.createObjectURL(new Blob([x.svg], { type: 'image/svg+xml' }));
         img.onload = function () {
@@ -3740,7 +3748,7 @@
           cv.width = Math.round(x.w * k); cv.height = Math.round(x.h * k);
           var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(img, 0, 0, cv.width, cv.height);
           URL.revokeObjectURL(url);
-          cv.toBlob(function (b) { if (b) specSaveBlob(specExportName(p, 'png'), b); else toast('Couldn’t make the picture'); }, 'image/png');
+          cv.toBlob(function (b) { if (b) specSaveBlob(specExportName(p, 'png', what), b); else toast('Couldn’t make the picture'); }, 'image/png');
         };
         img.onerror = function () { URL.revokeObjectURL(url); toast('Couldn’t make the picture'); };
         img.src = url;
@@ -3767,7 +3775,7 @@
       cell('pn', 'Part number', m.board, true) +
       cell('proj', 'Project', m.project, true) +
       '<div class="tb-logo">' + DG_MARK + '<span>DOVETAIL</span></div>' +
-      cell('title', 'Page:', tool + ' block diagram') +
+      cell('title', 'Page:', tool + ' ' + (x.what || 'block diagram')) +
       '<div class="tb-rev"><span class="tb-l">Rev</span> <b>' + esc(m.revision || '') + '</b></div>' +
       cell('date', 'Date:', date) +
       cell('var', 'Stage:', m.stage) +
@@ -3776,11 +3784,11 @@
       '<div class="tb-sheet"><span class="tb-l">Sheet</span> <b>1</b> <span class="tb-l">of</span> <b>1</b></div>' +
       '</div>';
     var r = $('#report');
-    r.innerHTML = '<div class="report-bar"><b>Block diagram</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print or save as PDF</button></div></div>' +
+    r.innerHTML = '<div class="report-bar"><b>' + (x.what === 'power tree' ? 'Power tree' : 'Block diagram') + '</b><div style="display:flex;gap:8px"><button class="btn" data-act="close-report">Close</button><button class="btn btn-primary" data-act="print">Print or save as PDF</button></div></div>' +
       '<div class="paper dg-paper"><div class="dg-art">' + x.svg + '</div><div class="dg-foot">' + block + '</div></div>';
     r.hidden = false;
   }
-  function specSetExpanded(on) { specExpanded = !!on; specZoom = null; specZp = null; renderPage(); }
+  function specSetExpanded(on) { specExpanded = on ? (typeof on === 'string' ? on : 'map') : false; specZoom = null; specZp = null; renderPage(); }
   function specVB(svg) { var b = svg.viewBox.baseVal; return [b.x, b.y, b.width, b.height]; }
   function specSetVB(svg, v) { specZoom = v.map(function (n) { return Math.round(n * 100) / 100; }); svg.setAttribute('viewBox', specZoom.join(' ')); }
   // Zoom by f (above 1 zooms in) about a point on screen, between a twelfth and four times the fitted width.
@@ -3859,7 +3867,21 @@
   // where it was dragged (the block's ports['<other id>|<word>'] = { side, t }). A line's straight runs
   // drag as Loom's wires do, and its shape is kept on its from-block (routes['<to id>|<word>'], Loom's
   // record { v, a, b, mode }). Nothing derived is written: auto ports and routes stay in memory.
-  var SPEC_GRID = 10, SPEC_LSTUB = 16, SPEC_RAD = 10, specFlowLast = null;
+  var SPEC_GRID = 10, SPEC_LSTUB = 16, SPEC_RAD = 10, specFlowLast = null, specPtLast = null;
+  // Two diagrams share the drag code (Chris, 2026-11-19): the block diagram ('flow'), whose arrangement sits on
+  // each section record (pos, ports, routes, labels), and the power tree ('ptree'), whose sits under its ptree.
+  function svgView(svg) { return svg && svg.getAttribute && svg.getAttribute('data-view') === 'ptree' ? 'ptree' : 'flow'; }
+  function specLastOf(view) { return view === 'ptree' ? specPtLast : specFlowLast; }
+  function specLay(rec, view) { return !rec ? {} : view === 'ptree' ? (rec.ptree || {}) : rec; }
+  // rec with patch applied to its arrangement for view; an undefined value or an empty map takes the key off.
+  function specWithLay(rec, view, patch) {
+    function tidy(o) { Object.keys(patch).forEach(function (k) { var v = o[k]; if (v === undefined || (v && typeof v === 'object' && k !== 'pos' && !Object.keys(v).length)) delete o[k]; }); return o; }
+    if (view !== 'ptree') return tidy(Object.assign({}, rec, patch));
+    var pt = tidy(Object.assign({}, rec.ptree || {}, patch)), out = Object.assign({}, rec);
+    if (pt.pos == null) delete pt.pos;
+    if (Object.keys(pt).length) out.ptree = pt; else delete out.ptree;
+    return out;
+  }
   function specRouter() { return window.LM && LM.connect && LM.route ? LM.connect : null; }
   // The side of block A facing block B (as specRoute picks).
   function specPortSide(A, B) {
@@ -3993,6 +4015,19 @@
     r('sw', b.x - c / 2, b.y + b.h - c / 2, c, c); r('se', b.x + b.w - c / 2, b.y + b.h - c / 2, c, c);
     return '<g class="spec-grips"><title>Drag to resize the section</title>' + out + '</g>';
   }
+  // drag: { from, key, d, anchor, t } makes the label draggable (Chris, 2026-11-13): along its line, or off
+  // it, where a leader ends in a dot at its place on the line (anchor, at t along d, the line's curve). The
+  // dot drags along the line too, and the leader follows both live (labelLead).
+  function pill(x, y, text, drag) {
+    var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
+    var lead = drag ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + (an ? an.x + ' ' + an.y : x + ' ' + y) + '"' + (off ? '' : ' style="display:none"') + '/>' +
+      '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
+      '<circle class="spec-lead-hit" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="8"/><circle class="spec-lead-pt" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="3"/></g>' : '';
+    return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' +
+      (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (drag.line ? ' data-line="' + esc(drag.line) + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
+      '<g class="spec-pill">' + (drag ? '<title>Drag along its line, or off it</title>' : '') +
+      '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g></g>';
+  }
   function specFlowHtml(p, a) {
     var T = specFlowTree(a), sel = specBlockSel(), show = ui.specBoxes !== false, head = show ? SPEC_HEAD : 0, pad = show ? SPEC_PAD : 0;
     var supWord = (M.specLinkWord('supplies') || '').toLowerCase();
@@ -4115,19 +4150,6 @@
           (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') +
           specGrips(b) + '</g>';
       });
-    }
-    // drag: { from, key, d, anchor, t } makes the label draggable (Chris, 2026-11-13): along its line, or off
-    // it, where a leader ends in a dot at its place on the line (anchor, at t along d, the line's curve). The
-    // dot drags along the line too, and the leader follows both live (labelLead).
-    function pill(x, y, text, drag) {
-      var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
-      var lead = drag ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + (an ? an.x + ' ' + an.y : x + ' ' + y) + '"' + (off ? '' : ' style="display:none"') + '/>' +
-        '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
-        '<circle class="spec-lead-hit" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="8"/><circle class="spec-lead-pt" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="3"/></g>' : '';
-      return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' +
-        (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (drag.line ? ' data-line="' + esc(drag.line) + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
-        '<g class="spec-pill">' + (drag ? '<title>Drag along its line, or off it</title>' : '') +
-        '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g></g>';
     }
     // Where a dragged label was left, from its block's record: { q, anchor } or null.
     function keptLabel(from, key, rt) {
@@ -4253,7 +4275,179 @@
     });
     svg += '</svg>';
     return bar + specCard(svg, flowTools) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds, and a line to each one in the same section. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
-      specTreeHtml(p, a, T);
+      specTreeHtml(p, a, T) + (M.specPowerOn() ? specPtreeHtml(p, T) : '');
+  }
+
+  // ── The power tree, under the hierarchy (Chris, 2026-11-19) ──
+  // Drawn from the Power lines: a block is in it for each rail row ticked Power tree. A block that makes a
+  // tree rail feeds every tree block that uses it, one line per rail, labeled with it. Laid out left to
+  // right from sources to loads; the blocks' input rails sit on their left edge and outputs on their right.
+  // Dragging arranges it as the block diagram does, kept apart under each section's ptree (specLay).
+  var SPEC_PT_COL = 130, SPEC_PT_PIN = 16;
+  function specPtModel(T) {
+    var blocks = T.items.filter(function (x) { return !T.isSec(x) && (x.power || []).some(function (r) { return r.tree; }); });
+    var pins = {};
+    blocks.forEach(function (x) {
+      var ins = [], outs = [];
+      x.power.forEach(function (r) {
+        if (!r.tree) return;
+        var list = r.role === 'source' ? outs : ins;
+        if (!list.some(function (y) { return y.toLowerCase() === r.rail.toLowerCase(); })) list.push(r.rail);
+      });
+      pins[x.sec.id] = { ins: ins, outs: outs };
+    });
+    var lines = [];
+    blocks.forEach(function (A) {
+      pins[A.sec.id].outs.forEach(function (rail) {
+        var rl = rail.toLowerCase();
+        blocks.forEach(function (B) {
+          if (B === A || !pins[B.sec.id].ins.some(function (y) { return y.toLowerCase() === rl; })) return;
+          lines.push({ key: A.sec.id + '>' + B.sec.id + '|' + rl, a: A.sec.id, b: B.sec.id, rail: rail, word: rl, srcA: A.sec.id, rkey: B.sec.id + '|' + rl });
+        });
+      });
+    });
+    return { blocks: blocks, pins: pins, lines: lines };
+  }
+  // Where a rail's pin sits on its block's edge (t, 0 to 1 down it), and the block's height.
+  function specPtHeight(pn) { return Math.max(SPEC_BH, 34 + SPEC_PT_PIN * Math.max(pn.ins.length, pn.outs.length, 1)); }
+  function specPtPinY(i) { return 32 + SPEC_PT_PIN * i + SPEC_PT_PIN / 2 - 2; }
+  function specPtreeHtml(p, T) {
+    var M0 = specPtModel(T), blocks = M0.blocks, pins = M0.pins, sel = specBlockSel(), ps = specPtSel();
+    var arranged = blocks.some(function (x) { return x.sec.ptree; });
+    var tools = arranged ? '<button class="chip" data-act="spec-auto-layout" data-view="ptree" title="Forget the power tree’s arrangement and lay it out again">Auto layout</button>' : '';
+    var head = '<div class="spec-pt-head"><b>Power tree</b><span>From each block’s Power rows ticked Power tree: a block that makes a rail feeds every block that uses it.</span><span class="spacer"></span>' + tools + '</div>';
+    if (!blocks.length) {
+      specPtLast = null;
+      return '<div class="spec-pt">' + head + '<div class="card empty"><h2>No power tree yet</h2><p>Open a block, and under Power tick <b>Power tree</b> on the rails it makes or uses. Ticked blocks appear here, joined by their rails.</p></div></div>';
+    }
+    var isPt = {}; blocks.forEach(function (x) { isPt[x.sec.id] = 1; });
+    // Ranks: sources left, each load one column right of what feeds it (bounded, so a loop can't run away).
+    var rank = {}; blocks.forEach(function (x) { rank[x.sec.id] = 0; });
+    for (var it = 0; it < blocks.length; it++) {
+      var mv = false;
+      M0.lines.forEach(function (L) { if (rank[L.b] < rank[L.a] + 1 && rank[L.a] + 1 < blocks.length) { rank[L.b] = rank[L.a] + 1; mv = true; } });
+      if (!mv) break;
+    }
+    var cols = {}, order = {};
+    blocks.forEach(function (x, i) { order[x.sec.id] = i; });
+    blocks.forEach(function (x) { (cols[rank[x.sec.id]] = cols[rank[x.sec.id]] || []).push(x.sec.id); });
+    var R = {}, rowOf = {};
+    Object.keys(cols).map(Number).sort(function (u, v) { return u - v; }).forEach(function (c) {
+      // Within a column, under what feeds them, then in document order.
+      var ids = cols[c].sort(function (u, v) {
+        function feed(id) { var f = M0.lines.filter(function (L) { return L.b === id && rowOf[L.a] != null; }).map(function (L) { return rowOf[L.a]; }); return f.length ? Math.min.apply(null, f) : 1e9; }
+        return feed(u) - feed(v) || order[u] - order[v];
+      });
+      var y = 40;
+      ids.forEach(function (id, i) {
+        var h = specPtHeight(pins[id]);
+        R[id] = { x: 20 + c * (SPEC_BW + SPEC_PT_COL), y: y, w: SPEC_BW, h: h };
+        rowOf[id] = i; y += h + 40;
+      });
+    });
+    // Kept places win; once any block is placed, a newcomer goes below everything in its column.
+    blocks.forEach(function (x) { var q = x.sec.ptree && x.sec.ptree.pos; if (q) R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: R[x.sec.id].h }; });
+    if (blocks.some(function (x) { return x.sec.ptree && x.sec.ptree.pos; })) {
+      var bottom = Math.max.apply(null, blocks.filter(function (x) { return x.sec.ptree && x.sec.ptree.pos; }).map(function (x) { var r = R[x.sec.id]; return r.y + r.h; }).concat([0]));
+      blocks.forEach(function (x) { if (x.sec.ptree && x.sec.ptree.pos) return; R[x.sec.id].y = bottom + 40; bottom += R[x.sec.id].h + 40; });
+    }
+    function pinT(id, rail, side) {
+      var list = side === 'r' ? pins[id].outs : pins[id].ins, i = list.map(function (y) { return y.toLowerCase(); }).indexOf(rail.toLowerCase());
+      return Math.max(0.05, Math.min(0.95, specPtPinY(Math.max(0, i)) / R[id].h));
+    }
+    var model = { doc: 'ptree|' + p.id, R: R, lines: M0.lines.map(function (L) {
+      var A = T.byId[L.a].sec, B = T.byId[L.b].sec, la = specLay(A, 'ptree'), lb = specLay(B, 'ptree');
+      var ka = (la.ports || {})[L.b + '|' + L.word], kb = (lb.ports || {})[L.a + '|' + L.word];
+      // Unmoved, a line leaves its rail's pin on the right edge and lands on its pin on the left edge.
+      return Object.assign({}, L, { shape: (la.routes || {})[L.rkey] || null,
+        pa: ka || { side: 'r', t: pinT(L.a, L.rail, 'r'), pin: true }, pb: kb || { side: 'l', t: pinT(L.b, L.rail, 'l'), pin: true } });
+    }) };
+    var routed = specRouter() ? specRouteSet(model) : {};
+    specPtLast = { model: model, routed: routed };
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    function grow(q, mx, my) { x0 = Math.min(x0, q.x - mx); y0 = Math.min(y0, q.y - my); x1 = Math.max(x1, q.x + mx); y1 = Math.max(y1, q.y + my); }
+    Object.keys(R).forEach(function (id) { var r = R[id]; grow({ x: r.x, y: r.y }, 24, 30); grow({ x: r.x + r.w, y: r.y + r.h }, 24, 30); });
+    Object.keys(routed).forEach(function (k) { routed[k].pts.forEach(function (q) { grow(q, 24, 30); }); });
+    var VW = Math.max(980, x1 - x0); if (x1 - x0 < VW) x0 -= (VW - (x1 - x0)) / 2;
+    var fit = x0 + ' ' + y0 + ' ' + VW + ' ' + (y1 - y0);
+    var focus = isPt[sel] || ps;
+    var svg = '<svg class="spec-map spec-flow spec-ptree' + (focus ? ' focus' : '') + '" data-view="ptree" ' + specVBAttr(fit, 'ptree') + ' role="img" aria-label="Power tree of the ' + esc(W.thing) + '">' +
+      '<defs><marker id="spec-pt-arrow" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="9" markerHeight="7.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0.6L10 4L0 7.4L2.6 4z" class="spec-arrow"/></marker></defs>' +
+      '<rect class="spec-flow-bg" x="' + x0 + '" y="' + y0 + '" width="' + VW + '" height="' + (y1 - y0) + '"/>';
+    var named = {};
+    model.lines.forEach(function (L) {
+      var rr = routed[L.key], rt = rr ? specRt(rr) : specRoute(R[L.a], R[L.b]), dl = ' data-line="' + esc(L.key) + '"';
+      var on = ps && ps.a === L.a && ps.b === L.b && ps.rail.toLowerCase() === L.word ? ' on sel' : isPt[sel] && (L.a === sel || L.b === sel) ? ' on' : '';
+      var a = T.byId[L.a].sec.title, b = T.byId[L.b].sec.title;
+      svg += '<path class="spec-edge supply' + on + '"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '" marker-end="url(#spec-pt-arrow)"/>' + specPulse(rt.d, L.key) +
+        '<path class="spec-edge-hit" data-act="spec-pt-edge"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" data-rail="' + esc(L.rail) + '" d="' + rt.d + '"><title>' + esc(a + ' makes ' + L.rail + ' for ' + b + ', click for its panel') + '</title></path>';
+      // A rail fanning out to several loads is named once, on its first line, unless a label was dragged.
+      var k = (specLay(T.byId[L.a].sec, 'ptree').labels || {})[L.rkey], fan = L.a + '|' + L.word;
+      if (!k && named[fan]) return;
+      named[fan] = 1;
+      var an = rt.at(k ? k.t : 0.5), q = k ? { x: an.x + k.x, y: an.y + k.y } : an;
+      svg += pill(q.x, q.y, L.rail, { from: L.a, key: L.rkey, d: rt.cd, anchor: k ? an : null, t: k ? k.t : 0.5, line: L.key });
+    });
+    blocks.forEach(function (x) {
+      var id = x.sec.id, b = R[id], pn = pins[id], both = pn.ins.length && pn.outs.length, pc = both ? 9 : 18;
+      svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
+        '<title>' + esc(x.sec.title + (pn.ins.length ? '\nUses ' + pn.ins.join(', ') : '') + (pn.outs.length ? '\nMakes ' + pn.outs.join(', ') : '') + '\nDrag to move it in the power tree; click for its panel') + '</title>' +
+        '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
+        '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 20) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 16) / 7.2))) + '</text>' +
+        pn.ins.map(function (r, i) { var y = b.y + specPtPinY(i); return '<text class="spec-pt-rail" x="' + (b.x + 8) + '" y="' + (y + 4) + '">' + esc(cutText(r, pc)) + '</text>'; }).join('') +
+        pn.outs.map(function (r, i) { var y = b.y + specPtPinY(i); return '<circle class="spec-pt-pin source" cx="' + (b.x + b.w) + '" cy="' + y + '" r="2.5"/><text class="spec-pt-rail" x="' + (b.x + b.w - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + esc(cutText(r, pc)) + '</text>'; }).join('') +
+        '</g>';
+    });
+    model.lines.forEach(function (L) {
+      var rr = routed[L.key]; if (!rr) return;
+      [['a', rr.qa, rr.pa], ['b', rr.qb, rr.pb]].forEach(function (o) {
+        svg += '<g class="spec-port' + (o[2] && !o[2].auto && !o[2].pin ? ' pinned' : '') + '" data-line="' + esc(L.key) + '" data-end="' + o[0] + '"><title>Drag round the block to move where the line meets it</title>' +
+          '<circle class="spec-port-hit" cx="' + o[1].x + '" cy="' + o[1].y + '" r="8"/><circle class="spec-port-dot" cx="' + o[1].x + '" cy="' + o[1].y + '" r="3.5"/></g>';
+      });
+    });
+    svg += '</svg>';
+    return '<div class="spec-pt">' + head + specCard(svg, tools, 'ptree') +
+      '<p class="note">Drag blocks to arrange the power tree, a line’s straight runs to shape it (a double-click adds a bend), and the dot at either end to move where it meets its block. Its arrangement is its own: the block diagram above keeps its own. Click a line for its panel.</p></div>';
+  }
+  // A power tree line's panel: read-only, since the line comes from the two blocks' Power rows.
+  // selected is 'specpt|' + JSON [from, to, rail].
+  function specPtSel() {
+    var m = /^specpt\|(.+)$/.exec(selected || ''); if (!m) return null;
+    try { var v = JSON.parse(m[1]); return { a: v[0], b: v[1], rail: String(v[2] || '') }; } catch (err) { return null; }
+  }
+  function specOpenPt(a, b, rail) {
+    selected = 'specpt|' + JSON.stringify([a, b, rail]);
+    $('#inspector').classList.add('open');
+    renderPage(); renderInspector();
+  }
+  function specPtShaped(p, s) {
+    var w = s.rail.toLowerCase(), A = specLay(p.spec[s.a], 'ptree'), B = specLay(p.spec[s.b], 'ptree');
+    return !!((A.routes && A.routes[s.b + '|' + w]) || (A.ports && A.ports[s.b + '|' + w]) || (B.ports && B.ports[s.a + '|' + w]));
+  }
+  function renderSpecPtInspector(p) {
+    var el = $('#inspector'), s = specPtSel(), A = s && p.spec[s.a], B = s && p.spec[s.b];
+    if (!A || !B || A.deleted || B.deleted) { selected = null; closeInspector(); renderPage(); return; }
+    el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Power tree › Line</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
+      '<div class="insp-body">' +
+      '<h2 class="spec-edge-title">' + esc(A.title || 'Untitled') + ' <span>powers</span> ' + esc(B.title || 'Untitled') + '</h2>' +
+      '<div class="field"><span class="field-label">Rail</span><div>' + esc(s.rail) + '</div></div>' +
+      '<div class="field"><span class="field-label">From</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(s.a) + '">' + esc(A.title || 'Untitled') + '</button></div></div>' +
+      '<div class="field"><span class="field-label">To</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(s.b) + '">' + esc(B.title || 'Untitled') + '</button></div></div>' +
+      '<p class="note">Drawn from the two blocks’ Power rows: ' + esc(A.title || 'one') + ' makes ' + esc(s.rail) + ' and ' + esc(B.title || 'the other') + ' uses it, both ticked Power tree. Untick either to take the line away.</p>' +
+      (specPtShaped(p, s) ? '<div class="spec-acts"><button class="btn" data-act="spec-pt-reset" title="Forget its shape and where its ends meet the blocks">Reset route</button></div>' : '') +
+      '</div>';
+    el.dataset.item = selected;
+  }
+  function specPtReset() {
+    var p = current(), s = specPtSel(); if (!p || !s) return;
+    var w = s.rail.toLowerCase(), out = [];
+    [[s.a, s.b], [s.b, s.a]].forEach(function (o, i) {
+      var r = p.spec[o[0]], k = o[1] + '|' + w, lay = specLay(r, 'ptree'), patch = {}; if (!r) return;
+      if (lay.ports && lay.ports[k]) { patch.ports = Object.assign({}, lay.ports); delete patch.ports[k]; }
+      if (!i && lay.routes && lay.routes[k]) { patch.routes = Object.assign({}, lay.routes); delete patch.routes[k]; }
+      if (Object.keys(patch).length) out.push(M.specStamp(specWithLay(r, 'ptree', patch), me()));
+    });
+    if (out.length) specPutAll(p, out);
   }
 
   // ── The hierarchy under the block diagram, after Signoff PL's Map ──
@@ -4388,33 +4582,33 @@
     var node = e.target.closest('.spec-node'), box = e.target.closest('.spec-group-g');
     var m = svg.getScreenCTM().inverse(), pt = svg.createSVGPoint();
     function local(ev) { pt.x = ev.clientX; pt.y = ev.clientY; return pt.matrixTransform(m); }
-    var last = specFlowLast, C = specRouter();
+    var view = svgView(svg), last = specLastOf(view), C = specRouter();
     // A line's port: it slides round its block's edge.
     var port = e.target.closest('.spec-port');
     if (port && last && C) {
-      var PL = specLine(port.dataset.line); if (!PL) return;
+      var PL = specLine(port.dataset.line, view); if (!PL) return;
       e.preventDefault(); e.stopPropagation();
-      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'port', line: PL, end: port.dataset.end };
+      flowDrag = { svg: svg, view: view, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: 'port', line: PL, end: port.dataset.end };
       return;
     }
     // A line's straight run: it drags sideways, as Loom's wires (Shift breaks it at the grab). A click
     // without moving still opens the line's panel.
     var lineHit = e.target.closest('.spec-edge-hit');
     if (lineHit) {
-      var L0 = last && C && specLine(lineHit.dataset.line), rr = L0 && last.routed[L0.key];
+      var L0 = last && C && specLine(lineHit.dataset.line, view), rr = L0 && last.routed[L0.key];
       if (!rr) return;
       var q0 = specRouteSpace(rr, local(e)), run = C.runAt(rr.R0, q0);
       if (!run) return;
       var g = {}, rec0 = C.dragStart(g, run, L0.shape && !!L0.shape.tr === rr.tr ? L0.shape : {}, e.ctrlKey ? null : specSnap, e.shiftKey, q0);
       if (!rec0) return;
-      flowDrag = { svg: svg, local: local, start: q0, cx: e.clientX, cy: e.clientY, on: false, type: 'run', line: L0, g: g, rec: rec0, ctrl: e.ctrlKey, tr: rr.tr, rr: rr };
+      flowDrag = { svg: svg, view: view, local: local, start: q0, cx: e.clientX, cy: e.clientY, on: false, type: 'run', line: L0, g: g, rec: rec0, ctrl: e.ctrlKey, tr: rr.tr, rr: rr };
       return;
     }
     var lab = e.target.closest('.spec-edge-label.drag');
     if (lab) {
       e.preventDefault();
       // The label itself, or the dot at the end of its leader ('dot'), which moves only along the line.
-      flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: e.target.closest('.spec-lead-dot') ? 'dot' : 'label', el: lab,
+      flowDrag = { svg: svg, view: view, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false, type: e.target.closest('.spec-lead-dot') ? 'dot' : 'label', el: lab,
         from: lab.dataset.from, key: lab.dataset.key, route: labelRoute(lab.dataset.route), c0: { x: +lab.dataset.cx, y: +lab.dataset.cy },
         t0: lab.dataset.t != null && lab.dataset.t !== '' ? +lab.dataset.t : null };
       return;
@@ -4426,7 +4620,9 @@
         edge: grip.dataset.edge, el: box, box0: box.dataset.box.split(' ').map(Number) };
       return;
     }
-    flowDrag = { svg: svg, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
+    // The power tree has no sections: only its blocks drag, and empty space draws nothing.
+    if (view === 'ptree' && !node) return;
+    flowDrag = { svg: svg, view: view, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
       type: node ? 'block' : box ? 'section' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '' };
     if (flowDrag.type === 'draw') e.preventDefault();
   }
@@ -4503,7 +4699,7 @@
         o.shapes[d.line.key] = d.rec;
       } else {
         var bid = d.end === 'a' ? d.line.a : d.line.b;
-        d.port = specPortAt(specFlowLast.model.R[bid], pq);
+        d.port = specPortAt(specLastOf(d.view).model.R[bid], pq);
         o.ports[d.line.key] = {}; o.ports[d.line.key][d.end] = d.port;
         o.shapes[d.line.key] = null;   // a moved port routes its line afresh
       }
@@ -4567,12 +4763,12 @@
     return moving;
   }
   function specSnap(v) { return Math.round(v / SPEC_GRID) * SPEC_GRID; }
-  function specLine(key) { var m = specFlowLast && specFlowLast.model; return m ? m.lines.filter(function (L) { return L.key === key; })[0] || null : null; }
+  function specLine(key, view) { var last = specLastOf(view), m = last && last.model; return m ? m.lines.filter(function (L) { return L.key === key; })[0] || null : null; }
   // The lines routed again as they stand mid-drag, and drawn so (Chris, 2026-11-18: lines follow a dragged
   // block). o: { moving (block ids), dx, dy, shapes: { key: record or null }, ports: { key: { a, b } } }. A
   // line with both blocks moving carries its kept shape along. Labels ride along at their place on the line.
   function flowLive(svg, o) {
-    var last = specFlowLast, C = specRouter(); if (!last || !C) return null;
+    var last = specLastOf(svgView(svg)), C = specRouter(); if (!last || !C) return null;
     var m = last.model, mv = o.moving || {}, dx = o.dx || 0, dy = o.dy || 0, R = {};
     Object.keys(m.R).forEach(function (id) { var r = m.R[id]; R[id] = mv[id] ? { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h } : r; });
     var lines = m.lines.map(function (L) {
@@ -4611,31 +4807,30 @@
     if (d.type === 'label' || d.type === 'dot') {
       var nd = d.type === 'dot' ? dotDrop(d, e) : labelDrop(d, e), rec = p.spec[d.from];
       if (!nd || !rec) { renderPage(); return; }
-      var labs = Object.assign({}, rec.labels || {});
+      var labs = Object.assign({}, specLay(rec, d.view).labels || {});
       labs[d.key] = { t: Math.round(nd.t * 1000) / 1000, x: nd.x, y: nd.y };
-      specPutAll(p, [M.specStamp(Object.assign({}, rec, { labels: labs }), me())]);
+      specPutAll(p, [M.specStamp(specWithLay(rec, d.view, { labels: labs }), me())]);
       return;
     }
     if (d.type === 'run') {
       var rl = d.line, rres = d.live && d.live.res[rl.key], srec0 = p.spec[rl.srcA];
       if (!rres || !srec0 || !d.rec) { renderPage(); return; }
-      var kept = specRouter().release(rres.R0, d.rec.v, d.rec), rts = Object.assign({}, srec0.routes || {});
+      var kept = specRouter().release(rres.R0, d.rec.v, d.rec), rts = Object.assign({}, specLay(srec0, d.view).routes || {});
       rts[rl.rkey] = { v: kept.v, a: kept.a, b: kept.b }; if (kept.mode) rts[rl.rkey].mode = kept.mode; if (rres.tr) rts[rl.rkey].tr = true;
-      specPutAll(p, [M.specStamp(Object.assign({}, srec0, { routes: rts }), me())]);
+      specPutAll(p, [M.specStamp(specWithLay(srec0, d.view, { routes: rts }), me())]);
       return;
     }
     if (d.type === 'port') {
       var pl = d.line, w = pl.word.toLowerCase(), bid = d.end === 'a' ? pl.a : pl.b, other = d.end === 'a' ? pl.b : pl.a, brec = p.spec[bid];
       if (!brec || !d.port) { renderPage(); return; }
-      var prts = Object.assign({}, brec.ports || {}), out = {};
+      var prts = Object.assign({}, specLay(brec, d.view).ports || {}), out = {};
       prts[other + '|' + w] = { side: d.port.side, t: d.port.t };
-      out[bid] = Object.assign({}, brec, { ports: prts });
+      out[bid] = specWithLay(brec, d.view, { ports: prts });
       // A moved port routes its line afresh: its kept shape goes.
-      var sr = out[pl.srcA] || p.spec[pl.srcA];
-      if (sr && sr.routes && sr.routes[pl.rkey]) {
-        var r2 = Object.assign({}, sr.routes); delete r2[pl.rkey];
-        out[pl.srcA] = Object.assign({}, sr, { routes: r2 });
-        if (!Object.keys(r2).length) delete out[pl.srcA].routes;
+      var sr = out[pl.srcA] || p.spec[pl.srcA], srt = specLay(sr, d.view).routes;
+      if (sr && srt && srt[pl.rkey]) {
+        var r2 = Object.assign({}, srt); delete r2[pl.rkey];
+        out[pl.srcA] = specWithLay(sr, d.view, { routes: r2 });
       }
       specPutAll(p, Object.keys(out).map(function (k) { return M.specStamp(out[k], me()); }));
       return;
@@ -4675,7 +4870,7 @@
     var snap = function (v) { return Math.round(v / 10) * 10; };
     var dx = snap(q.x - d.start.x), dy = snap(q.y - d.start.y);
     // Every block's place is kept from now on (the arrangement freezes), and the dragged ones move.
-    var stored = {}; M.liveSpec(p).forEach(function (s) { stored[s.id] = s.pos; });
+    var stored = {}; M.liveSpec(p).forEach(function (s) { stored[s.id] = specLay(s, d.view).pos; });
     var moving = {};
     if (d.type === 'block') moving[d.id] = 1;
     else Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
@@ -4683,14 +4878,15 @@
     Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
       var id = g.dataset.id, x = +g.dataset.x + (moving[id] ? dx : 0), y = +g.dataset.y + (moving[id] ? dy : 0), was = stored[id];
       if (was && was.x === x && was.y === y) return;
-      upd[id] = Object.assign({}, p.spec[id], { pos: { x: x, y: y } }); view.spec[id] = upd[id];
+      upd[id] = specWithLay(p.spec[id], d.view, { pos: { x: x, y: y } }); view.spec[id] = upd[id];
     });
     // A shaped line between two moved blocks moves with them (its shape is absolute).
-    if (dx || dy) ((specFlowLast && specFlowLast.model.lines) || []).forEach(function (L) {
+    var lastV = specLastOf(d.view);
+    if (dx || dy) ((lastV && lastV.model.lines) || []).forEach(function (L) {
       if (!L.shape || !moving[L.a] || !moving[L.b]) return;
       var r0 = upd[L.srcA] || p.spec[L.srcA]; if (!r0) return;
-      var rts = Object.assign({}, r0.routes || {}); rts[L.rkey] = specShiftShape(L.shape, dx, dy);
-      upd[L.srcA] = Object.assign({}, r0, { routes: rts });
+      var rts = Object.assign({}, specLay(r0, d.view).routes || {}); rts[L.rkey] = specShiftShape(L.shape, dx, dy);
+      upd[L.srcA] = specWithLay(r0, d.view, { routes: rts });
     });
     Object.keys(upd).forEach(function (id) { upd[id] = M.specStamp(upd[id], me()); });
     var recs = Object.keys(upd).map(function (k) { return upd[k]; });
@@ -4698,8 +4894,13 @@
     specPutAll(p, recs);
   }
   function T_title(p, id) { var s = M.liveSpec(p).filter(function (x) { return x.id === id; })[0]; return s ? s.title : 'It'; }
-  function specAutoLayout() {
+  function specAutoLayout(view) {
     var p = current(); if (!p) return;
+    if (view === 'ptree') {
+      var precs = M.liveSpec(p).filter(function (s) { return s.ptree; }).map(function (s) { var r = Object.assign({}, p.spec[s.id]); delete r.ptree; return M.specStamp(r, me()); });
+      if (precs.length) { specPutAll(p, precs); toast('Power tree laid out again'); }
+      return;
+    }
     var recs = M.liveSpec(p).filter(function (s) { return s.pos || s.labels || s.grow || s.ports || s.routes; }).map(function (s) { var r = Object.assign({}, p.spec[s.id], { pos: null }); delete r.labels; delete r.grow; delete r.ports; delete r.routes; return M.specStamp(r, me()); });
     if (recs.length) { specPutAll(p, recs); toast('Laid out again'); }
   }
@@ -5030,7 +5231,8 @@
     return '<div class="field"><span class="field-label">Power</span>' + ((x.power || []).length ? '<div class="spec-power-rows">' + x.power.map(function (r, i) {
       return '<div class="spec-power-row"><span class="spec-power-rail">' + esc(r.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['', 'N/A']].map(function (o) {
         return '<button class="' + (r.role === o[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + i + '" data-role="' + o[0] + '" title="' + esc(o[0] === 'source' ? 'It makes ' + r.rail : o[0] === 'sink' ? 'It uses ' + r.rail : 'Take ' + r.rail + ' off') + '">' + o[1] + '</button>';
-      }).join('') + '</div></div>';
+      }).join('') + '</div>' +
+        '<label class="spec-power-tree" title="Show ' + esc(x.sec.title) + ' in the power tree for ' + esc(r.rail) + '"><input type="checkbox" data-act="spec-power-tree" data-i="' + i + '"' + (r.tree ? ' checked' : '') + '> Power tree</label></div>';
     }).join('') + '</div>' : '<p class="note" style="margin:0 0 6px">No power rails. A rail it uses gets a bar over the block; one it makes, a circle.</p>') +
       '<input class="input" id="spec-power-add" list="spec-power-rails" placeholder="Add a rail it uses, e.g. 3V3 (Enter)" autocomplete="off" style="margin-top:6px">' +
       '<datalist id="spec-power-rails">' + rails.map(function (r) { return '<option value="' + esc(r) + '">'; }).join('') + '</datalist></div>';
@@ -6909,11 +7111,14 @@
       case 'spec-fmt': specFmt(el.dataset.f, el); break;
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
       case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
+      case 'spec-pt-edge': if (!specDragJustEnded) specOpenPt(el.dataset.a, el.dataset.b, el.dataset.rail); break;
+      case 'spec-pt-reset': specPtReset(); break;
       case 'spec-edge-delete': specEdgeDelete(); break;
       case 'spec-edge-reset': specEdgeReset(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
-      case 'spec-auto-layout': specAutoLayout(); break;
-      case 'spec-expand': specSetExpanded(!specExpanded); break;
+      case 'spec-power-tree': { var ti = +el.dataset.i, ton = !!el.checked; specPowerSet(function (it) { if (it[ti]) { if (ton) it[ti] = Object.assign({}, it[ti], { tree: true }); else { it[ti] = Object.assign({}, it[ti]); delete it[ti].tree; } } return it; }); break; }
+      case 'spec-auto-layout': specAutoLayout(el.dataset.view); break;
+      case 'spec-expand': specSetExpanded(specExpanded ? false : (el.dataset.card || 'map')); break;
       case 'spec-fit': specZoom = null; renderPage(); break;
       case 'spec-export': specExport(el); break;
       case 'spec-new-section': specNewSectionSheet(); break;
@@ -7300,15 +7505,15 @@
   // A double-click on a diagram line adds a bend where it was clicked (Loom's bend), kept as its shape.
   document.addEventListener('dblclick', function (e) {
     var hitEl = e.target.closest && e.target.closest('svg.spec-flow .spec-edge-hit'), C = specRouter();
-    var L = hitEl && C && specLine(hitEl.dataset.line), rr = L && specFlowLast.routed[L.key], p = current();
+    var dv = hitEl && svgView(hitEl.ownerSVGElement), L = hitEl && C && specLine(hitEl.dataset.line, dv), rr = L && specLastOf(dv).routed[L.key], p = current();
     if (!rr || !p || !p.spec[L.srcA]) return;
     var svg = hitEl.ownerSVGElement, pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
     var run = C.runAt(rr.R0, specRouteSpace(rr, pt.matrixTransform(svg.getScreenCTM().inverse()))), rec = run && C.bend(run, specSnap, L.shape && !!L.shape.tr === rr.tr ? L.shape : {});
     if (!rec) return;
     e.preventDefault();
-    var src = p.spec[L.srcA], rts = Object.assign({}, src.routes || {});
+    var src = p.spec[L.srcA], rts = Object.assign({}, specLay(src, dv).routes || {});
     rts[L.rkey] = { v: rec.v, a: rec.a, b: rec.b }; if (rec.mode) rts[L.rkey].mode = rec.mode; if (rr.tr) rts[L.rkey].tr = true;
-    specPutAll(p, [M.specStamp(Object.assign({}, src, { routes: rts }), me())]);
+    specPutAll(p, [M.specStamp(specWithLay(src, dv, { routes: rts }), me())]);
   });
   document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar, .spec-fmtbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
