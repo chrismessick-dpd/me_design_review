@@ -754,7 +754,7 @@
     else if (ui.view === 'revisions') { loadRuns(p); page.innerHTML = revisionsPage(p); }
     else if (ui.view === 'releases') page.innerHTML = releasesPage(p);
     else if (ui.view === 'reqs') page.innerHTML = reqsPage(p);
-    else if (ui.view === 'spec') page.innerHTML = specPage(p);
+    else if (ui.view === 'spec') { page.innerHTML = specPage(p); specMountEditor(); }
     else if (reworkTab(p) && ui.reworkView === 'rework') page.innerHTML = reworkPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
@@ -1816,7 +1816,7 @@
   // scroll they had.
   function focusNow() {
     var a = document.activeElement;
-    if (!a || !a.id || !/^(INPUT|TEXTAREA)$/.test(a.tagName)) return null;
+    if (!a || !a.id || !(/^(INPUT|TEXTAREA)$/.test(a.tagName) || a.id === 'spec-editor')) return null;
     var f = { el: a, id: a.id, top: a.scrollTop };
     try { f.start = a.selectionStart; f.end = a.selectionEnd; f.dir = a.selectionDirection; } catch (e) { /* no selection on this input type */ }
     return f;
@@ -1824,7 +1824,7 @@
   function restoreFocus(f) {
     if (!f || f.el.isConnected) return;   // not redrawn: nothing to do
     var a = document.getElementById(f.id);
-    if (!a || a === document.activeElement || !/^(INPUT|TEXTAREA)$/.test(a.tagName)) return;
+    if (!a || a === document.activeElement || !(/^(INPUT|TEXTAREA)$/.test(a.tagName) || a.id === 'spec-editor')) return;
     a.focus({ preventScroll: true });
     try { if (f.start != null) a.setSelectionRange(f.start, f.end, f.dir); } catch (e) { /* no selection on this input type */ }
     a.scrollTop = f.top;
@@ -2583,19 +2583,32 @@
   function specUnitHtml(p, a, x, u) {
     var sel = specSel(), on = sel && sel.sec === x.sec.id && sel.start === u.start;
     var tip = u.reqs.map(function (id) { return reqLabel(a.ctx.reqs[id]); }).concat(u.missing.map(function (t) { return t + ': not found'; })).join('\n');
-    var inner = u.tokens.map(function (t, i) {
-      if (t.t === 'tag') return '<span class="sl-tag" title="Flagged to become a requirement">@req</span>';
-      if (t.t === 'text' && i === 0 && u.note) {
-        var nm = /^(\s*)(check:)\s*/i.exec(t.text);
-        if (nm) return esc(nm[1]) + '<span class="sl-note" title="A review note: resolve it in its panel">Check</span> ' + esc(t.text.slice(nm[0].length));
-      }
-      if (t.t === 'text') return esc(t.text);
-      return specSpanHtml(t);
-    }).join('');
+    var toks = u.tokens.slice(), lead = '';
+    if (u.note && toks[0] && toks[0].t === 'text') {
+      var nm = /^(\s*)(check:)\s*/i.exec(toks[0].text);
+      if (nm) { lead = esc(nm[1]) + '<span class="sl-note" title="A review note: resolve it in its panel">Check</span> '; toks[0] = { t: 'text', text: toks[0].text.slice(nm[0].length) }; }
+    }
+    var inner = lead + specRichHtml(toks, function (t) {
+      return t.t === 'tag' ? '<span class="sl-tag" title="Flagged to become a requirement">@req</span>' : specSpanHtml(t);
+    });
     if (u.row) inner = specRowCells(u).join(' <span class="muted">·</span> ');
     if (u.broken) { inner += '<span class="sl-broken" title="' + esc(BROKEN_TIP) + '">mark?</span>'; tip = (tip ? tip + '\n' : '') + BROKEN_TIP; }
     return '<span class="su su-' + u.state + (u.broken ? ' su-broken' : '') + (on ? ' sel' : '') + '" data-act="spec-unit" data-sec="' + esc(x.sec.id) + '" data-u="' + u.start + '"' +
       (tip ? ' title="' + esc(tip) + '"' : ' title="' + STATE_LABEL[u.state] + '"') + '>' + inner + '</span>';
+  }
+  // A unit's tokens with bold, italic, and struck words (model.specRich) drawn, marks and flags included: each
+  // token that isn't text stands in as one private-use character, so markers may wrap a link.
+  function specRichHtml(toks, other) {
+    var PH = '', text = '', rest = [];
+    toks.forEach(function (t) { if (t.t === 'text') text += t.text.replace(//g, ''); else { text += PH; rest.push(t); } });
+    var k = 0;
+    return M.specRich(text).map(function (r) {
+      var h = r.t.split(PH).map(esc).reduce(function (acc, part, i) { return i ? acc + other(rest[k++]) + part : part; }, '');
+      if (r.s) h = '<s>' + h + '</s>';
+      if (r.i) h = '<em>' + h + '</em>';
+      if (r.b) h = '<strong>' + h + '</strong>';
+      return h;
+    }).join('');
   }
   // A mark's words, drawn as in a sentence.
   function specSpanHtml(t) {
@@ -2621,11 +2634,19 @@
   }
   var BROKEN_TIP = 'A mark in this sentence didn’t parse, so its words show as typed. A mark is [words]{…} on one line; brackets inside the words go in pairs, or in `code`.';
   function specBlocksHtml(p, a, x) {
-    var html = '', list = false;
-    x.blocks.forEach(function (b) {
+    var html = '', list = false, nums = [], ni = 0;
+    x.blocks.forEach(function (b, bi) {
       if (b.type !== 'li' && list) { html += '</ul>'; list = false; }
       if (b.type === 'p') html += '<p class="spec-p">' + b.units.map(function (u) { return specUnitHtml(p, a, x, u); }).join(' ') + '</p>';
-      else if (b.type === 'li') { if (!list) { html += '<ul class="spec-ul">'; list = true; } html += '<li>' + b.units.map(function (u) { return specUnitHtml(p, a, x, u); }).join(' ') + '</li>'; }
+      else if (b.type === 'li') {
+        if (!list) {
+          html += '<ul class="spec-ul">'; list = true; ni = 0;
+          var run = []; for (var j = bi; j < x.blocks.length && x.blocks[j].type === 'li'; j++) run.push(x.blocks[j]);
+          nums = M.specListNumbers(run);
+        }
+        var n = nums[ni++];
+        html += '<li class="' + (n ? 'spec-li-n' : 'spec-li-b') + (b.lv ? ' lv-' + b.lv : '') + '">' + (n ? '<span class="spec-num">' + n + '</span>' : '') + '<span class="spec-li-text">' + b.units.map(function (u) { return specUnitHtml(p, a, x, u); }).join(' ') + '</span></li>';
+      }
       else if (b.type === 'gist') html += '<p class="spec-gist">' + esc(b.text) + '</p>';
       else if (b.type === 'code') html += '<pre class="spec-code">' + esc(b.text) + '</pre>';
       else if (b.type === 'uses') {
@@ -2708,6 +2729,7 @@
       if (c) c.textContent = counts[k] ? ' ' + counts[k] : '';
     });
     bar.querySelectorAll('[data-act="spec-uses-add"]').forEach(function (b) { b.disabled = !h.head; });
+    specFmtRefresh();
   }
   // Rewrite the editor's text, keeping the cursor where it was relative to the text around it.
   function specEditorReplace(ta, lines, cursor) {
@@ -2766,18 +2788,154 @@
     var ta = $('#spec-editor'); if (!ta) return;
     var lines = ta.value.split('\n'), at = lines.slice(0, Math.max(0, n - 1)).join('\n').length + (n > 1 ? 1 : 0);
     ta.focus(); ta.setSelectionRange(at, at + (lines[n - 1] || '').length);
-    var lh = parseFloat(getComputedStyle(ta).lineHeight) || 20, y = (n - 1) * lh;
-    if (ta.scrollHeight > ta.clientHeight + 4) ta.scrollTop = Math.max(0, y - ta.clientHeight / 3);
-    else {
-      var dy = ta.getBoundingClientRect().top + y - window.innerHeight / 3, m = $('#main');
-      if (m && m.scrollHeight > m.clientHeight + 4) m.scrollBy({ top: dy, behavior: 'smooth' }); else window.scrollBy({ top: dy, behavior: 'smooth' });
+    var ln = ta.children[n - 1]; if (ln) ln.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  // ── The Scribe editor (2026-11-19, Chris: a toolbar that writes the markup, and the markup shown as badges) ──
+  // assets/specedit.js (SignoffSpecEdit) draws the text with its markup as badges and keeps the text exactly as
+  // typed; the bar under it writes bold, italic, and strikethrough, bullets and numbered lists (1.1 by level),
+  // headings, a gist, a review note, and the marks: Link requirement…, Flag @req, Standard, and Section link….
+  var specEd = null;
+  var FMT = {
+    bold: ['Bold (Ctrl+B)', '<b>B</b>'], italic: ['Italic (Ctrl+I)', '<i>I</i>'], strike: ['Strikethrough (Ctrl+Shift+X)', '<s>S</s>'],
+    bul: ['Bullets (Ctrl+Shift+8)', '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="3" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M6.5 4h7M6.5 8h7M6.5 12h7"/></svg>'],
+    num: ['Numbered list, 1.1 by level (Ctrl+Shift+7)', '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6.5 4h7M6.5 8h7M6.5 12h7"/><text x="0.5" y="5.6" font-size="5" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="0.5" y="9.6" font-size="5" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="0.5" y="13.6" font-size="5" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>'],
+    out: ['Outdent (Shift+Tab)', '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7M7 8h7M7 12h7M4.5 5.5L2 8l2.5 2.5"/></svg>'],
+    'in': ['Indent (Tab)', '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7M7 8h7M7 12h7M2 5.5L4.5 8 2 10.5"/></svg>']
+  };
+  function specFmtBarHtml() {
+    function b(f) { return '<button type="button" class="icon-btn spec-fmt" data-act="spec-fmt" data-f="' + f + '" title="' + esc(FMT[f][0]) + '" aria-label="' + esc(FMT[f][0].replace(/ \(.*$/, '')) + '">' + FMT[f][1] + '</button>'; }
+    function t(f, label, title) { return '<button type="button" class="btn btn-sm spec-fmt-t" data-act="spec-fmt" data-f="' + f + '" title="' + esc(title) + '">' + label + '</button>'; }
+    var sep = '<span class="spec-fmt-sep" aria-hidden="true"></span>';
+    return '<div class="spec-fmtbar" role="toolbar" aria-label="Formatting and markup">' + b('bold') + b('italic') + b('strike') + sep + b('bul') + b('num') + b('out') + b('in') + sep +
+      t('heading', 'Heading ▾', 'Make the line a heading (a new block or section), or a paragraph again') + t('gist', 'Gist', 'Make the line the section’s one-line gist (> …)') + t('check', 'Check', 'Make the line a review note (Check: …)') + sep +
+      t('link', 'Link requirement…', 'Link the selected words to a requirement') + t('tag', 'Flag @req', 'Flag the sentence to become a requirement') + t('std', 'Standard', 'Mark the selected words as standard text that needs no requirement') +
+      t('sec', 'Section link…', 'Point the selected words at another section') + (SPEC && SPEC.parts ? t('parts', 'Parts…', 'Add a Parts line under the cursor (U1, C1–C3)') : '') + '</div>';
+  }
+  function specMountEditor() {
+    var ta = $('#spec-editor');
+    if (!ta || ta._se || !window.SignoffSpecEdit) return;
+    var p = current(), ctx = p ? M.specContext(p) : null;
+    specEd = ta._se = window.SignoffSpecEdit.mount(ta, specDraft, {
+      model: M, words: M.specLinkWords,
+      markLabel: function (inner) { return specMarkLabel(ctx, inner); },
+      onBadge: specBadge
+    });
+  }
+  // What a mark's chip says: its requirement numbers, Standard, or the section it points at.
+  function specMarkLabel(ctx, inner) {
+    var miss = false, out = String(inner || '').split(',').map(function (t) {
+      t = t.trim(); var low = t.toLowerCase();
+      if (low === 'std') return 'Standard';
+      if (low.charAt(0) === '#') { if (!ctx || !ctx.titles[low.slice(1).trim()]) miss = true; return '§ ' + t.slice(1).trim(); }
+      if (/^q:/.test(t)) { var q = ctx && ctx.reqs[t.slice(2)]; if (!q) miss = true; return q ? q.ref || 'requirement' : t; }
+      if (/^s:/.test(t)) { var sc = ctx && ctx.secs[t.slice(2)]; if (!sc) miss = true; return sc ? '§ ' + sc.title : t; }
+      if (ctx && !ctx.refs[low] && !M.specRange(t, ctx)) miss = true;
+      return t;
+    }).filter(Boolean);
+    var label = out.length > 2 ? out.slice(0, 2).join(' · ') + ' +' + (out.length - 2) : out.join(' · ');
+    return { label: label || '?', missing: miss, title: (miss ? 'Not found: ' : '') + out.join(', ') };
+  }
+  // A click on a badge: what can be done to it.
+  function specBadge(info, b) {
+    var ed = specEd; if (!ed) return;
+    var t = ed.value(), entries;
+    if (info.kind === 'mark') entries = [['change', /std/i.test(info.inner) ? 'Link a requirement instead…' : 'Change what it links…'], ['unwrap', 'Remove the mark, keep the words'], ['drop', 'Delete the words too', true]];
+    else if (info.kind === 'tag') entries = [['drop', 'Remove the @req flag', true]];
+    else if (info.kind === 'li') entries = [['plain', 'Make it a paragraph']];
+    else if (info.kind === 'h') entries = [['h1', 'Heading 1'], ['h2', 'Heading 2'], ['h3', 'Heading 3'], ['h4', 'Heading 4'], ['plain', 'Make it a paragraph']];
+    else if (info.kind === 'kind') entries = [['drop', 'Remove the kind']];
+    else entries = [['plain', 'Make it a paragraph']];
+    menu(b, entries).then(function (c) {
+      if (c === 'unwrap') ed.replace(info.a, info.b, info.txt);
+      else if (c === 'drop') { var a = info.a; if (info.kind === 'tag' && a > 0 && t[a - 1] === ' ') a--; ed.replace(a, info.b, ''); }
+      else if (c === 'plain') ed.replace(info.a, info.b, '');
+      else if (/^h\d$/.test(c)) { ed.el.setSelectionRange(info.b, info.b); ed.setHeading(+c.slice(1)); }
+      else if (c === 'change') { ed.replace(info.a, info.b, info.txt); ed.el.setSelectionRange(info.a, info.a + info.txt.length); specReqPicker(b); }
+      ed.el.focus();
+    });
+  }
+  // Link requirement…: a searchable list of the review's requirements; a pick wraps the selected words.
+  function specReqPicker(anchor) {
+    var ed = specEd, p = current(); if (!ed || !p) return;
+    var s = ed.selection();
+    if (s.a === s.b) { toast('Select the words to link first'); return; }
+    var ctx = M.specContext(p);
+    closeMenu();
+    var m = document.createElement('div');
+    m.className = 'menu spec-req-pick'; m.id = 'menu';
+    m.innerHTML = '<input class="input" id="spec-req-pick" placeholder="Search requirements by number or words" autocomplete="off"><div class="spec-req-pick-list"></div>';
+    document.body.appendChild(m);
+    var r = anchor.getBoundingClientRect();
+    m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left)) + 'px';
+    m.style.top = Math.max(8, Math.min(innerHeight - 340, r.bottom + 6)) + 'px';
+    var list = m.querySelector('.spec-req-pick-list'), inp = m.querySelector('input');
+    function draw() {
+      var q = inp.value.trim().toLowerCase();
+      var hits = M.liveReqs(p).filter(function (x) { return x.status !== 'deprecated' && (!q || [x.ref, x.text, x.category].join(' ').toLowerCase().indexOf(q) >= 0); }).slice(0, 40);
+      list.innerHTML = hits.map(function (x) { return '<button data-req="' + esc(x.id) + '"><span><b>' + esc(x.ref || '') + '</b> ' + esc(x.text || 'No text yet') + '</span></button>'; }).join('') || '<p class="note">' + (M.liveReqs(p).length ? 'No requirements match.' : 'No requirements yet: use Flag @req, then make it one.') + '</p>';
     }
+    draw(); inp.focus();
+    inp.addEventListener('input', draw);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { var f = list.querySelector('[data-req]'); if (f) { e.preventDefault(); f.click(); } } });
+    list.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-req]'); if (!b) return;
+      var q = ctx.reqs[b.dataset.req], ref = String(q.ref || ''), inner = ref && ctx.refs[ref.toLowerCase()] === q.id ? ref : 'q:' + q.id;
+      closeMenu();
+      ed.el.focus(); ed.el.setSelectionRange(s.a, s.b);
+      if (!ed.wrapMark(inner)) toast('Select words on one line, outside other links');
+    });
+  }
+  function specFmt(f, btn) {
+    var ed = specEd; if (!ed || !$('#spec-editor')) return;
+    ed.el.focus();
+    var s = ed.selection();
+    switch (f) {
+      case 'bold': ed.toggleWrap('**'); break;
+      case 'italic': ed.toggleWrap('*'); break;
+      case 'strike': ed.toggleWrap('~~'); break;
+      case 'bul': ed.setList('b'); break;
+      case 'num': ed.setList('n'); break;
+      case 'out': ed.shift(-1); break;
+      case 'in': ed.shift(1); break;
+      case 'gist': ed.setPrefix('> '); break;
+      case 'check': ed.setPrefix('Check: '); break;
+      case 'heading':
+        menu(btn, [['1', 'Heading 1'], ['2', 'Heading 2'], ['3', 'Heading 3'], ['4', 'Heading 4'], ['0', 'Paragraph']]).then(function (l) { ed.el.focus(); ed.el.setSelectionRange(s.a, s.b); ed.setHeading(+l); });
+        break;
+      case 'tag': ed.insert('@req', true); break;
+      case 'std':
+        if (s.a === s.b) { toast('Select the words to mark standard'); break; }
+        if (!ed.wrapMark('std')) toast('Select words on one line, outside other links');
+        break;
+      case 'link': specReqPicker(btn); break;
+      case 'sec': {
+        var titles = {}, entries = [];
+        M.specSplit(ed.value()).concat(current() && specEditing !== 'all' ? M.liveSpec(current()).map(function (x) { return { heading: x }; }) : []).forEach(function (c) {
+          var tt = c.heading && c.heading.title; if (!tt || titles[tt.toLowerCase()]) return; titles[tt.toLowerCase()] = 1; entries.push([tt, tt]);
+        });
+        if (!entries.length) { toast('No sections to point at yet'); break; }
+        menu(btn, entries).then(function (tt) { ed.el.focus(); ed.el.setSelectionRange(s.a, s.b); if (!ed.wrapMark('#' + tt, tt)) toast('Select words on one line, outside other links'); });
+        break;
+      }
+      case 'parts': {
+        var li = ed.lineAt(), end = ed.lineStart(li) + ed.line(li).length;
+        ed.replace(end, end, (ed.line(li).trim() ? '\n' : '') + 'Parts: ');
+        break;
+      }
+    }
+    specFmtRefresh();
+  }
+  function specFmtRefresh() {
+    var bar = document.querySelector('.spec-fmtbar'); if (!bar || !specEd || !$('#spec-editor')) return;
+    var st = specEd.state(), on = { bold: st.bold, italic: st.italic, strike: st.strike, bul: st.list === 'b', num: st.list === 'n', gist: st.gist, check: st.check, heading: !!st.heading };
+    bar.querySelectorAll('[data-f]').forEach(function (b) { var v = !!on[b.dataset.f]; b.classList.toggle('on', v); if (b.dataset.f in on) b.setAttribute('aria-pressed', v ? 'true' : 'false'); });
   }
   function specEditorHtml(id, all) {
     var lines = specDraft.split('\n').length;
     return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() +
-      '<textarea class="input" id="spec-editor" data-sec="' + esc(id || '') + '" rows="' + (all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) + '" spellcheck="true">' + esc(specDraft) + '</textarea>' +
-      '<div class="spec-help">Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section · review note: <code>Check: …</code></div>' +
+      '<div class="input spec-ed" id="spec-editor" data-sec="' + esc(id || '') + '" style="min-height:' + Math.round((all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) * 1.6) + 'em"></div>' +
+      specFmtBarHtml() +
+      '<div class="spec-help">The buttons write the markup, shown as badges; typing it works too. Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section · review note: <code>Check: …</code></div>' +
       '<div id="spec-editor-warn" aria-live="polite">' + specDraftWarnHtml() + '</div>' +
       '<div class="spec-editor-foot"><button class="btn" data-act="spec-guide" title="How to write headings, links, lists, and tables">Writing guide</button>' +
       (id ? '<button class="btn btn-danger" data-act="spec-delete" data-id="' + esc(id) + '">Delete section</button>' : '') +
@@ -2833,7 +2991,7 @@
     var example = board ?
       '## Power\n> From mains to the 5 V and 3.3 V rails.\nThe whole board draws no more than 1.5 W @req\n\n### 3V3 buck\n> Steps 5 V down to the 3.3 V rail.\n[U7 is a 2 A synchronous buck.]{std} [The rail stays within ±3% at 1.5 A]{REQ-006}.\nParts: U7, L1, C1–C3\nSupplies: MCU (3V3), Wi-Fi module (3V3)'
       : '## Relay driver * driver\n> Switches the heat and cool relays.\n[Both outputs are held off through a reset]{REQ-003}. The driver turns one on only when the control loop asks.\nAdd a 2 s minimum off time @req\nUses: Relays';
-    var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>' + esc(SPEC_LABEL) + ' is plain text with a few marks. Anything else shows exactly as you type it.</p></div>' +
+    var w = sheet('<div class="sheet-head"><h2>Writing guide</h2><p>' + esc(SPEC_LABEL) + ' is plain text with a few marks. The buttons under the text write them, and the editor shows them as badges; click a badge to change or remove it. Anything else shows exactly as you type it.</p></div>' +
       '<div class="sheet-body spec-guide">' + structure +
       '<h3>Tie sentences to requirements</h3><p class="note">Every sentence is linked, standard, flagged, a review note, or unlinked. Unlinked sentences get a dotted underline until you do one of these.</p>' + rows(tie) +
       '<p class="note">You can also click a sentence when you’re not editing and use the buttons in its panel; they write these marks for you. Select a few words first to link just those.</p>' +
@@ -2846,19 +3004,21 @@
       '<p class="note">A sentence ends at a full stop and a space, even when the next word starts in lowercase (<code>kff is added after.</code>), and at a question or exclamation mark before a capital. It doesn’t end after e.g., i.e., vs., or cf., inside a number (0.5), or after No., Fig., rev., or ref. before a number, letter, or ref (<code>rev. B</code>, <code>ref. REQ-004</code>). Units end it: <code>above 22 V. The pump stops.</code></p>' +
       '<h3>Paragraphs, lists, and tables</h3>' + rows([
         ['First paragraph.\n\nSecond paragraph.', 'A blank line starts a new paragraph. Lines without a blank between them run together.'],
-        [board ? '- Line voltage\n- Neutral' : '- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing.'],
+        [board ? '- Line voltage\n- Neutral' : '- Heat call\n- Cool call', 'A list. Each item counts as one sentence for tracing. Two spaces before the dash put it a level in (Tab does it in the editor).'],
+        ['1. Power up\n  1. Check the 5 V rail\n2. Program the MCU', 'A numbered list, numbered 1., 1.1, 2. by level, whatever numbers you type.'],
+        ['**bold**, *italic*, ~~struck~~', 'Bold, italic, and struck-through words (Ctrl+B, Ctrl+I, Ctrl+Shift+X). A star with spaces round it, as in 5 * 3, stays a star.'],
         [board ? '| Rail | Max load |\n| --- | --- |\n| 3V3 | 1.5 A |' : '| Field | Units |\n| --- | --- |\n| temp | °C |', board ? 'A table: a header row, a row of dashes, then the rows. Good for a power budget or a pin list. Tables aren’t traced.' : 'A table: a header row, a row of dashes, then the rows. Good for interface fields. Tables aren’t traced.'],
         ['```\nstatus = 0x01\n```', 'Code, shown as typed. Put three backticks on their own line before and after.']
       ]) +
       '<h3>A short example</h3><pre class="spec-code">' + esc(example) + '</pre>' +
-      '<p class="note">Not supported: bold, italics, and links to web pages show as typed.</p>' +
+      '<p class="note">The buttons under the text write all of this for you, and the editor shows it as badges. Not supported: links to web pages show as typed.</p>' +
       (specGuideId() && window.SignoffSpecGuide ? '<p class="note">New to ' + esc(SPEC_LABEL) + '? <button class="btn btn-sm" data-act="spec-guide-start">Take the guide</button> walks through it on the demo.</p>' : '') +
       '</div><div class="sheet-foot"><span class="spacer"></span><button class="btn btn-primary" data-sheet="done">Back to writing</button></div>', { wide: true });
     w.querySelector('[data-sheet="done"]').addEventListener('click', function () { closeSheet(); var t = $('#spec-editor'); if (t) t.focus(); });
   }
 
   function specPage(p) {
-    var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth || 3, view = ui.specView === 'map' ? 'map' : 'doc';
+    var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth === 2 ? 2 : 3, view = ui.specView === 'map' ? 'map' : 'doc';
     specHistOf(p); specHistNote(p);
     // Gaps or Notes shows only the sections that have them, in full, with the other sentences dimmed.
     var show = ui.specShow === 'gaps' || ui.specShow === 'notes' ? ui.specShow : '';
@@ -2890,7 +3050,7 @@
         ' <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
     }
     html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button></div>' +
-      (view === 'doc' ? '<div class="seg" title="How much to show">' + [[1, 'Headings'], [2, 'Gists'], [3, 'Full text']].map(function (d) {
+      (view === 'doc' ? '<div class="seg" title="How much to show">' + [[2, 'Gists'], [3, 'Full text']].map(function (d) {
         return '<button class="' + (depth === d[0] && !show ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
       }).join('') + '</div>' : '') +
       (view === 'doc' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
@@ -6438,7 +6598,7 @@
         // (on a narrow screen the panel is a sheet over the depth buttons, which took the first click).
         if (ui.specView !== el.dataset.view && /^spec(block|edge)?\|/.test(selected || '')) { selected = null; closeInspector(); }
         ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
-      case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) || 3; ui.specShow = ''; saveUi(); renderPage(); break;
+      case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) === 2 ? 2 : 3; ui.specShow = ''; saveUi(); renderPage(); break;
       case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
       case 'spec-inbox': ui.specInbox = !ui.specInbox; saveUi(); renderPage(); break;
       case 'spec-resolve': specResolve(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
@@ -6485,6 +6645,7 @@
       case 'spec-guide-start': closeSheet(); if (window.SignoffSpecGuide) window.SignoffSpecGuide.start(); break;
       case 'spec-kind-set': specKindSet(el.dataset.kind); break;
       case 'spec-uses-add': specUsesAdd(el, el.dataset.word); break;
+      case 'spec-fmt': specFmt(el.dataset.f, el); break;
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
       case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
       case 'spec-edge-delete': specEdgeDelete(); break;
@@ -6876,7 +7037,7 @@
     specPutAll(p, [M.specStamp(Object.assign({}, src, { routes: rts }), me())]);
   });
   document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
-  document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
+  document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar, .spec-fmtbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 
   // ── Boot ─────────────────────────────────────────────────

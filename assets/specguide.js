@@ -49,10 +49,10 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline, down to four levels. The outline, beside the text or above it on a narrow screen, jumps to any section. {Headings} shows just the structure, {Gists} adds each section’s one-line summary, and {Full text} shows everything.',
-        do: 'Click {Gists}, then {Headings}, then {Full text}. Click {Control loop} in the outline to jump to it.',
+        text: 'Headings make the outline, down to four levels. The outline, beside the text or above it on a narrow screen, jumps to any section. {Gists} shows each section’s one-line summary under its heading, and {Full text} shows everything.',
+        do: 'Click {Gists}, then {Full text}. Click {Control loop} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
-        spot: function () { return [['[data-act="spec-depth"][data-depth="1"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
+        spot: function () { return [['[data-act="spec-depth"][data-depth="2"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
     ] },
     { title: 'Tied to requirements', steps: [
       { title: 'Five kinds of sentence',
@@ -160,7 +160,7 @@
         spot: function () { return ['[data-act="spec-more"]']; } },
       { title: 'Working together',
         text: 'Signed in, the description syncs with the review. Sections merge one by one; when two people edit the same section at once, the newer edit wins and the other is kept as a conflict copy under {Edited in two places}. Signoff PL shows the top-level gists as {What it does} on the firmware Part.',
-        setup: function () { A().open('doc', 1); } }
+        setup: function () { A().open('doc', 2); } }
     ] },
     { title: 'Done', steps: [
       { title: 'You’re set',
@@ -179,10 +179,10 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline. The outline, beside the text or above it on a narrow screen, jumps to any subcircuit. {Headings} shows just the structure, {Gists} adds each subcircuit’s one-line summary, and {Full text} shows everything.',
-        do: 'Click {Gists}, then {Headings}, then {Full text}. Click {MCU} in the outline to jump to it.',
+        text: 'Headings make the outline. The outline, beside the text or above it on a narrow screen, jumps to any subcircuit. {Gists} shows each subcircuit’s one-line summary under its heading, and {Full text} shows everything.',
+        do: 'Click {Gists}, then {Full text}. Click {MCU} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
-        spot: function () { return [['[data-act="spec-depth"][data-depth="1"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
+        spot: function () { return [['[data-act="spec-depth"][data-depth="2"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
     ] },
     { title: 'Tied to requirements', steps: [
       { title: 'Five kinds of sentence',
@@ -288,7 +288,7 @@
         spot: function () { return ['[data-act="spec-more"]']; } },
       { title: 'Working together',
         text: 'Signed in, the description syncs with the review. Subcircuits merge one by one; when two people edit the same one at once, the newer edit wins and the other is kept as a conflict copy under {Edited in two places}. Signoff PL shows the top-level gists as {What it does} on the board’s Part.',
-        setup: function () { A().open('doc', 1); } }
+        setup: function () { A().open('doc', 2); } }
     ] },
     { title: 'Done', steps: [
       { title: 'You’re set',

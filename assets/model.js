@@ -977,8 +977,40 @@
   }
   // A sentence as plain words: marks unwrapped, @req taken out. A space before punctuation goes only
   // where the punctuation ends a word ("pulse @req." -> "pulse."), so "the .cfg file" keeps its space.
+  // Bold, italic, and struck words in Scribe text (2026-11-19, Chris: rich text in Scribe): **bold**, *italic*,
+  // ~~struck~~. A marker opens only before a non-space with a closing marker later in the text, and closes only
+  // after a non-space, so "5 * 3" and a lone "**" stay as typed; a backslash keeps a * or ~ as itself.
+  // [{ t, b, i, s }], runs in order.
+  function specRich(text) {
+    text = String(text || '');
+    var out = [], st = { b: false, i: false, s: false }, buf = '';
+    function flush() { if (buf) out.push({ t: buf, b: st.b, i: st.i, s: st.s }); buf = ''; }
+    function closes(from, tok) {
+      for (var j = from; j < text.length; j++) {
+        if (text[j] === '\\') { j++; continue; }
+        if (tok === '*' && text.substr(j, 2) === '**') { j++; continue; }
+        if (text.substr(j, tok.length) === tok && j > from && !/\s/.test(text[j - 1])) return true;
+      }
+      return false;
+    }
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '\\' && (text[i + 1] === '*' || text[i + 1] === '~')) { buf += text[++i]; continue; }
+      var two = text.substr(i, 2), k = two === '**' ? 'b' : two === '~~' ? 's' : ch === '*' ? 'i' : '';
+      if (k) {
+        var tok = k === 'i' ? '*' : two, nx = text[i + tok.length] || '', pv = text[i - 1] || '';
+        if (st[k] ? pv && !/\s/.test(pv) : nx && !/\s/.test(nx) && !(k === 'i' && /\w/.test(pv)) && closes(i + tok.length, tok)) {
+          flush(); st[k] = !st[k]; i += tok.length - 1; continue;
+        }
+      }
+      buf += ch;
+    }
+    flush();
+    return out;
+  }
+  function specRichPlain(text) { return specRich(text).map(function (r) { return r.t; }).join(''); }
   function specPlain(raw) {
-    return specSpanReplace(raw, function (all, txt) { return txt; }).replace(new RegExp(SPEC_TAG.source, 'ig'), '$1').replace(/[ \t]{2,}/g, ' ')
+    return specRichPlain(specSpanReplace(raw, function (all, txt) { return txt; })).replace(new RegExp(SPEC_TAG.source, 'ig'), '$1').replace(/[ \t]{2,}/g, ' ')
       .replace(/\s+([.!?,;:])(?=$|[\s.!?,;:)"'’”\]])/g, '$1').trim();
   }
 
@@ -1111,8 +1143,23 @@
     return cells;
   }
 
-  // A section body as blocks: p and li (with sentence units), gist, uses, table (rows with marks are
-  // units), code.
+  var SPEC_LIST_MAX = 5;
+  // The numbers of a run of list blocks: 1., then 1.1 and 1.2 a level in, 1.1.1 further; a bullet keeps the
+  // count above it and restarts the ones below. [label or '' per block].
+  function specListNumbers(lis) {
+    var c = [];
+    return lis.map(function (b) {
+      var lv = b.lv || 0;
+      if (!b.num) { c.length = Math.min(c.length, lv + 1); return ''; }
+      c.length = lv + 1;
+      for (var i = 0; i < lv; i++) c[i] = c[i] || 0;
+      c[lv] = (c[lv] || 0) + 1;
+      var path = c.filter(function (n) { return n > 0; });
+      return path.join('.') + (path.length === 1 ? '.' : '');
+    });
+  }
+  // A section body as blocks: p and li (with sentence units; li with lv and num), gist, uses, table (rows with
+  // marks are units), code.
   function specBlocks(body, ctx) {
     body = String(body || '');
     var out = [], lines = [], pos = 0;
@@ -1170,12 +1217,15 @@
         var gs = L.s + t.indexOf('>') + 1;
         out.push({ type: 'gist', text: specPlain(body.slice(gs, L.e)) }); i++; continue;
       }
-      var lm = /^(\s*[-*]\s+)/.exec(t);
+      // A list line: "- " or "* " a bullet, "1. " or "1) " numbered (numbers are drawn by level, 1., 1.1,
+      // 1.1.1, whatever digits were typed); two leading spaces (or a tab) a level, up to SPEC_LIST_MAX.
+      var lm = /^(\s*)([-*]|\d+[.)])\s+/.exec(t);
       if (lm) {
         endPara();
-        var a = L.s + lm[1].length, b = L.e;
+        var a = L.s + lm[0].length, b = L.e;
         while (b > a && /\s/.test(body[b - 1])) b--;
-        out.push({ type: 'li', start: a, end: b, units: b > a ? [specUnit(body, a, b, ctx)] : [] }); i++; continue;
+        out.push({ type: 'li', start: a, end: b, lv: Math.min(SPEC_LIST_MAX, Math.floor(lm[1].replace(/\t/g, '  ').length / 2)), num: /\d/.test(lm[2]),
+          units: b > a ? [specUnit(body, a, b, ctx)] : [] }); i++; continue;
       }
       // A "Check:" line starts its own paragraph, so notes typed one per line stay apart.
       if (para && SPEC_NOTE.test(trim)) endPara();
@@ -2634,7 +2684,7 @@
     liveComments: liveComments, retiredItems: retiredItems, changesSince: changesSince, recordDiff: recordDiff, historyRows: historyRows, historyBlocks: historyBlocks,
     restorePlan: restorePlan, restoreApply: restoreApply,
     isRevNote: isRevNote, stripRevNote: stripRevNote, revNotes: revNotes,
-    specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specLinkDir: specLinkDir, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specResolvePlan: specResolvePlan, specResolveApply: specResolveApply, specBase: specBase, specStampKey: specStampKey, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain,
+    specKinds: specKinds, specKindInfo: specKindInfo, specLinkWords: specLinkWords, specLinkWord: specLinkWord, specKindLink: specKindLink, specLinkItems: specLinkItems, specLinkText: specLinkText, specLinkDir: specLinkDir, specUsesItems: specUsesItems, specEnabled: specEnabled, liveSpec: liveSpec, newSection: newSection, specStamp: specStamp, mergeSpec: mergeSpec, specResolvePlan: specResolvePlan, specResolveApply: specResolveApply, specBase: specBase, specStampKey: specStampKey, specHeading: specHeading, specHeadingLine: specHeadingLine, specPlain: specPlain, specRich: specRich, specRichPlain: specRichPlain, specListNumbers: specListNumbers, specRange: specRange, SPEC_LIST_MAX: SPEC_LIST_MAX,
     specSpans: specSpans, specCells: specCells, specUseIs: specUseIs, specUseId: specUseId, specRemoveUnit: specRemoveUnit, specBrokenMarks: specBrokenMarks, SPEC_BODY_MAX: SPEC_BODY_MAX, specTooLong: specTooLong, specKindLabel: specKindLabel, specKindPlural: specKindPlural, specSentences: specSentences, specContext: specContext, specBlocks: specBlocks, specAnalysis: specAnalysis, specEdit: specEdit,
     specToEditor: specToEditor, specFromEditor: specFromEditor, specSplit: specSplit, specSave: specSave, specToText: specToText, specSaveAll: specSaveAll, specSetLine: specSetLine, specUsesNames: specUsesNames, specRenameUses: specRenameUses, specRename: specRename, specAddBlock: specAddBlock, specMoveBlock: specMoveBlock, specNest: specNest, specGroup: specGroup, specUngroup: specUngroup, specCommentTags: specCommentTags, specMarkdown: specMarkdown, specSummary: specSummary, specTemplate: specTemplate,
     newer: newer, mergeMaps: mergeMaps, mergeProjects: mergeProjects, mergeLocalCopies: mergeLocalCopies,

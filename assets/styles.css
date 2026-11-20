@@ -1477,3 +1477,68 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .rwp-sign.rwp-sign-tech { grid-template-columns: 2fr 1fr; }
 @media print { .rwp-steps > li { break-inside: avoid; } }
 @media (max-width: 860px) { .report-bar { flex-wrap: wrap; gap: 8px; } }
+
+/* Scribe lists by level, numbered 1., 1.1, 1.1.1 (model.specListNumbers) */
+.spec-ul li.lv-1 { margin-left: 22px; }
+.spec-ul li.lv-2 { margin-left: 44px; }
+.spec-ul li.lv-3 { margin-left: 66px; }
+.spec-ul li.lv-4 { margin-left: 88px; }
+.spec-ul li.lv-5 { margin-left: 110px; }
+.spec-ul li.spec-li-n { list-style: none; margin-left: -22px; display: flex; gap: 8px; }
+.spec-ul li.spec-li-n.lv-1 { margin-left: 0; }
+.spec-ul li.spec-li-n.lv-2 { margin-left: 22px; }
+.spec-ul li.spec-li-n.lv-3 { margin-left: 44px; }
+.spec-ul li.spec-li-n.lv-4 { margin-left: 66px; }
+.spec-ul li.spec-li-n.lv-5 { margin-left: 88px; }
+.spec-num { flex: none; min-width: 14px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.spec-p s, .spec-ul s { color: var(--text-3); }
+
+/* Scribe's editor (assets/specedit.js): the text as typed, its markup as badges. Badges differ by shape and label,
+   not hue alone. */
+.spec-ed { width: 100%; height: auto; padding: 10px 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; outline: none; }
+.spec-editor:not(.spec-editor-all) .spec-ed { max-height: 70vh; overflow: auto; resize: vertical; }
+.spec-editor-all .spec-ed { min-height: 60vh; }
+.se-line { min-height: 1.6em; }
+.se-h { font-weight: 650; color: var(--text); }
+.se-h1 { font-size: 1.25em; margin-top: 6px; }
+.se-h2 { font-size: 1.12em; margin-top: 4px; }
+.se-h3 { font-size: 1.04em; }
+.se-gist { color: var(--text-2); font-style: italic; }
+.se-li.se-lv1 { padding-left: 22px; } .se-li.se-lv2 { padding-left: 44px; } .se-li.se-lv3 { padding-left: 66px; } .se-li.se-lv4 { padding-left: 88px; } .se-li.se-lv5 { padding-left: 110px; }
+.se-code, .se-table { font: 12.5px/1.6 var(--mono); color: var(--text-2); }
+.se-code { background: var(--bg-sunk); padding: 0 6px; }
+.se-z { font-size: 0; }
+.se-mk { color: var(--text-3); font-size: 0.8em; font-weight: 400; font-style: normal; opacity: 0.7; }
+.se-line s { color: var(--text-3); }
+.se-b { display: inline; margin: 0 1px; border-radius: 6px; cursor: pointer; user-select: none; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.se-pre { display: inline-block; }
+.se-mark .se-chip { display: inline-block; white-space: nowrap; margin-left: 4px; line-height: 1.4; }
+.se-pre { font-size: 10.5px; font-weight: 600; line-height: 1; letter-spacing: 0.03em; padding: 3px 6px; margin-right: 6px; background: var(--bg-sunk); color: var(--text-2); border: 1px solid var(--border); }
+.se-pre.se-hb { border-radius: 4px; }
+.se-pre.se-bulb { background: none; border: none; padding: 0 4px 0 0; font-size: 14px; color: var(--text-3); }
+.se-pre.se-numb { background: none; border: none; padding: 0 2px 0 0; font-weight: 400; font-size: 1em; letter-spacing: 0; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.se-pre.se-wordb { border-style: solid; border-radius: 999px; }
+.se-pre.se-gistb { border-style: dashed; }
+.se-pre.se-checkb { border-radius: 999px; border-style: dotted; border-width: 2px; }
+.se-mark { padding: 0 2px 0 3px; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.se-mark .se-words { color: var(--text); }
+.se-mark .se-chip { font: 600 10.5px/1.5 var(--mono); padding: 0 5px; border-radius: 4px; background: var(--accent); color: #fff; }
+.se-mark.se-std { border-style: dotted; border-color: var(--text-3); background: none; }
+.se-mark.se-std .se-chip { background: var(--bg-sunk); color: var(--text-2); border: 1px solid var(--border); }
+.se-mark.se-missing { border-style: dashed; border-color: var(--warn); }
+.se-mark.se-missing .se-chip { background: var(--warn-fill-hatch, var(--warn)); color: var(--on-warn, #000); }
+.se-tag { font: 600 10.5px/1.5 var(--mono); padding: 0 6px; border: 1px dashed var(--text-3); color: var(--text-2); }
+.se-tag::before { content: '⚑ '; }
+.se-kind { font-size: 10.5px; line-height: 1.5; padding: 0 6px; border-radius: 999px; background: var(--bg-sunk); color: var(--text-2); border: 1px solid var(--border); font-weight: 600; }
+.se-b:hover { box-shadow: 0 0 0 2px var(--focus, var(--accent)); }
+.spec-fmtbar { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 8px; padding: 3px; border-radius: 10px; background: var(--bg-sunk); }
+.spec-fmt { width: 30px; height: 30px; font-size: 14px; font-family: Georgia, 'Times New Roman', serif; }
+.spec-fmt svg { width: 16px; height: 16px; }
+.spec-fmt.on, .spec-fmt-t.on { background: var(--bg-elev); color: var(--accent-ink, var(--accent)); box-shadow: var(--shadow-sm); }
+.spec-fmt-t { border: none; background: none; }
+.spec-fmt-t:hover { background: var(--bg-elev); }
+.spec-fmt-sep { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
+.spec-req-pick { width: min(420px, calc(100vw - 16px)); padding: 8px; }
+.spec-req-pick .input { margin-bottom: 6px; }
+.spec-req-pick-list { max-height: 280px; overflow: auto; }
+.spec-req-pick-list button span { text-align: left; }
