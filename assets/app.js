@@ -4815,7 +4815,9 @@
       d.on = true; d.svg.classList.add('moving'); e.preventDefault();
       var pq = d.local(e), o = { shapes: {}, ports: {} };
       if (d.type === 'run') {
-        var nrec = specRouter().dragTo(d.g, specRouteSpace(d.rr, pq), d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID);
+        // Near straight it snaps straight, within one grid step (Chris, 2026-11-19: Loom's 5 steps, 50 units here,
+        // left nowhere to put a run between two straight lines under 100 apart; Loom's STICK is 5, so step / 5).
+        var nrec = specRouter().dragTo(d.g, specRouteSpace(d.rr, pq), d.ctrl ? null : specSnap, d.ctrl ? 0 : SPEC_GRID / 5);
         // A run stops where the line still clears its blocks by a stub: past that it would hook back
         // into the block, and the kept shape would be dropped when drawn. Any of the line's end pairs will
         // do (a run next to a top or bottom port crosses under it to the other side), and so will a run in
