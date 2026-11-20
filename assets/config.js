@@ -16,7 +16,12 @@
    words.unit(s):  what one review is called on screen (board / part). "Project" is the
                    client project several reviews belong to (meta.project).
    assemblies:     the details window asks whether a part is a single part or an assembly
-                   (meta.kind, summary.kind); Signoff PL shows an assembly's review on its branch. */
+                   (meta.kind, summary.kind); Signoff PL shows an assembly's review on its branch.
+   previews.dir:   the folder Partcheck's Send stores part pictures and models in next to a review
+                   (../partcheck/docs/send-to-signoff-me.md); the overview shows the hero part beside
+                   the ring. demo.pictures names the demo reviews' pictures in
+                   assets/demo-previews/ (<id>-<view>.webp), the hero part's views from the same
+                   Partcheck send the Signoff PL demo shows (partcheck/tools/pl_demo.html). */
 window.SIGNOFF_CONFIG = {
   "product": "Signoff ME",
   "discipline": "ME",
@@ -43,6 +48,7 @@ window.SIGNOFF_CONFIG = {
   "legacyTabs": [],
   "pl": { "tool": "me", "dataRepo": "signoff_pl_data" },
   "assemblies": true,
+  "previews": { "dir": "partcheck/" },
   "words": {
     "unit": "part",
     "units": "parts",
@@ -77,6 +83,7 @@ window.SIGNOFF_CONFIG = {
     { "id": "wearable", "label": "Wearable", "desc": "Worn or in prolonged skin contact" }
   ],
   "demo": {
+    "pictures": { "mdemo5": { "keys": ["iso", "top", "front", "right"], "ext": "webp" }, "mdemo13": { "keys": ["iso", "top", "front", "right"], "ext": "webp" } },
     "findings": [
       {
         "id": "pd-im-6",

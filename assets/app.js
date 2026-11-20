@@ -1108,12 +1108,25 @@
         var want = (Array.isArray(doc.images) ? doc.images : []).filter(function (i) {
           return i && /^[a-z0-9-]{1,32}$/.test(i.key) && /^[a-z0-9-]{1,32}\.(webp|png)$/.test(i.file) && PIC_TYPES[i.type] && sha[dir + i.file];
         });
+        // A review of several parts (Partcheck's `parts`, partcheck/docs/send-to-signoff-me.md) shows
+        // its hero part's views, named by view (iso, top, front, right).
+        var hp = (Array.isArray(doc.parts) ? doc.parts : []).filter(function (x) {
+          return x && x.views && typeof x.views === 'object' && Object.keys(x.views).some(function (v) { return x.views[v] === doc.hero; });
+        })[0], hero = doc.hero;
+        if (hp) {
+          want = Object.keys(hp.views).filter(function (v) { return /^[a-z]{1,12}$/.test(v); }).map(function (v) {
+            var i = want.filter(function (x) { return x.key === hp.views[v]; })[0];
+            if (i && i.key === doc.hero) hero = v;
+            return i && Object.assign({}, i, { key: v });
+          }).filter(Boolean);
+        }
         return Promise.all(want.map(function (i) {
           return store.blobBytes(sha[dir + i.file]).then(function (b) { return { key: i.key, url: URL.createObjectURL(new Blob([b], { type: i.type })) }; });
         })).then(function (images) {
           if (!images.length) return null;
-          return { state: 'ok', images: images, hero: images.some(function (x) { return x.key === doc.hero; }) ? doc.hero : images[0].key,
-            runId: /^[A-Za-z0-9_-]{1,64}$/.test(doc.runId || '') ? doc.runId : '' };
+          // Only Fabcheck's runs (config.runs) open from the picture.
+          return { state: 'ok', images: images, hero: images.some(function (x) { return x.key === hero; }) ? hero : images[0].key,
+            runId: C.runs && C.runs.tool === 'fabcheck' && /^[A-Za-z0-9_-]{1,64}$/.test(doc.runId || '') ? doc.runId : '' };
         });
       });
     }).then(function (got) { pics[p.id] = got || { state: 'none' }; showPicture(p); }, function () { pics[p.id] = { state: 'none' }; });
