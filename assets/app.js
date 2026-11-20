@@ -4273,6 +4273,16 @@
           '<circle class="spec-port-hit" cx="' + o[1].x + '" cy="' + o[1].y + '" r="8"/><circle class="spec-port-dot" cx="' + o[1].x + '" cy="' + o[1].y + '" r="3.5"/></g>';
       });
     });
+    // A legend for the power symbols at the bottom right (Chris, 2026-11-19), when any block has a Power line.
+    // It sits in the frame's bottom margin, below every block (rx1, ry1: the frame's corner).
+    if (blocks.some(function (x) { return (x.power || []).length; })) {
+      var lx = rx1 - 150, ly = ry1 - 22;
+      svg += '<g class="spec-legend" aria-label="Legend: a circle is a rail the block makes (source); a bar, a rail it uses (sink)">' +
+        '<path d="M' + lx + ' ' + (ly + 11) + ' L' + lx + ' ' + (ly + 4) + '"/><circle class="spec-flag-ring" cx="' + lx + '" cy="' + (ly + 0.5) + '" r="3.5"/>' +
+        '<text x="' + (lx + 9) + '" y="' + (ly + 9) + '">Source</text>' +
+        '<path d="M' + (lx + 76) + ' ' + (ly + 11) + ' L' + (lx + 76) + ' ' + ly + '"/><path class="spec-flag-bar" d="M' + (lx + 71) + ' ' + ly + ' L' + (lx + 81) + ' ' + ly + '"/>' +
+        '<text x="' + (lx + 85) + '" y="' + (ly + 9) + '">Sink</text></g>';
+    }
     svg += '</svg>';
     return bar + specCard(svg, flowTools) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds, and a line to each one in the same section. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T) + (M.specPowerOn() ? specPtreeHtml(p, T) : '');

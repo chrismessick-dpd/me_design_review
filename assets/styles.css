@@ -1319,6 +1319,12 @@ svg.spec-flow.moving .spec-port, svg.spec-flow.moving .spec-edge-hit { pointer-e
 .spec-flag .spec-flag-bar { stroke-width: 2; stroke-linecap: round; }
 .spec-flag .spec-flag-ring { stroke: var(--text-2); stroke-width: 1.4; fill: var(--bg-elev); }
 .spec-flag text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
+/* The power symbols' legend, bottom right of the block diagram (Chris, 2026-11-19). */
+.spec-legend { pointer-events: none; }
+.spec-legend path { stroke: var(--text-2); stroke-width: 1.4; fill: none; }
+.spec-legend .spec-flag-bar { stroke-width: 2; stroke-linecap: round; }
+.spec-legend .spec-flag-ring { stroke: var(--text-2); stroke-width: 1.4; fill: var(--bg-elev); }
+.spec-legend text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
 .spec-flag:hover path { stroke: var(--accent); }
 .spec-flag:hover text { fill: var(--accent); }
 .spec-use-label { margin-left: 4px; padding: 0 5px !important; border-radius: 6px; background: var(--bg-elev) !important; font-size: 11px !important; color: var(--text-2); }
