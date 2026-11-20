@@ -256,7 +256,12 @@
     function setText(t, a, b) {
       lines = String(t).split('\n');
       draw();
-      if (a != null) { cached = { a: a, b: b == null ? a : b }; if (document.activeElement === el) setSel(a, b); }
+      if (a != null) {
+        cached = { a: a, b: b == null ? a : b };
+        // Move the page's caret too when it's in here, focused or not (a stale one would be read back).
+        var ps = getSelection();
+        if (document.activeElement === el || (ps.rangeCount && el.contains(ps.anchorNode))) setSel(a, b);
+      }
     }
     function changed() { el.dispatchEvent(new Event('input', { bubbles: true })); }
     function replace(a, b, ins, caret, kind) {

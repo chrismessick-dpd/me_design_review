@@ -1110,6 +1110,8 @@ html.embed .compare-bar { display: none !important; }
 /* The expanded diagram (Chris, 2026-11-13): the whole window, zoom and pan inside; the panel (z-index 40) opens over it. */
 .spec-map-card { position: relative; }
 .spec-view-acts { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; align-items: center; }
+.spec-view-tools { position: absolute; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); z-index: 2; display: flex; gap: 6px; align-items: center; }
+.spec-view-tools .chip { box-shadow: var(--shadow-sm); }
 .spec-expand { width: 32px; height: 32px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--hair-2); box-shadow: var(--shadow); }
 .spec-expand svg { width: 16px; height: 16px; }
 .spec-map-card.expanded { position: fixed; inset: 0; z-index: 38; margin: 0; border-radius: 0; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
@@ -1307,6 +1309,7 @@ svg.spec-flow.moving .spec-port, svg.spec-flow.moving .spec-edge-hit { pointer-e
 .spec-flag { cursor: pointer; }
 .spec-flag path { stroke: var(--text-2); stroke-width: 1.4; fill: none; }
 .spec-flag .spec-flag-bar { stroke-width: 2; stroke-linecap: round; }
+.spec-flag .spec-flag-ring { stroke: var(--text-2); stroke-width: 1.4; fill: var(--bg-elev); }
 .spec-flag text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
 .spec-flag:hover path { stroke: var(--accent); }
 .spec-flag:hover text { fill: var(--accent); }
@@ -1542,3 +1545,5 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-req-pick .input { margin-bottom: 6px; }
 .spec-req-pick-list { max-height: 280px; overflow: auto; }
 .spec-req-pick-list button span { text-align: left; }
+
+.spec-from-note { margin: -4px 0 10px; font-size: 12.5px; }

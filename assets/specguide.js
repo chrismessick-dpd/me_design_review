@@ -39,7 +39,7 @@
   function mineOr(fallback) { return mine() || fallback; }
 
   // Two sets of steps: FW's (the layers layout: tasks, modules, drivers, Uses) and EE's (the flow
-  // layout: a schematic block diagram of subcircuits with Connects, Supplies, and Parts).
+  // layout: a schematic block diagram of subcircuits with Connects, Power, and Parts).
   var FLOW = !!(window.SIGNOFF_CONFIG && window.SIGNOFF_CONFIG.spec && window.SIGNOFF_CONFIG.spec.layout === 'flow');
   var FW_CHAPTERS = [
     { title: 'Welcome', steps: [
@@ -216,8 +216,8 @@
         do: 'Add a sentence about the buck’s switching frequency, then press {k:Ctrl+Enter} to save. {k:Esc} cancels; {Writing guide} lists every mark.',
         setup: function () { A().open('doc', 3); var s = A().section('3V3 buck') || A().section('MCU'); if (s) A().edit(s.id); },
         spot: function () { return ['#spec-editor']; } },
-      { title: 'Connects, Supplies, and signals',
-        text: '{Connects:} names the blocks a subcircuit sends signals to, with the bus or signal in brackets: {Connects: Wi-Fi module (UART)}. {Supplies:} names the blocks a power subcircuit feeds, with the rail: {Supplies: MCU (3V3)}. They draw the diagram’s lines and power flags. Rename a heading and every link line follows.',
+      { title: 'Connects, Power, and signals',
+        text: '{Connects:} names the blocks a subcircuit sends signals to, with the bus or signal in brackets: {Connects: Wi-Fi module (UART)}. Power goes the same way, with the rail: {Connects: MCU (3V3)}. {Power:} lists the rails a block uses and makes: {Power: 5V (sink), 3V3 (source)}. They draw the diagram’s lines and power flags. Rename a heading and every link line follows.',
         do: 'In the MCU’s {Connects:} line, change {(GPIO)} after Status LEDs to {(LED_PWR/LED_FLT)} and press {k:Ctrl+Enter}. {Add to Connects…} picks another block to add. (A two-way bus can go either way; write it in the direction signals mostly go.)',
         setup: function () { A().open('doc', 3); var s = A().section('MCU'); if (s) A().edit(s.id); },
         spot: function () { return ['.spec-kindbar [data-act="spec-uses-add"]', '#spec-editor']; } },
@@ -234,8 +234,8 @@
     ] },
     { title: 'The block diagram', steps: [
       { title: 'The block diagram',
-        text: 'Every heading is a block, and a heading with headings under it is a section, a box around its blocks: Power, Control, and Outputs here. Inside a section, blocks run left to right in signal order. Lines carry their signal names, a block a supply feeds wears a power flag with the rail’s name, and dotted blocks have unlinked or flagged sentences. Drag blocks and sections to arrange them; {Auto layout} puts them back, and {Sections} hides the boxes.',
-        do: 'Click a 3V3 flag: it opens the buck that supplies it.',
+        text: 'Every heading is a block, and a heading with headings under it is a section, a box around its blocks: Power, Control, and Outputs here. Inside a section, blocks run left to right in signal order. Lines carry their signal names, a block wears a bar for each rail it uses and a circle for each it makes, and dotted blocks have unlinked or flagged sentences. Drag blocks and sections to arrange them; {Auto layout} puts them back, and {Sections} hides the boxes.',
+        do: 'Click a 3V3 bar: it opens the buck that makes it.',
         setup: function () { A().open('map'); },
         spot: function () { return ['.spec-map-card']; } },
       { title: 'Add a block',
@@ -259,19 +259,19 @@
         setup: function () { var a = A(); a.open('map'); var s = a.section(mineOr('USB-C service port')); if (s) a.block(s.id); },
         spot: function () { return ['#spec-editor', '#spec-link-search', '#inspector [data-act="spec-edit"]']; } },
       { title: 'Connect blocks',
-        text: 'Each block has a dot on its top-right corner. Drag from it to another block: a signal block now connects to it, and a power block now supplies it. Click a line for its panel: name its signal there, set its direction (out, in, or both ways), or {Delete line}; Undo in the message puts it back. Two blocks that name each other draw one line, both ways.',
+        text: 'Each block has a dot on its top-right corner. Drag from it to another block: the block now connects to it. Click a line for its panel: name its signal there, set its direction (out, in, or both ways), or {Delete line}; Undo in the message puts it back. Two blocks that name each other draw one line, both ways.',
         do: 'Drag from your protection block’s dot to MCU. Then click the old line from USB-C service port to MCU and {Delete line}, so USB runs through the protection.',
         phone: 'On a touch screen the dots always show; drag from one to another block.',
         setup: function () { A().open('map'); },
         spot: function () { return [handle(mineOr('USB-C service port')), node(mineOr('USB-C service port'))]; } },
       { title: 'The block panel',
-        text: 'Click a block for its panel: its name (a rename follows into every link line), kind, gist, what it connects to and supplies (each with its signal or rail; click the name to change it), what connects into it or supplies it, and its parts.',
+        text: 'Click a block for its panel: its name (a rename follows into every link line), kind, gist, what it connects to (each with its signal or rail; click the name to change it), what connects into it, its power rails (Source, Sink, or N/A), and its parts.',
         do: 'MCU is open. Under {Connects}, click the signal name beside Relay outputs and call it HEAT/COOL.',
         setup: function () { var a = A(); a.open('map'); var s = a.section('MCU') || a.section('Controller'); if (s) a.block(s.id); },
         spot: function () { return [field('Connects'), '#inspector']; } },
       { title: 'Power flags',
-        text: 'A power block’s {Supplies} line puts a flag on every block it feeds, named for the rail. A block fed by two rails, like the relays (5 V coils, and the switched AC line), wears two. Click a flag to open the supply.',
-        do: 'Click the 5V flag on Relay outputs, then add your protection block to the buck’s {Supplies} from its panel.',
+        text: 'A block’s {Power} line puts a bar over it for each rail it uses and a circle for each rail it makes, named for the rail. A block on two rails, like the relays (5 V coils, and the switched AC line), wears two bars. A connection carrying a rail is a line within a section and just the flags across sections. Click a bar to open the block that makes the rail.',
+        do: 'Click the 5V bar on Relay outputs, then give your protection block a 3V3 rail it uses: under {Power} in its panel, type 3V3 and press {k:Enter}.',
         setup: function () { A().open('map'); },
         spot: function () { var f = Array.prototype.filter.call(document.querySelectorAll('.spec-flag'), function (g) { return /5V/.test(g.textContent); })[0]; return [f, '.spec-flag']; } }
     ] },
@@ -292,7 +292,7 @@
     ] },
     { title: 'Done', steps: [
       { title: 'You’re set',
-        text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} and {Add to Supplies…} add links, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box around blocks to make a section, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
+        text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} adds links, the bar under the text writes every mark, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box around blocks to make a section, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
         do: 'Open this guide again from the menu (☰) in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
         setup: function () { A().open('doc', 3); },
         last: true }

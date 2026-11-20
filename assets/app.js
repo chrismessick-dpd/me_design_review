@@ -2654,6 +2654,8 @@
           var id = M.specUseId(a.ctx, it);
           return id ? '<button class="chip" data-act="spec-goto" data-id="' + esc(id) + '">' + esc(linkItemText(it)) + '</button>' : '<span class="chip spec-chip-missing" title="No section has this title">' + esc(linkItemText(it)) + '</span>';
         }).join('') + '</div>';
+      } else if (b.type === 'power') {
+        html += '<div class="spec-uses spec-parts"><span>Power</span>' + b.items.map(function (r) { return '<span class="chip spec-part" title="' + esc(r.role === 'source' ? 'It makes this rail' : 'It uses this rail') + '">' + (r.role === 'source' ? '○ ' : '⊤ ') + esc(r.rail) + ' <span class="muted">' + r.role + '</span></span>'; }).join('') + '</div>';
       } else if (b.type === 'parts') {
         html += '<div class="spec-uses spec-parts"><span>Parts</span>' + b.items.map(function (n) { return '<span class="chip spec-part">' + esc(n) + '</span>'; }).join('') + '</div>';
       } else if (b.type === 'table' && b.rows.length) {
@@ -2698,7 +2700,7 @@
   // section to that heading's Uses line.
   function specKindBarHtml() {
     if (!M.specKinds().length) {
-      return '<div class="spec-kindbar" role="toolbar" aria-label="Links of the heading at the cursor"><span class="spec-kindbar-label">Headings under a heading make a section</span><span class="spacer"></span>' + M.specLinkWords().map(function (w) {
+      return '<div class="spec-kindbar" role="toolbar" aria-label="Links of the heading at the cursor"><span class="spec-kindbar-label">Headings under a heading make a section</span><span class="spacer"></span>' + M.specOfferWords().map(function (w) {
         return '<button type="button" class="btn btn-sm" data-act="spec-uses-add" data-word="' + esc(w) + '" title="Add a block to the ' + esc(w) + ' line of the heading at the cursor">Add to ' + esc(w) + '…</button>';
       }).join('') + '</div>';
     }
@@ -2816,7 +2818,7 @@
     if (!ta || ta._se || !window.SignoffSpecEdit) return;
     var p = current(), ctx = p ? M.specContext(p) : null;
     specEd = ta._se = window.SignoffSpecEdit.mount(ta, specDraft, {
-      model: M, words: M.specLinkWords,
+      model: M, words: function () { return M.specLinkWords().concat(M.specPowerOn() ? ['Power'] : []); },
       markLabel: function (inner) { return specMarkLabel(ctx, inner); },
       onBadge: specBadge
     });
@@ -2930,12 +2932,23 @@
     var st = specEd.state(), on = { bold: st.bold, italic: st.italic, strike: st.strike, bul: st.list === 'b', num: st.list === 'n', gist: st.gist, check: st.check, heading: !!st.heading };
     bar.querySelectorAll('[data-f]').forEach(function (b) { var v = !!on[b.dataset.f]; b.classList.toggle('on', v); if (b.dataset.f in on) b.setAttribute('aria-pressed', v ? 'true' : 'false'); });
   }
+  // While one section is edited: the other blocks' lines that name it (Connected from, Supplied by), which are
+  // set in their text or in this block's panel, not here.
+  function specFromNoteHtml(id) {
+    var p = current(); if (!id || !p) return '';
+    var a = M.specAnalysis(p), parts = M.specLinkWords().map(function (w) {
+      var from = [];
+      a.sections.forEach(function (y) { y.edges.forEach(function (e) { if (e.id === id && e.word.toLowerCase() === w.toLowerCase()) from.push(y.sec.title + (e.label ? ' (' + e.label + ')' : '')); }); });
+      return from.length ? '<b>' + esc(linkFrom(w)) + '</b> ' + esc(from.join(', ')) : '';
+    }).filter(Boolean);
+    return parts.length ? '<p class="note spec-from-note">' + parts.join(' · ') + '. <span class="muted">Set in those blocks’ own text, or in this block’s panel on the diagram.</span></p>' : '';
+  }
   function specEditorHtml(id, all) {
     var lines = specDraft.split('\n').length;
-    return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() +
+    return '<div class="spec-editor card' + (all ? ' spec-editor-all' : '') + '">' + specKindBarHtml() + specFromNoteHtml(id) +
       '<div class="input spec-ed" id="spec-editor" data-sec="' + esc(id || '') + '" style="min-height:' + Math.round((all ? Math.max(20, lines + 3) : Math.max(6, Math.min(30, lines + 2))) * 1.6) + 'em"></div>' +
       specFmtBarHtml() +
-      '<div class="spec-help">The buttons write the markup, shown as badges; typing it works too. Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specLinkWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section · review note: <code>Check: …</code></div>' +
+      '<div class="spec-help">The buttons write the markup, shown as badges; typing it works too. Headings: <code># Title</code>, <code>## Title * task</code> (kinds: ' + M.specKinds().join(', ') + ') · link: <code>[text]{REQ-001}</code> · standard: <code>[text]{std}</code> · flag: <code>@req</code> · ' + M.specOfferWords().map(function (w) { return '<code>' + esc(w) + ': Title' + (M.specLinkWords().length > 1 ? ' (signal)' : ', Title') + '</code>'; }).join(' ') + (M.specPowerOn() ? ' · <code>Power: 3V3 (sink), 5V (source)</code>' : '') + (SPEC && SPEC.parts ? ' · <code>Parts: U1, C1–C3</code>' : '') + ' · gist: <code>&gt; one line</code> · <code>[text]{#Title}</code> points at a section · review note: <code>Check: …</code></div>' +
       '<div id="spec-editor-warn" aria-live="polite">' + specDraftWarnHtml() + '</div>' +
       '<div class="spec-editor-foot"><button class="btn" data-act="spec-guide" title="How to write headings, links, lists, and tables">Writing guide</button>' +
       (id ? '<button class="btn btn-danger" data-act="spec-delete" data-id="' + esc(id) + '">Delete section</button>' : '') +
@@ -2963,7 +2976,8 @@
       '<p class="note">Moving a block into another section moves its heading in the text; the hierarchy under the diagram does that by dragging.</p>' +
       '<h3>How blocks connect</h3>' + rows([
         ['Connects: Wi-Fi module (UART), Display connector (I2C)', 'The blocks this one sends signals to, with the signal or bus in brackets. Write it in the direction signals go; it draws the diagram’s labeled arrows. Add a direction after the signal for one that comes in or goes both ways: (UART, in), (I2C, both ways). Two blocks that name each other draw one line, both ways.'],
-        ['Supplies: MCU (3V3), Wi-Fi module (3V3)', 'The blocks this one powers, with the rail in brackets. Each block fed shows a power flag with the rail’s name, and a block in the same section also gets a line.'],
+        ['Power: 5V (sink), 3V3 (source)', 'The rails the block uses (sink) and makes (source). A rail it uses gets a bar over the block, one it makes a circle, each with its name. Set them in the block’s panel too.'],
+        ['Connects: MCU (3V3), Wi-Fi module (3V3)', 'Power goes on Connects too, with the rail in brackets. A connection carrying a rail the other block uses (or this one makes) is a power link: a line within one section, and just the flags across sections. Old Supplies lines still read as before.'],
         ['Parts: U7, L1, C1–C3, C12', 'The reference designators the block covers, with ranges. Shown as chips on the block; not traced.']
       ]) +
       '<p class="note">Blocks are named by their heading, so <code>Connects: MCU</code> needs a heading called MCU. Rename a heading and every Connects and Supplies line follows.</p>'
@@ -3456,8 +3470,11 @@
   var ICON_EXPAND = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5h4.5V8M8 16.5H3.5V12M16.5 3.5l-5 5M3.5 16.5l5-5"/></svg>';
   var ICON_SHRINK = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 8H12V3.5M3.5 12H8v4.5M12 8l4.5-4.5M8 12l-4.5 4.5"/></svg>';
   function specVBAttr(fit) { return 'viewBox="' + (specExpanded && specZoom ? specZoom.join(' ') : fit) + '" data-fit="' + fit + '"'; }
-  function specCard(svg) {
+  // tools: buttons shown at the top left only while the diagram is expanded (Chris, 2026-11-19: Add block and
+  // Auto layout full screen too).
+  function specCard(svg, tools) {
     return '<div class="card spec-map-card' + (specExpanded ? ' expanded' : '') + '">' +
+      (specExpanded && tools ? '<div class="spec-view-tools">' + tools + '</div>' : '') +
       '<div class="spec-view-acts">' + (specExpanded ? '<button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
       '<button class="icon-btn spec-expand" data-act="spec-export" title="Save the diagram as a picture or a PDF" aria-label="Export the diagram" aria-haspopup="menu">' + ICON_SAVE + '</button>' +
       '<button class="icon-btn spec-expand" data-act="spec-expand" title="' + (specExpanded ? 'Back to the page (Esc)' : 'Expand the diagram: zoom and pan') + '" aria-label="' + (specExpanded ? 'Collapse the diagram' : 'Expand the diagram') + '">' + (specExpanded ? ICON_SHRINK : ICON_EXPAND) + '</button></div>' +
@@ -3789,21 +3806,31 @@
     var blocks = T.items.filter(function (x) { return !T.isSec(x); }), isBlock = {};
     blocks.forEach(function (x) { isBlock[x.sec.id] = 1; });
     var frozen = blocks.some(function (x) { return x.sec.pos; });
-    var bar = '<div class="spec-flow-add"><button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
-      (frozen || T.items.some(function (x) { return x.sec.labels || x.sec.grow || x.sec.ports || x.sec.routes; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '') +
+    var flowTools = '<button class="chip" data-act="spec-add-block" data-kind="">+ Add block</button>' +
+      (frozen || T.items.some(function (x) { return x.sec.labels || x.sec.grow || x.sec.ports || x.sec.routes; }) ? '<button class="chip" data-act="spec-auto-layout" title="Forget the arrangement and lay the diagram out again">Auto layout</button>' : '');
+    var bar = '<div class="spec-flow-add">' + flowTools +
       '<span class="spec-flow-hint">Drag on empty space to draw a section around blocks</span>' +
       '<label class="spec-boxes" title="Show section boxes"><input type="checkbox" data-act="spec-boxes"' + (show ? ' checked' : '') + '> Sections</label></div>';
     if (!blocks.length) {
       return bar + '<div class="card empty"><h2>Nothing to draw yet</h2><p>Every heading is a block, and a heading with headings under it is a section around them. Add a block above, or write headings in the Document view.</p></div>';
     }
-    var conn = [], sup = [];
+    var conn = [], sup = [], pw = [];
+    // A connection is a power link when it carries a rail the far block sinks or this block sources (its
+    // Power line): drawn like a supply, a line within one section and only the flags across sections.
+    function railOf(id, rail, role) { var y = T.byId[id]; return !!rail && !!y && (y.power || []).some(function (r) { return r.role === role && r.rail.toLowerCase() === rail.toLowerCase(); }); }
     blocks.forEach(function (x) {
-      x.edges.forEach(function (e) { if (!isBlock[e.id]) return; (supWord && e.word.toLowerCase() === supWord ? sup : conn).push({ a: x.sec.id, b: e.id, label: e.label, word: e.word, dir: e.dir || '' }); });
+      x.edges.forEach(function (e) {
+        if (!isBlock[e.id]) return;
+        var o = { a: x.sec.id, b: e.id, label: e.label, word: e.word, dir: e.dir || '' };
+        if (supWord && e.word.toLowerCase() === supWord) sup.push(o);
+        else if (railOf(e.id, e.label, 'sink') || railOf(x.sec.id, e.label, 'source')) pw.push(o);
+        else conn.push(o);
+      });
     });
     function under(x) { return T.isSec(x) ? T.ch[x.sec.id].reduce(function (acc, c) { return acc.concat(under(c)); }, []) : [x.sec.id]; }
     // Siblings in signal order: one goes right of another when a link runs from it into it.
     function orderRow(list) {
-      var u = list.map(under), rank = list.map(function () { return 0; }), edges = conn.concat(sup);
+      var u = list.map(under), rank = list.map(function () { return 0; }), edges = conn.concat(sup, pw);
       function link(i, j) { return edges.some(function (e) { return u[i].indexOf(e.a) >= 0 && u[j].indexOf(e.b) >= 0; }); }
       for (var it = 0; it < list.length; it++) {
         var mv = false;
@@ -3925,7 +3952,7 @@
     // Chris, 2026-11-19: a supply between two blocks in one section is a routed line wherever they sit (it
     // used to be a line only while they stood side by side, so dragging one turned it into a flag), and every
     // supply also keeps its rail flag on the block it feeds.
-    var flagged = sup.slice(), arrows = sup.filter(function (e) { return e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]); });
+    var flagged = sup.slice(), arrows = sup.concat(pw).filter(function (e) { return e.a !== e.b && T.dparent(T.byId[e.a]) === T.dparent(T.byId[e.b]); });
     // One line per pair of blocks (ticket 6, 2026-11-13): a connection both blocks name draws once.
     // Its arrows show which way the signal goes (ticket 8): out from the block whose line names the
     // other (the default), in to it, or both ways; both blocks naming each other is both ways too.
@@ -4012,6 +4039,16 @@
           '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 4) + '"/><path class="spec-flag-bar" d="M' + (fx + 3) + ' ' + (fy + 4) + ' L' + (fx + 13) + ' ' + (fy + 4) + '"/>' +
           '<text x="' + (fx + 17) + '" y="' + (fy + 9) + '">' + esc(cutText(name, Math.floor((fw - 20) / 6.2))) + '</text></g>';
       });
+      // The block's Power line: a bar for each rail it uses (sink), a circle for each it makes (source).
+      (x.power || []).forEach(function (r) {
+        var name = r.rail, fw = Math.min(110, 22 + name.length * 6.2), fx = right - fw, fy = b.y - 15, src = r.role === 'source';
+        right = fx - 6;
+        var from = src ? null : pw.filter(function (e) { return e.b === x.sec.id && (e.label || '').toLowerCase() === name.toLowerCase(); })[0];
+        svg += '<g class="spec-flag' + (src ? ' source' : '') + '" data-act="spec-block" data-id="' + esc(from ? from.a : x.sec.id) + '" data-for="' + esc(x.sec.id) + '"><title>' + esc((src ? 'Makes ' : 'Uses ') + name + (from ? ', from ' + T.byId[from.a].sec.title : '')) + '</title>' +
+          (src ? '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 8) + '"/><circle class="spec-flag-ring" cx="' + (fx + 8) + '" cy="' + (fy + 4.5) + '" r="3.5"/>'
+            : '<path d="M' + (fx + 8) + ' ' + (fy + 15) + ' L' + (fx + 8) + ' ' + (fy + 4) + '"/><path class="spec-flag-bar" d="M' + (fx + 3) + ' ' + (fy + 4) + ' L' + (fx + 13) + ' ' + (fy + 4) + '"/>') +
+          '<text x="' + (fx + 17) + '" y="' + (fy + 9) + '">' + esc(cutText(name, Math.floor((fw - 20) / 6.2))) + '</text></g>';
+      });
     });
     // Each line's ports, over the blocks: drag one round its block's edge.
     rlines.forEach(function (l) {
@@ -4022,7 +4059,7 @@
       });
     });
     svg += '</svg>';
-    return bar + specCard(svg) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds, and a line to each one in the same section. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
+    return bar + specCard(svg, flowTools) + '<p class="note">Drag blocks and sections to arrange the diagram, and a section’s edge to size it; drag on empty space to draw a new section around blocks. Drag a line’s straight runs to shape it (Shift breaks a run where it’s grabbed; a double-click adds a bend), and the dot at either end to move where it meets its block. Which section a block is in is set in the hierarchy below. Signals flow from each block’s <code>Connects:</code> line, and a <code>Supplies:</code> line puts a power flag with the rail’s name on each block it feeds, and a line to each one in the same section. Drag from the dot on a block’s top-right corner to connect it; click a line for its panel, where Delete removes it (Undo in the message brings it back).</p>' +
       specTreeHtml(p, a, T);
   }
 
@@ -4741,9 +4778,12 @@
     var lower = SPEC_FLOW ? '' : { product: 'task', task: 'module', module: 'driver', driver: 'hardware' }[s.kind] || '';
     var groups = specRows().concat(M.specKinds().indexOf('interface') >= 0 ? [['interface', 'Interfaces']] : [], [['', 'Other sections']]);
     // One field per link word: its names (with signal or rail), remove, rename the signal, add more.
+    var offer = M.specOfferWords().map(function (w) { return w.toLowerCase(); });
     var linkFields = words.map(function (w) {
       var items = M.specUsesItems(s.body, w), have = items.map(function (n) { return (M.specUseId(a.ctx, n) && a.ctx.secs[M.specUseId(a.ctx, n)].title || n.name).toLowerCase(); });
-      var opts = a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && have.indexOf(y.sec.title.toLowerCase()) < 0; });
+      var offered = offer.indexOf(w.toLowerCase()) >= 0;
+      if (!offered && !items.length) return '';
+      var opts = offered ? a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && have.indexOf(y.sec.title.toLowerCase()) < 0; }) : [];
       return '<div class="field"><span class="field-label">' + esc(w) + '</span><div class="chips">' + (items.length ? items.map(function (it) {
         var tid = M.specUseId(a.ctx, it);
         return '<span class="chip spec-use-chip' + (tid ? '' : ' spec-chip-missing') + '">' + (tid ? '<button data-act="spec-block" data-id="' + esc(tid) + '">' + esc(it.name) + '</button>' : esc(it.name)) +
@@ -4755,12 +4795,22 @@
         return o.length ? '<optgroup label="' + esc(r[1]) + '">' + o.map(function (y) { return '<option value="' + esc(y.sec.title) + '">' + esc(y.sec.title) + '</option>'; }).join('') + '</optgroup>' : '';
       }).join('') + '</select>' : '') + '</div>';
     }).join('');
+    // Connected from and Supplied by are the other blocks' lines naming this one (Chris, 2026-11-19: set them
+    // here too): × takes this block off that block's line, and the list adds it to another block's line.
     var fromFields = words.map(function (w) {
       var from = a.sections.filter(function (y) { return y.edges.some(function (e) { return e.id === id && e.word.toLowerCase() === w.toLowerCase(); }); });
-      return from.length ? '<div class="field"><span class="field-label">' + esc(linkFrom(w)) + '</span><div class="chips">' + from.map(function (y) {
+      var offeredF = offer.indexOf(w.toLowerCase()) >= 0;
+      if (!offeredF && !from.length) return '';
+      var fopts = offeredF ? a.sections.filter(function (y) { return y.sec.id !== id && y.sec.title && from.indexOf(y) < 0; }) : [];
+      return '<div class="field"><span class="field-label">' + esc(linkFrom(w)) + '</span><div class="chips">' + (from.length ? from.map(function (y) {
         var e = y.edges.filter(function (e2) { return e2.id === id && e2.word.toLowerCase() === w.toLowerCase(); })[0];
-        return '<button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(y.sec.id) + '">' + esc(y.sec.title + (e && e.label ? ' · ' + e.label : '')) + '</button>';
-      }).join('') + '</div></div>' : '';
+        var it = M.specUsesItems(y.sec.body, w).filter(function (n) { return M.specUseId(a.ctx, n) === id; })[0];
+        return '<span class="chip spec-use-chip"><button data-act="spec-block" data-id="' + esc(y.sec.id) + '">' + esc(y.sec.title + (e && e.label ? ' · ' + e.label : '')) + '</button>' +
+          (it ? '<button class="spec-use-x" data-act="spec-block-unfrom" data-from="' + esc(y.sec.id) + '" data-word="' + esc(w) + '" data-name="' + esc(it.name) + '" aria-label="Remove ' + esc(y.sec.title) + '">×</button>' : '') + '</span>';
+      }).join('') : '<span class="note" style="margin:0">Nothing yet</span>') + '</div>' +
+      (fopts.length ? '<select class="input spec-block-from" data-word="' + esc(w) + '" style="margin-top:8px"><option value="">Add a block that ' + esc(linkVerb(w)) + ' it…</option>' + fopts.map(function (y) {
+        return '<option value="' + esc(y.sec.id) + '">' + esc(y.sec.title) + '</option>';
+      }).join('') + '</select>' : '') + '</div>';
     }).join('');
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › ' + esc(s.title || 'Untitled') + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
@@ -4769,7 +4819,7 @@
         return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? kindLabel(k) : 'None') + '</button>';
       }).join('') + '</div></div>' : '') +
       '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
-      linkFields + fromFields +
+      linkFields + fromFields + specPowerField(a, x) +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced + x.counts.note, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : '', x.notes.length ? plural(x.notes.length, 'review note') : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       specGapList(x) + specNoteList(x) +
@@ -4778,6 +4828,24 @@
       '<button class="btn btn-danger" data-act="spec-block-delete" data-id="' + esc(id) + '">Delete</button></div>' +
       '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
     el.dataset.item = selected;
+  }
+  // The block panel's Power (EE, config.spec.power; Chris, 2026-11-19): the rails the block uses or makes.
+  function specPowerField(a, x) {
+    if (!M.specPowerOn()) return '';
+    var rails = [];
+    a.sections.forEach(function (y) { (y.power || []).forEach(function (r) { if (rails.map(function (t) { return t.toLowerCase(); }).indexOf(r.rail.toLowerCase()) < 0) rails.push(r.rail); }); });
+    return '<div class="field"><span class="field-label">Power</span>' + ((x.power || []).length ? '<div class="spec-power-rows">' + x.power.map(function (r, i) {
+      return '<div class="spec-power-row"><span class="spec-power-rail">' + esc(r.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['', 'N/A']].map(function (o) {
+        return '<button class="' + (r.role === o[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + i + '" data-role="' + o[0] + '" title="' + esc(o[0] === 'source' ? 'It makes ' + r.rail : o[0] === 'sink' ? 'It uses ' + r.rail : 'Take ' + r.rail + ' off') + '">' + o[1] + '</button>';
+      }).join('') + '</div></div>';
+    }).join('') + '</div>' : '<p class="note" style="margin:0 0 6px">No power rails. A rail it uses gets a bar over the block; one it makes, a circle.</p>') +
+      '<input class="input" id="spec-power-add" list="spec-power-rails" placeholder="Add a rail it uses, e.g. 3V3 (Enter)" autocomplete="off" style="margin-top:6px">' +
+      '<datalist id="spec-power-rails">' + rails.map(function (r) { return '<option value="' + esc(r) + '">'; }).join('') + '</datalist></div>';
+  }
+  function specPowerSet(fn) {
+    var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur) return;
+    var items = fn(M.specPowerOf(cur.body).slice());
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: M.specSetLine(cur.body, 'power', M.specPowerText(items)) }), me())]);
   }
   function specBlockField(key, value, word) {
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur) return;
@@ -4801,7 +4869,7 @@
     var p = current(), a = p && (p.spec || {})[from], b = p && (p.spec || {})[to];
     if (!a || !b || from === to) return;
     var word = M.specKindLink(M.oneOf(M.specKinds(), a.kind, ''));
-    if (!M.specKinds().length && M.specLinkWord('supplies') && M.specUsesItems(a.body, 'supplies').length) word = M.specLinkWord('supplies');
+    if (!M.specKinds().length && M.specLinkWord('supplies') && M.specOfferWords().indexOf(M.specLinkWord('supplies')) >= 0 && M.specUsesItems(a.body, 'supplies').length) word = M.specLinkWord('supplies');
     var items = M.specUsesItems(a.body, word), t = M.liveSpec(p).filter(function (s) { return s.id === to; })[0].title;
     if (items.some(function (n) { return M.specUseIs(n, t); })) { toast((a.title || 'It') + ' already ' + linkVerb(word) + ' ' + t); return; }
     specPutAll(p, [M.specStamp(Object.assign({}, a, { body: M.specSetLine(a.body, word, M.specLinkText(items.concat([{ name: t, label: '' }]))) }), me())]);
@@ -5034,7 +5102,7 @@
       (FT ? '<div class="field"><label for="spec-new-section">In section</label><select class="input" id="spec-new-section"><option value="">None</option>' + groups.map(function (g) {
         return '<option value="' + esc(g.sec.id) + '"' + (g.sec.id === section ? ' selected' : '') + '>' + esc(g.sec.title || 'Untitled') + '</option>';
       }).join('') + '</select></div>' : '') +
-      '<div class="field"><label for="spec-new-parent">' + esc(M.specLinkWords().length > 1 ? 'Connected from, or supplied by' : linkFrom(M.specLinkWords()[0])) + '</label><select class="input" id="spec-new-parent"><option value="">Nothing yet</option>' + secs.map(function (s) {
+      '<div class="field"><label for="spec-new-parent">' + esc(M.specOfferWords().length > 1 ? 'Connected from, or supplied by' : linkFrom(M.specOfferWords()[0])) + '</label><select class="input" id="spec-new-parent"><option value="">Nothing yet</option>' + secs.map(function (s) {
         return '<option value="' + esc(s.id) + '"' + (s.id === parent ? ' selected' : '') + '>' + esc(s.title || 'Untitled') + (s.kind ? ' (' + esc(s.kind) + ')' : '') + '</option>';
       }).join('') + '</select></div>' + (M.specLinkWords().length > 1 ? '<div class="field"><label for="spec-new-label">Signal or rail (optional)</label><input class="input" id="spec-new-label" placeholder="UART, I2C, 3V3…"></div>' : '') + '</div>' +
       '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Add</button></div>');
@@ -6689,6 +6757,8 @@
       case 'spec-add-block': specAddBlockSheet(el.dataset.kind, el.dataset.parent || (SPEC_FLOW ? '' : specBlockSel()), el.dataset.section || ''); break;
       case 'spec-block-kind': specBlockField('kind', el.dataset.kind); break;
       case 'spec-block-unuse': specUnlinkName(specBlockSel(), el.dataset.word, el.dataset.name); break;
+      case 'spec-block-unfrom': specUnlinkName(el.dataset.from, el.dataset.word, el.dataset.name); break;
+      case 'spec-power-role': { var pi = +el.dataset.i, prole = el.dataset.role; specPowerSet(function (it) { if (!it[pi]) return it; if (prole) it[pi].role = prole; else it.splice(pi, 1); return it; }); break; }
       case 'spec-editor-line': specEditorLine(parseInt(el.dataset.line, 10) || 1); break;
       case 'spec-block-delete': {
         var dp = current(), dc = dp && (dp.spec || {})[id];
@@ -6957,7 +7027,15 @@
       var up = current(), uc = up && (up.spec || {})[specBlockSel()], uw = e.target.dataset.word;
       if (uc) specBlockField('link', M.specLinkText(M.specUsesItems(uc.body, uw).concat([{ name: e.target.value, label: '' }])), uw);
     }
+    if (e.target.classList && e.target.classList.contains('spec-block-from') && e.target.value) {
+      var fp = current(), fsrc = fp && (fp.spec || {})[e.target.value], fme = fp && (fp.spec || {})[specBlockSel()], fw = e.target.dataset.word;
+      if (fsrc && fme) {
+        specPutAll(fp, [M.specStamp(Object.assign({}, fsrc, { body: M.specSetLine(fsrc.body, fw, M.specLinkText(M.specUsesItems(fsrc.body, fw).concat([{ name: fme.title, label: '' }]))) }), me())]);
+        toast('Added ' + fme.title + ' to ' + fsrc.title + '’s ' + fw + ' line. Name the ' + (/suppl/i.test(fw) ? 'rail' : 'signal') + ' in ' + fsrc.title + '’s panel.');
+      }
+    }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
+    if (e.target.id === 'spec-power-add' && e.target.value.trim()) { var prail = e.target.value.trim(); specPowerSet(function (it) { return it.concat([{ rail: prail, role: 'sink' }]); }); }
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
     if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);
   });
