@@ -49,7 +49,7 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline, down to four levels. The outline, beside the text or above it on a narrow screen, jumps to any section. {Gists} shows each section’s one-line summary under its heading, and {Full text} shows everything.',
+        text: 'Headings make the outline, down to four levels. The outline beside the text (its {Outline} button folds it) jumps to any section. {Gists} shows each section’s one-line summary under its heading, and {Full text} shows everything.',
         do: 'Click {Gists}, then {Full text}. Click {Control loop} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return [['[data-act="spec-depth"][data-depth="2"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }
@@ -179,7 +179,7 @@
         setup: function () { A().open('doc', 3); },
         spot: function () { return ['#view-seg [data-view="spec"]']; } },
       { title: 'Reading at any depth',
-        text: 'Headings make the outline. The outline, beside the text or above it on a narrow screen, jumps to any subcircuit. {Gists} shows each subcircuit’s one-line summary under its heading, and {Full text} shows everything.',
+        text: 'Headings make the outline. The outline beside the text (its {Outline} button folds it) jumps to any subcircuit. {Gists} shows each subcircuit’s one-line summary under its heading, and {Full text} shows everything.',
         do: 'Click {Gists}, then {Full text}. Click {MCU} in the outline to jump to it.',
         setup: function () { A().open('doc', 3); },
         spot: function () { return [['[data-act="spec-depth"][data-depth="2"]', '[data-act="spec-depth"][data-depth="3"]'], '.spec-outline']; } }

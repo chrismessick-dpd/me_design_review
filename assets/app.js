@@ -2203,6 +2203,12 @@
     if (e.target.closest && e.target.closest('.rw-grip')) { rwInspWidth(RW_INSP_MIN); save('rwInspW', RW_INSP_MIN); }
   });
   window.addEventListener('resize', function () { var w = load('rwInspW', 0); if (w) rwInspWidth(w); });
+  // Side by side shows the document alone on a narrow window: crossing that width draws the Scribe page again
+  // (not while a section is open for editing, which a redraw would close).
+  window.addEventListener('resize', function () {
+    if (ui.view !== 'spec' || ui.specView !== 'side' || specEditing || specDrawnNarrow === null || specNarrow() === specDrawnNarrow) return;
+    renderPage();
+  });
 
   function renderReworkInspector(p, r) {
     var el = $('#inspector');
@@ -3226,7 +3232,11 @@
   }
 
   function specPage(p) {
-    var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth === 2 ? 2 : 3, view = ui.specView === 'map' ? 'map' : 'doc';
+    // Side by side (Chris, 2026-11-20): the document and the diagram together; on a narrow screen it shows
+    // the document (its tab is hidden there), and a resize across the line draws the page again.
+    var narrow = specNarrow(), view = ui.specView === 'map' ? 'map' : ui.specView === 'side' && !narrow ? 'side' : 'doc';
+    var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth === 2 ? 2 : 3;
+    specDrawnNarrow = narrow;
     specHistOf(p); specHistNote(p);
     // Gaps or Notes shows only the sections that have them, in full, with the other sentences dimmed.
     var show = ui.specShow === 'gaps' || ui.specShow === 'notes' ? ui.specShow : '';
@@ -3257,16 +3267,18 @@
         (SPEC.template ? '<button class="btn btn-primary" data-act="spec-template">Start from template</button> <button class="btn" data-act="spec-add">Add section</button>' : '<button class="btn btn-primary" data-act="spec-add">Add section</button>') +
         ' <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
     }
-    html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button></div>' +
-      (view === 'doc' ? '<div class="seg" title="How much to show">' + [[2, 'Gists'], [3, 'Full text']].map(function (d) {
+    html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button>' +
+      '<button class="spec-side-tab' + (view === 'side' ? ' on' : '') + '" data-act="spec-view" data-view="side" title="The document and the diagram together">Side by side</button></div>' +
+      (view !== 'map' ? '<div class="seg" title="How much to show">' + [[2, 'Gists'], [3, 'Full text']].map(function (d) {
         return '<button class="' + (depth === d[0] && !show ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
       }).join('') + '</div>' : '') +
-      (view === 'doc' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
+      (view !== 'map' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
         return '<button class="' + (show === f[0] ? 'on' : '') + '" data-act="spec-show" data-show="' + f[0] + '">' + f[1] + (f[0] ? ' <span class="count">' + f[2] + '</span>' : '') + '</button>';
       }).join('') + '</div>' : '') + '</div>';
-    html += specNeedsHtml(p, a);
+    // The Requirements inbox stays out of the diagram (Chris, 2026-11-20); the document views keep it.
+    html += specNeedsHtml(p, a, view === 'map');
     if (view === 'map') return html + specMapHtml(p, a) + '</div>';
-    var outline = '<nav class="spec-outline" aria-label="Outline">' + a.sections.filter(shown).map(function (x) {
+    var outline = '<nav class="spec-outline" aria-label="Outline">' + specOlToggle() + a.sections.filter(shown).map(function (x) {
       return '<button class="lv-' + x.sec.level + '" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(x.sec.title || 'Untitled') + '</span>' + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) + '</button>';
     }).join('') + '</nav>';
     var doc = a.sections.map(function (x, i) {
@@ -3283,8 +3295,23 @@
         (specEditing === 'new' && specNewAfter === s.id ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
     }).join('') + (specEditing === 'new' && !specNewAt(p) ? '<section class="spec-sec">' + specEditorHtml(null) + '</section>' : '');
     if (show && !a.sections.some(shown)) doc = '<p class="note">' + (show === 'gaps' ? 'No gaps: every sentence is linked, standard, or a review note.' : 'No review notes.') + '</p>';
-    return html + '<div class="spec-wrap depth-' + depth + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div></div>';
+    // The outline folds (Chris, 2026-11-20): ui.specOutline (Document) or ui.specOutlineSide, 'open' or 'closed' once
+    // toggled; until then it folds itself on a mid-width window, and always in Side by side (CSS, .ol-auto).
+    var ol = (view === 'side' ? ui.specOutlineSide : ui.specOutline) || 'auto';
+    var wrap = '<div class="spec-wrap depth-' + depth + ' ol-' + ol + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div>';
+    if (view === 'side') return html.replace('<div class="page spec-page">', '<div class="page spec-page spec-side-page">') +
+      '<div class="spec-side"><div class="spec-side-doc">' + wrap + '</div><div class="spec-side-map">' + specMapHtml(p, a) + '</div></div></div>';
+    return html + wrap + '</div>';
   }
+  // The window is too narrow for Side by side (and for the outline beside the text).
+  var specDrawnNarrow = null;
+  function specNarrow() { return !!(window.matchMedia && window.matchMedia('(max-width: 860px)').matches); }
+  function specOlToggle() {
+    return '<button class="spec-ol-toggle" data-act="spec-outline-toggle" title="Show or hide the outline" aria-label="Show or hide the outline">' +
+      '<span class="spec-ol-chev" aria-hidden="true">‹</span><span class="spec-ol-label">Outline</span></button>';
+  }
+  // The view to show text in: Side by side stays (it has the text), Diagram goes to Document.
+  function specTextView() { return ui.specView === 'side' ? 'side' : 'doc'; }
 
   // Resolve a conflict copy in one step (Chris, 2026-11-13; ../signoff/docs/history.md, lab
   // ../signoff/lab/history.html). Lists what the copy has that the section lacks (M.specResolvePlan):
@@ -3459,7 +3486,7 @@
   }
 
   // The two lists that need someone: flagged sentences and requirements nothing describes.
-  function specNeedsHtml(p, a) {
+  function specNeedsHtml(p, a, noInbox) {
     var copies = a.sections.filter(function (x) { return x.sec.conflictOf; }), ctags = M.specCommentTags(p);
     if (!a.tags.length && !a.undescribed.length && !copies.length && !ctags.length) return '';
     var secTitle = function (id) { var s = a.ctx.secs[id]; return s ? s.title || 'Untitled' : ''; };
@@ -3501,7 +3528,7 @@
     // The requirement lists fold into one Requirements inbox, folded by default (Chris, 2026-11-13: a
     // long list pushed the text off the page). ui.specInbox remembers it open.
     var nMiss = a.undescribed.length, open = !!ui.specInbox, inbox = '';
-    if (nTags || nMiss) {
+    if ((nTags || nMiss) && !noInbox) {
       var counts = (nTags ? '<span class="count" title="Tagged @req: requirements still to make from them">' + nTags + ' to make</span>' : '') +
         (nMiss ? '<span class="count" title="Requirements no sentence describes">' + nMiss + ' not described</span>' : '');
       inbox = '<div class="card spec-inbox' + (open ? ' open' : '') + '">' +
@@ -4284,7 +4311,7 @@
         var b = R[x.sec.id];
         var gw = x.sec.grow || {};
         svg += '<g class="spec-group-g' + (sel === x.sec.id ? ' sel' : '') + (x.gaps ? ' gap' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-box="' + [b.x, b.y, b.w, b.h].join(' ') + '" data-grow="' + [gw.l || 0, gw.t || 0, gw.r || 0, gw.b || 0].join(' ') + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
-          '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.links.length ? '\n' + plural(x.links.length, 'requirement') + ' tied to the section itself' : '') + '\nDrag to move it with its blocks, or an edge to resize it; click for its panel') + '</title>' +
+          '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.links.length ? '\n' + plural(x.links.length, 'requirement') + ' tied to the section itself' : '')) + '</title>' +
           '<rect class="spec-group" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="12"/>' +
           '<text class="spec-group-label" x="' + (b.x + 12) + '" y="' + (b.y + 16) + '">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 24) / 7) - (x.links.length || x.gaps ? 8 : 0))) + '</text>' +
           (x.links.length || x.gaps ? '<text class="spec-group-meta" x="' + (b.x + b.w - 12) + '" y="' + (b.y + 16) + '" text-anchor="end">' + esc([x.links.length ? plural(x.links.length, 'req') : '', x.gaps ? '△ ' + x.gaps : ''].filter(Boolean).join(' · ')) + '</text>' : '') +
@@ -4352,7 +4379,7 @@
       var b = R[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
       var sub = x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.parts.length ? x.parts.slice(0, 4).join(' · ') + (x.parts.length > 4 ? ' …' : '') : '';
       svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (sel === x.sec.id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
-        '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '') + '\nDrag to move it; drop it in a section to put it there') + '</title>' +
+        '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '')) + '</title>' +
         '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
         (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' : '') +
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + (sub ? 23 : 31)) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', chars)) + '</text>' +
@@ -4516,7 +4543,7 @@
     blocks.forEach(function (x) {
       var id = x.sec.id, b = R[id], pn = pins[id], both = pn.ins.length && pn.outs.length, pc = both ? 9 : 18;
       svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
-        '<title>' + esc(x.sec.title + (pn.ins.length ? '\nUses ' + pn.ins.join(', ') : '') + (pn.outs.length ? '\nMakes ' + pn.outs.join(', ') : '') + '\nDrag to move it in the power tree; click for its panel') + '</title>' +
+        '<title>' + esc(x.sec.title + (pn.ins.length ? '\nUses ' + pn.ins.join(', ') : '') + (pn.outs.length ? '\nMakes ' + pn.outs.join(', ') : '')) + '</title>' +
         '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 20) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 16) / 7.2))) + '</text>' +
         pn.ins.map(function (r, i) { var y = b.y + specPtPinY(i); return '<text class="spec-pt-rail" x="' + (b.x + 8) + '" y="' + (y + 4) + '">' + esc(cutText(r, pc)) + '</text>'; }).join('') +
@@ -5745,7 +5772,7 @@
   function specOpenUnit(sec, start, phrase) {
     var p = current(); if (!p) return;
     specPhrase = phrase || '';
-    ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
+    ui.view = 'spec'; ui.specView = specTextView(); if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
     selected = specSelKey(sec, start);
     $('#inspector').classList.add('open');
     renderPage(); renderInspector();
@@ -5762,7 +5789,7 @@
     var slug = specGuideSlug(); if (!slug) return false;
     ui.slug = slug; ui.home = false; ui.page = '';
     ui.view = view === 'reqs' ? 'reqs' : 'spec';
-    if (view === 'doc' || view === 'map') ui.specView = view;
+    if (view === 'doc' || view === 'map' || view === 'side') ui.specView = view;
     if (depth) ui.specDepth = depth;
     ui.specShow = '';
     specEditing = null; specDraft = ''; selected = null; closeInspector(); saveUi(); render();
@@ -5822,7 +5849,7 @@
   // From the Requirements to make list: show the sentence in the document, highlighted, without
   // opening its panel (Chris: the text is where to write it up).
   function specJumpUnit(sec, start) {
-    ui.view = 'spec'; ui.specView = 'doc'; if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
+    ui.view = 'spec'; ui.specView = specTextView(); if ((ui.specDepth || 3) < 3) ui.specDepth = 3; saveUi();
     selected = null; closeInspector(); renderPage();
     var el = document.querySelector('.su[data-sec="' + CSS.escape(sec) + '"][data-u="' + start + '"]');
     if (!el && specUnfilter()) el = document.querySelector('.su[data-sec="' + CSS.escape(sec) + '"][data-u="' + start + '"]');
@@ -5857,7 +5884,7 @@
     return true;
   }
   function specGoto(id) {
-    if (ui.view !== 'spec' || ui.specView === 'map') { ui.view = 'spec'; ui.specView = 'doc'; saveUi(); renderPage(); }
+    if (ui.view !== 'spec' || ui.specView === 'map') { ui.view = 'spec'; ui.specView = specTextView(); saveUi(); renderPage(); }
     var el = document.getElementById('spec-' + id);
     if (!el && specUnfilter()) el = document.getElementById('spec-' + id);
     if (el) { specScrollTo(el, 'start'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
@@ -5866,7 +5893,7 @@
     var p = current(); if (!p) return;
     var a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0];
     if (!x) return;
-    ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+    ui.view = 'spec'; ui.specView = specTextView(); saveUi();
     specEditing = id;
     specDraft = M.specHeadingLine(x.sec) + '\n' + M.specToEditor(x.sec.body, a.ctx);
     closeInspector(); renderPage(); specFocusEditor();
@@ -7194,6 +7221,15 @@
       case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) === 2 ? 2 : 3; ui.specShow = ''; saveUi(); renderPage(); break;
       case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
       case 'spec-inbox': ui.specInbox = !ui.specInbox; saveUi(); renderPage(); break;
+      case 'spec-outline-toggle': {
+        // Whatever the outline shows now (folded by hand, or by the window's width), the other is kept.
+        var olw = el.closest('.spec-wrap'), olItem = olw && olw.querySelector('.spec-outline [data-act="spec-goto"]');
+        var olShut = olItem ? getComputedStyle(olItem).display === 'none' : !!(olw && olw.classList.contains('ol-closed')), olNext = olShut ? 'open' : 'closed';
+        if (el.closest('.spec-side')) ui.specOutlineSide = olNext; else ui.specOutline = olNext;
+        saveUi();
+        if (olw) { olw.classList.remove('ol-auto', 'ol-open', 'ol-closed'); olw.classList.add('ol-' + olNext); }
+        break;
+      }
       case 'spec-resolve': specResolve(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
       case 'spec-goto': specGoto(id); break;
       case 'spec-jump': specJumpUnit(el.dataset.sec, parseInt(el.dataset.u, 10)); break;
@@ -7203,11 +7239,11 @@
       case 'spec-edit': specStartEdit(id); break;
       case 'spec-edit-all': {
         var ea = current(); if (!ea) break;
-        ui.view = 'spec'; ui.specView = 'doc'; saveUi();
+        ui.view = 'spec'; ui.specView = specTextView(); saveUi();
         specEditing = 'all'; specDraft = M.specToText(ea); closeInspector(); selected = null; renderPage(); specFocusEditor(); break;
       }
       case 'spec-add':
-        ui.view = 'spec'; ui.specView = 'doc'; saveUi(); specNewAfter = '';
+        ui.view = 'spec'; ui.specView = specTextView(); saveUi(); specNewAfter = '';
         specEditing = 'new'; specDraft = '## New section' + String.fromCharCode(10); closeInspector(); renderPage(); specFocusEditor(); break;
       case 'spec-add-after': {
         // + on a heading: a new section right under it, at the level of what follows it (its first

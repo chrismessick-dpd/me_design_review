@@ -925,6 +925,32 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-outline .lv-2 { padding-left: 18px; }
 .spec-outline .lv-3 { padding-left: 30px; font-size: 12.5px; }
 .spec-outline .lv-4 { padding-left: 42px; font-size: 12.5px; }
+/* The outline folds (Chris, 2026-11-20): its toggle stays as a narrow rail. .ol-auto folds it on a mid-width
+   window and always in Side by side; .ol-open and .ol-closed are a choice made with the toggle. */
+.spec-outline .spec-ol-toggle { align-self: flex-start; gap: 6px; padding: 3px 8px; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+.spec-outline .spec-ol-toggle > span:first-child { flex: none; min-width: 0; }
+.spec-ol-chev { display: inline-block; font-size: 15px; line-height: 1; transition: transform .15s; }
+.spec-wrap.ol-closed { grid-template-columns: 30px minmax(0, 1fr); gap: 14px; }
+.spec-wrap.ol-closed .spec-outline > :not(.spec-ol-toggle) { display: none; }
+.spec-wrap.ol-closed .spec-ol-label { display: none; }
+.spec-wrap.ol-closed .spec-ol-chev { transform: rotate(180deg); }
+.spec-wrap.ol-closed .spec-ol-toggle { padding: 4px 8px; }
+@media (max-width: 1200px) {
+  .spec-wrap.ol-auto { grid-template-columns: 30px minmax(0, 1fr); gap: 14px; }
+  .spec-wrap.ol-auto .spec-outline > :not(.spec-ol-toggle) { display: none; }
+  .spec-wrap.ol-auto .spec-ol-label { display: none; }
+  .spec-wrap.ol-auto .spec-ol-chev { transform: rotate(180deg); }
+}
+.spec-side .spec-wrap.ol-auto { grid-template-columns: 30px minmax(0, 1fr); gap: 14px; }
+.spec-side .spec-wrap.ol-auto .spec-outline > :not(.spec-ol-toggle) { display: none; }
+.spec-side .spec-wrap.ol-auto .spec-ol-label { display: none; }
+.spec-side .spec-wrap.ol-auto .spec-ol-chev { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .spec-ol-chev { transition: none; } }
+/* Side by side (Chris, 2026-11-20): the document on the left, the diagram on the right, which stays in view
+   while the text scrolls (its own scroll for the hierarchy and power tree under it). */
+.page.spec-side-page { max-width: 1800px; }
+.spec-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.spec-side-map { position: sticky; top: 64px; max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px); overflow: auto; padding-bottom: 12px; }
 .spec-gap { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font: 600 11px/1 var(--sans); color: var(--warn); background: var(--warn-hatch), var(--warn-soft); }
 .spec-doc { min-width: 0; }
 .spec-sec { padding: 2px 0 6px; scroll-margin-top: 70px; border-radius: 10px; }
@@ -1197,11 +1223,11 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .spec-node-sub { font-size: 11px; fill: var(--text-3); }
 .spec-node.gap .spec-node-sub { fill: var(--warn); font-weight: 600; }
 @media (max-width: 860px) {
-  .spec-wrap { grid-template-columns: minmax(0, 1fr); }
-  /* On a narrow screen the outline is a wrapping row of section names above the text. */
-  .spec-outline { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; max-height: none; overflow: visible; padding: 0 0 10px; border-bottom: 1px solid var(--hair); margin-bottom: 4px; }
-  .spec-outline button, .spec-outline .lv-1, .spec-outline .lv-2, .spec-outline .lv-3, .spec-outline .lv-4 { padding: 3px 9px; margin: 0; font-size: 12.5px; background: var(--bg-sunk); border-radius: 980px; flex: none; }
-  .spec-outline .lv-1 { font-weight: 600; }
+  /* On a narrow screen there's no outline (Chris, 2026-11-20; it was a row of section names above the text), and
+     no Side by side (the page shows the document). */
+  .spec-wrap, .spec-wrap.ol-auto, .spec-wrap.ol-open, .spec-wrap.ol-closed { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .spec-wrap .spec-outline { display: none; }
+  .seg .spec-side-tab { display: none; }
   .spec-sec.lv-3, .spec-sec.lv-4 { margin-left: 8px; }
 }
 .spec-editor-all { margin-top: 0; }
