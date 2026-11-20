@@ -285,6 +285,14 @@ button.head-pic-img:hover img { transform: translateY(-2px) scale(1.02); }
 .head-pic .seg { position: absolute; right: 0; bottom: -10px; opacity: 0; transition: opacity 0.15s; }
 .head-pic:hover .seg, .head-pic:focus-within .seg { opacity: 1; }
 .head-pic .seg button { padding: 2px 8px; font-size: 11px; }
+/* Part models (config.previews.models, Signoff ME): the 3D side, who stored the model, and its actions,
+   under the picture. With them the side toggle sits under the picture too. */
+.head-3d { display: block; width: 240px; max-width: 38vw; height: 150px; border-radius: 10px; cursor: grab; touch-action: none; }
+.head-pic:has(.head-pic-by, .head-pic-acts) { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.head-pic:has(.head-pic-by) .seg { position: static; opacity: 1; }
+.head-pic-by { font-size: 11.5px; color: var(--text-2); text-align: center; max-width: 260px; }
+.head-pic-part { font: inherit; font-size: 11.5px; padding: 1px 4px; border-radius: 6px; border: 1px solid var(--hair-2); background: var(--bg-elev); color: var(--text); }
+.head-pic-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 /* Touch screens: the side toggle sits under the picture, not over it. */
 @media (hover: none) {
   .head-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; }

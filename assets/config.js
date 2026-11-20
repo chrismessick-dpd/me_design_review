@@ -19,9 +19,11 @@
                    (meta.kind, summary.kind); Signoff PL shows an assembly's review on its branch.
    previews.dir:   the folder Partcheck's Send stores part pictures and models in next to a review
                    (../partcheck/docs/send-to-signoff-me.md); the overview shows the hero part beside
-                   the ring. demo.pictures names the demo reviews' pictures in
-                   assets/demo-previews/ (<id>-<view>.webp), the hero part's views from the same
-                   Partcheck send the Signoff PL demo shows (partcheck/tools/pl_demo.html). */
+                   the ring. previews.models: it also turns each part in 3D and has Attach a model…
+                   (../signoff_pl/docs/part-models.md; Signoff PL and Partcheck write the same folder).
+                   demo.pictures { folder: true } reads assets/demo-previews/<id>/, the whole folder
+                   Partcheck's demo Send stores, the same Send the Signoff PL demo shows
+                   (partcheck/tools/pl_demo.html). */
 window.SIGNOFF_CONFIG = {
   "product": "Signoff ME",
   "discipline": "ME",
@@ -48,7 +50,7 @@ window.SIGNOFF_CONFIG = {
   "legacyTabs": [],
   "pl": { "tool": "me", "dataRepo": "signoff_pl_data" },
   "assemblies": true,
-  "previews": { "dir": "partcheck/" },
+  "previews": { "dir": "partcheck/", "models": true },
   "words": {
     "unit": "part",
     "units": "parts",
@@ -83,7 +85,7 @@ window.SIGNOFF_CONFIG = {
     { "id": "wearable", "label": "Wearable", "desc": "Worn or in prolonged skin contact" }
   ],
   "demo": {
-    "pictures": { "mdemo5": { "keys": ["iso", "top", "front", "right"], "ext": "webp" }, "mdemo13": { "keys": ["iso", "top", "front", "right"], "ext": "webp" } },
+    "pictures": { "mdemo5": { "folder": true }, "mdemo13": { "folder": true } },
     "findings": [
       {
         "id": "pd-im-6",

@@ -20,7 +20,7 @@ ENGINE = [
     "assets/model.js", "assets/auth.js", "assets/github.js", "assets/workspace.js", "assets/app.js", "assets/demo.js", "assets/specedit.js", "assets/specguide.js", "assets/history.js", "assets/localstore.js",
     "assets/styles.css", "tools/build.py", "tools/package.py", "tools/validate_templates.py",
     "tools/signoff.js", "tools/signoff_test.js", "tools/sync_routing.py",
-    "assets/vendor/route.js", "assets/vendor/connect.js",
+    "assets/vendor/route.js", "assets/vendor/connect.js", "assets/vendor/model3d.js", "assets/vendor/occt-worker.js",
 ]
 
 

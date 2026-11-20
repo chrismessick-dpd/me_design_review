@@ -1078,7 +1078,7 @@
   // The pictures a checker stored with the latest run, read from the project's home repo once
   // per page load. A tool sets config.previews.dir (Fabcheck's folder for Signoff EE); without
   // it, or without a stored picture, the header shows the ring alone.
-  var pics = {};   // project id -> { state: 'loading' | 'none' | 'ok', images: [{ key, url }], hero, runId }
+  var pics = {};   // project id -> { state: 'loading' | 'none' | 'ok', images: [{ key, url }], hero, runId, parts, heroPart, store }
   var PIC_TYPES = { 'image/webp': 1, 'image/png': 1 };
   // A checker's folder for this review in its home repo (Fabcheck's fabcheck/<id>/), under the
   // data path when the review lives in the data repo.
@@ -1087,17 +1087,71 @@
     return (isData && settings.dataPath ? settings.dataPath.replace(/\/+$/, '') + '/' : '') + dir + p.id + '/';
   }
   function picDir(p) { return checkerDir(p, C.previews.dir) + 'preview/'; }
+  // Part models (config.previews.models, Signoff ME; signoff_pl/docs/part-models.md): the folder holds every
+  // part's pictures and PL's mesh, written by Partcheck's Send, Signoff PL, and Attach a model here. The
+  // overview shows one part (the hero, or the one picked), turns it in 3D, and attaches or removes a model.
+  var MODELS = !!(C.previews && C.previews.models);
+  if (MODELS && S.model3d) S.model3d.workerUrl = 'assets/vendor/occt-worker.js';
+  var STORED_BY = { partcheck: ['From Partcheck', 'sent'], pl: ['Attached in Signoff PL', 'attached'], me: ['Attached in ' + C.product, 'attached'] };
+  // The files an index names (as model3d.parts.named, which EE doesn't load).
+  function folderFiles(doc) {
+    var out = ['index.json'];
+    ((doc && doc.images) || []).forEach(function (i) { if (i && i.file) out.push(i.file); });
+    ((doc && doc.parts) || []).forEach(function (x) { [x && x.mesh, x && x.step].forEach(function (f) { if (f && f.file) out.push(f.file); }); });
+    return out;
+  }
+  // The demo's folder: assets/demo-previews/<id>/ as Partcheck's demo Send stored it (partcheck/tools/pl_demo.html),
+  // read through the same code as a repo; what's attached here stays in this page (a reload starts over).
+  var demoFolders = {};
+  function demoStore(p) {
+    var base = 'assets/demo-previews/' + p.id + '/', dir = 'demo/' + p.id + '/';
+    var mem = demoFolders[p.id] = demoFolders[p.id] || { files: {}, index: undefined };
+    function index() {
+      if (mem.index !== undefined) return Promise.resolve(mem.index);
+      return fetch(base + 'index.json').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+        .then(function (d) { if (mem.index === undefined) mem.index = d; return mem.index; });
+    }
+    function snapshot() {
+      return index().then(function (d) {
+        return { head: 'demo', entries: d ? folderFiles(d).map(function (n) { return { type: 'blob', path: dir + n, sha: dir + n }; }) : [] };
+      });
+    }
+    return {
+      dir: dir, snapshot: snapshot,
+      listTree: function (prefix) { return snapshot().then(function (s) { return s.entries.filter(function (e) { return e.path.indexOf(prefix) === 0; }); }); },
+      blobBytes: function (sha) {
+        var name = sha.slice(dir.length);
+        if (name === 'index.json') return Promise.resolve(new TextEncoder().encode(JSON.stringify(mem.index)));
+        if (mem.files[name]) return Promise.resolve(mem.files[name]);
+        return fetch(base + name).then(function (r) { if (!r.ok) throw new Error('not found'); return r.arrayBuffer(); }).then(function (b) { return new Uint8Array(b); });
+      },
+      putFiles: function (files) {
+        files.forEach(function (f) {
+          var name = f.path.slice(dir.length);
+          if (name === 'index.json') { mem.index = f.remove ? null : JSON.parse(f.text); return; }
+          if (f.remove) delete mem.files[name]; else mem.files[name] = f.bytes;
+        });
+        return Promise.resolve({ pushed: files.length });
+      }
+    };
+  }
+  // Where a review's pictures are, and a store to read (and, with models, write) them.
+  function picHome(p) {
+    if (DEMO) { var ds = demoStore(p); return { store: ds, dir: ds.dir }; }
+    return { store: workspace().store(homeOf(p)), dir: picDir(p) };
+  }
   function loadPicture(p) {
     if (!C.previews || pics[p.id]) return;
-    if (DEMO) {
+    var dp = DEMO && ((C.demo || {}).pictures || {})[p.id];
+    if (DEMO && !(dp && dp.folder)) {
       // ["top", ...] (SVGs), or { run, keys, ext }: the board's Fabcheck pictures and its demo run.
-      var dp = ((C.demo || {}).pictures || {})[p.id], keys = dp && (Array.isArray(dp) ? dp : dp.keys), ext = (dp && dp.ext) || 'svg';
+      var keys = dp && (Array.isArray(dp) ? dp : dp.keys), ext = (dp && dp.ext) || 'svg';
       pics[p.id] = keys ? { state: 'ok', hero: keys[0], runId: (dp && dp.run) || '', images: keys.map(function (k) { return { key: k, url: 'assets/demo-previews/' + p.id + '-' + k + '.' + ext }; }) } : { state: 'none' };
       return showPicture(p);
     }
-    if (!getToken()) return;
+    if (!DEMO && !getToken()) return;
     pics[p.id] = { state: 'loading' };
-    var store = workspace().store(homeOf(p)), dir = picDir(p);
+    var h = picHome(p), store = h.store, dir = h.dir;
     store.listTree(dir).then(function (entries) {
       var sha = {};
       entries.forEach(function (e) { sha[e.path] = e.sha; });
@@ -1108,34 +1162,37 @@
         var want = (Array.isArray(doc.images) ? doc.images : []).filter(function (i) {
           return i && /^[a-z0-9-]{1,32}$/.test(i.key) && /^[a-z0-9-]{1,32}\.(webp|png)$/.test(i.file) && PIC_TYPES[i.type] && sha[dir + i.file];
         });
-        // A review of several parts (Partcheck's `parts`, partcheck/docs/send-to-signoff-me.md) shows
-        // its hero part's views, named by view (iso, top, front, right).
-        var hp = (Array.isArray(doc.parts) ? doc.parts : []).filter(function (x) {
-          return x && x.views && typeof x.views === 'object' && Object.keys(x.views).some(function (v) { return x.views[v] === doc.hero; });
-        })[0], hero = doc.hero;
-        if (hp) {
-          want = Object.keys(hp.views).filter(function (v) { return /^[a-z]{1,12}$/.test(v); }).map(function (v) {
-            var i = want.filter(function (x) { return x.key === hp.views[v]; })[0];
-            if (i && i.key === doc.hero) hero = v;
-            return i && Object.assign({}, i, { key: v });
-          }).filter(Boolean);
-        }
+        // A review of several parts (Partcheck's `parts`, partcheck/docs/send-to-signoff-me.md): each part's
+        // views (iso, top, front, right) and, with models, its mesh and STEP.
+        var known = {};
+        want.forEach(function (i) { known[i.key] = 1; });
+        var file = function (f, re) { return f && re.test(String(f.file || '')) && sha[dir + f.file] ? sha[dir + f.file] : ''; };
+        var parts = (Array.isArray(doc.parts) ? doc.parts : []).filter(function (x) { return x && x.views && typeof x.views === 'object'; }).map(function (x) {
+          var views = {};
+          Object.keys(x.views).forEach(function (v) { if (/^[a-z]{1,12}$/.test(v) && known[x.views[v]]) views[v] = x.views[v]; });
+          return { key: String(x.key || ''), partNumber: String(x.partNumber || ''), name: String(x.name || ''), views: views,
+            mesh: file(x.mesh, /^[a-z0-9-]{1,32}\.plm\.gz$/), step: file(x.step, /^[a-z0-9-]{1,32}\.step\.gz$/),
+            source: STORED_BY[x.source] ? x.source : 'partcheck', at: String(x.at || doc.at || ''), by: String(x.by || ''), file: String(x.file || '') };
+        }).filter(function (x) { return Object.keys(x.views).length || x.mesh; });
+        var hp = parts.filter(function (x) { return Object.keys(x.views).some(function (v) { return x.views[v] === doc.hero; }); })[0];
         return Promise.all(want.map(function (i) {
           return store.blobBytes(sha[dir + i.file]).then(function (b) { return { key: i.key, url: URL.createObjectURL(new Blob([b], { type: i.type })) }; });
         })).then(function (images) {
-          if (!images.length) return null;
+          if (!images.length && !parts.length) return null;
           // Only Fabcheck's runs (config.runs) open from the picture.
-          return { state: 'ok', images: images, hero: images.some(function (x) { return x.key === hero; }) ? hero : images[0].key,
+          return { state: 'ok', images: images, parts: parts, heroPart: hp ? hp.key : '', store: store,
+            hero: images.some(function (x) { return x.key === doc.hero; }) ? doc.hero : (images[0] ? images[0].key : ''),
             runId: C.runs && C.runs.tool === 'fabcheck' && /^[A-Za-z0-9_-]{1,64}$/.test(doc.runId || '') ? doc.runId : '' };
         });
       });
-    }).then(function (got) { pics[p.id] = got || { state: 'none' }; showPicture(p); }, function () { pics[p.id] = { state: 'none' }; });
+    }).then(function (got) { pics[p.id] = got || { state: 'none' }; showPicture(p); }, function () { pics[p.id] = { state: 'none' }; showPicture(p); });
   }
   function showPicture(p) {
     var box = document.querySelector('.head-pic[data-pic="' + p.id + '"]');
     if (!box) return;
     var was = box.childElementCount;
     box.innerHTML = picHtml(p);
+    load3d(p, box);
     if (!was && box.childElementCount) scootIn(box);
   }
   // A picture arriving after the header drew grows in from nothing and pushes the ring over.
@@ -1156,18 +1213,141 @@
       ], { duration: 520, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }).onfinish = function () { box.style.overflow = ''; };
     });
   }
+  // The part the overview shows: the one picked (ui.picPart), else the hero part.
+  function picPart(p, pc) {
+    var parts = (pc && pc.parts) || [], want = (ui.picPart || {})[p.id] || pc.heroPart;
+    return parts.filter(function (x) { return x.key === want; })[0] || parts.filter(function (x) { return x.key === pc.heroPart; })[0] || parts[0] || null;
+  }
+  // The pictures to show: a part's views named by view, else the folder's own.
+  function picSides(pc, part) {
+    if (!part) return pc.images;
+    return Object.keys(part.views).map(function (v) {
+      var i = pc.images.filter(function (x) { return x.key === part.views[v]; })[0];
+      return i && { key: v, url: i.url };
+    }).filter(Boolean);
+  }
   function picHtml(p) {
     var pc = pics[p.id];
+    // With models, a review with nothing stored yet still offers to attach one (once signed in, or in the demo).
+    if (MODELS && pc && pc.state === 'none' && S.model3d && (DEMO || getToken())) return '<div class="head-pic-acts"><button class="btn btn-sm" data-act="model-attach">Attach a model…</button></div>';
     if (!pc || pc.state !== 'ok') return '';
-    var key = pc.images.some(function (i) { return i.key === ui.picSide; }) ? ui.picSide : pc.hero;
-    var img = pc.images.filter(function (i) { return i.key === key; })[0];
-    var pic = '<img alt="' + esc(p.meta.name + ', ' + key) + '" src="' + esc(img.url) + '">';
-    return (pc.runId ? '<button class="head-pic-img" data-act="open-fabcheck" data-run="' + esc(pc.runId) + '" data-href="' + esc(fabcheckUrl(p, { run: { id: pc.runId } })) + '" title="Open the latest stored run in Fabcheck">' + pic + '</button>'
-      : '<span class="head-pic-img">' + pic + '</span>') +
-      (pc.images.length > 1 ? '<div class="seg">' + pc.images.map(function (i) {
-        return '<button class="' + (i.key === key ? 'on' : '') + '" data-act="pic-side" data-key="' + esc(i.key) + '">' + esc(i.key.charAt(0).toUpperCase() + i.key.slice(1)) + '</button>';
-      }).join('') + '</div>' : '');
+    var part = picPart(p, pc), images = picSides(pc, part), three = MODELS && part && part.mesh && S.model3d;
+    var sides = images.map(function (i) { return i.key; }).concat(three ? ['3d'] : []);
+    var key = sides.indexOf(ui.picSide) >= 0 ? ui.picSide : (part ? (images.some(function (i) { return i.key === 'iso'; }) ? 'iso' : sides[0]) : pc.hero);
+    var html;
+    if (key === '3d') html = '<canvas class="m3d head-3d" data-mesh="' + esc(part.mesh) + '" aria-label="' + esc(p.meta.name) + ' in 3D: drag to turn, scroll to zoom"></canvas>';
+    else {
+      var img = images.filter(function (i) { return i.key === key; })[0] || images[0];
+      if (!img) return '';
+      var pic = '<img alt="' + esc(p.meta.name + ', ' + img.key) + '" src="' + esc(img.url) + '">';
+      html = pc.runId ? '<button class="head-pic-img" data-act="open-fabcheck" data-run="' + esc(pc.runId) + '" data-href="' + esc(fabcheckUrl(p, { run: { id: pc.runId } })) + '" title="Open the latest stored run in Fabcheck">' + pic + '</button>'
+        : '<span class="head-pic-img">' + pic + '</span>';
+    }
+    html += sides.length > 1 ? '<div class="seg">' + sides.map(function (k) {
+      return '<button class="' + (k === key ? 'on' : '') + '" data-act="pic-side" data-key="' + esc(k) + '">' + (k === '3d' ? '3D' : esc(k.charAt(0).toUpperCase() + k.slice(1))) + '</button>';
+    }).join('') + '</div>' : '';
+    if (MODELS && part) {
+      var w = STORED_BY[part.source] || STORED_BY.partcheck, multi = pc.parts.length > 1;
+      html += '<div class="head-pic-by">' + (multi ? '<select class="head-pic-part" data-pic-part="' + esc(p.id) + '" aria-label="Part">' + pc.parts.map(function (x) {
+        return '<option value="' + esc(x.key) + '"' + (x === part ? ' selected' : '') + '>' + esc(x.partNumber || x.name || x.key) + '</option>';
+      }).join('') + '</select> ' : '') + esc(w[0] + (part.at ? ', ' + w[1] + ' ' + relTime(part.at) : '') + (part.by && part.source !== 'partcheck' ? ' by ' + part.by : '')) + '</div>';
+      if (S.model3d && (DEMO || getToken())) html += '<div class="head-pic-acts"><button class="btn btn-sm" data-act="model-attach">Attach a model…</button>' +
+        (part.step ? '<button class="btn btn-sm" data-act="model-step">Download STEP</button>' : '') +
+        '<button class="btn btn-sm" data-act="model-remove">Remove</button></div>';
+    }
+    return html;
   }
+  // The 3D side: PL's viewer over the part's stored mesh (decoded once per mesh).
+  var meshes = {};
+  function load3d(p, box) {
+    var cv = box && box.querySelector('canvas.m3d[data-mesh]'), pc = pics[p.id];
+    if (!cv || !pc || !pc.store) return;
+    var sha = cv.getAttribute('data-mesh');
+    cv.removeAttribute('data-mesh');
+    if (!meshes[sha]) {
+      meshes[sha] = pc.store.blobBytes(sha).then(function (b) { return S.model3d.decode(b); });
+      meshes[sha].catch(function () { delete meshes[sha]; });
+    }
+    meshes[sha].then(function (mesh) { if (cv.isConnected) S.model3d.viewer(cv, mesh); }, function () { toast('Couldn’t load the 3D model'); });
+  }
+  // Attach a model: a STEP read in this page (model3d.prepare) and kept with the review for every tool
+  // (model3d.parts.put): Signoff PL and Partcheck see it too, and anyone the review is shared with.
+  function modelSheet(p) {
+    var pc = pics[p.id] || {}, parts = pc.parts || [], cur = pc.state === 'ok' ? picPart(p, pc) : null, prep = null, busy = false;
+    var w = sheet('<div class="sheet-head"><h2>Attach a model</h2><p>Read in this browser, then kept with this ' + esc(UNIT) + ': a simplified model (at most ' +
+      S.model3d.MAX_TRIS.toLocaleString() + ' triangles), its pictures, and the STEP if you keep it, compressed. Signoff PL, Partcheck, and anyone this ' + esc(UNIT) +
+      ' is shared with see it. It replaces any model with the same part number.</p></div><div class="sheet-body">' +
+      '<div class="field"><label for="m-pn">Part number</label><input class="input" id="m-pn" list="m-pn-list" value="' + esc(cur ? cur.partNumber : p.meta.board || '') + '" maxlength="80">' +
+      '<datalist id="m-pn-list">' + parts.map(function (x) { return '<option value="' + esc(x.partNumber) + '">'; }).join('') + '</datalist></div>' +
+      '<div class="field"><label for="m-file">STEP file</label><input class="input" id="m-file" type="file" accept=".step,.stp"></div>' +
+      '<p class="note" id="m-status">Pick a STEP (.step or .stp).</p>' +
+      '<label class="check"><input type="checkbox" id="m-keep" checked> Also keep the original STEP (compressed)</label></div>' +
+      '<div class="sheet-foot"><button class="btn" data-m="cancel">Cancel</button><button class="btn btn-primary" data-m="save" disabled>Attach</button></div>', { sticky: true });
+    var status = w.querySelector('#m-status'), save = w.querySelector('[data-m="save"]');
+    w.querySelector('#m-file').addEventListener('change', function (e) {
+      var f = e.target.files[0];
+      prep = null; save.disabled = true;
+      if (!f) return;
+      if (!/\.(step|stp)$/i.test(f.name)) { status.textContent = 'Pick a STEP file (.step or .stp).'; return; }
+      if (f.size > 300 * 1048576) { status.textContent = 'That STEP is over 300 MB; export a lighter one and try again.'; return; }
+      status.textContent = 'Reading ' + f.name + '…';
+      f.arrayBuffer().then(function (buf) { return S.model3d.prepare(f.name, new Uint8Array(buf), function (msg) { status.textContent = msg; }); }).then(function (pr) {
+        prep = pr; save.disabled = false;
+        var keep = w.querySelector('#m-keep');
+        keep.disabled = !pr.stepFits; if (!pr.stepFits) keep.checked = false;
+        status.textContent = pr.name + ': ' + pr.bboxMm.join(' × ') + ' mm, ' + pr.tris.toLocaleString() + ' triangles' + (pr.srcTris > pr.tris ? ' (simplified from ' + pr.srcTris.toLocaleString() + ')' : '') +
+          (pr.stepFits ? '' : '. The STEP is over ' + Math.round(S.model3d.STEP_CAP / 1048576) + ' MB compressed, so only the model and pictures are kept.');
+      }, function (err) { status.textContent = 'Couldn’t read ' + f.name + ': ' + err.message; });
+    });
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-m]');
+      if (!b || busy) return;
+      if (b.dataset.m === 'cancel') return closeSheet();
+      var pn = w.querySelector('#m-pn').value.trim();
+      if (!prep) return;
+      if (!pn) { w.querySelector('#m-pn').focus(); return; }
+      busy = true; save.disabled = true; status.textContent = 'Saving with the ' + UNIT + '…';
+      var h = picHome(p), old = parts.filter(function (x) { return x.partNumber.trim().toLowerCase() === pn.toLowerCase(); })[0];
+      S.model3d.parts.put(h.store, h.dir, { prep: prep, partNumber: pn, name: old ? old.name : (pn === (p.meta.board || '') ? p.meta.name : ''), source: 'me', by: me(),
+        keepStep: w.querySelector('#m-keep').checked, message: C.product + ': model for ' + pn + ' (' + me() + ')' }).then(function () {
+        closeSheet();
+        (ui.picPart = ui.picPart || {})[p.id] = '';
+        reloadPicture(p);
+        toast('Model attached: Signoff PL and Partcheck see it too');
+      }, function (err) { busy = false; save.disabled = false; status.textContent = 'Couldn’t save it: ' + (err.code === 'moved' ? 'someone else kept changing it; try again' : err.message); });
+    });
+  }
+  function reloadPicture(p) {
+    var pc = pics[p.id];
+    if (pc && pc.images) pc.images.forEach(function (i) { if (/^blob:/.test(i.url)) URL.revokeObjectURL(i.url); });
+    delete pics[p.id];
+    loadPicture(p);
+  }
+  function removeModel(p) {
+    var pc = pics[p.id], part = pc && pc.state === 'ok' && picPart(p, pc);
+    if (!part) return;
+    if (!confirm('Remove the model of ' + (part.partNumber || 'this part') + ' from this ' + UNIT + '? Signoff PL and Partcheck stop showing it too. Git keeps the old files.')) return;
+    var h = picHome(p);
+    S.model3d.parts.remove(h.store, h.dir, part.partNumber, C.product + ': model for ' + (part.partNumber || 'a part') + ' removed (' + me() + ')')
+      .then(function () { reloadPicture(p); toast('Model removed'); }, function (err) { toast('Couldn’t remove it: ' + err.message); });
+  }
+  function downloadModelStep(p) {
+    var pc = pics[p.id], part = pc && pc.state === 'ok' && picPart(p, pc);
+    if (!part || !part.step) return;
+    pc.store.blobBytes(part.step).then(function (b) { return S.model3d.gzip(b, 'gunzip'); }).then(function (bytes) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/step' }));
+      a.download = part.file || (part.partNumber || 'model') + '.step'; a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }, function () { toast('Couldn’t get the STEP file'); });
+  }
+  document.addEventListener('change', function (e) {
+    var id = e.target.getAttribute && e.target.getAttribute('data-pic-part');
+    if (!id) return;
+    (ui.picPart = ui.picPart || {})[id] = e.target.value;
+    var p = current();
+    if (p && p.id === id) showPicture(p);
+  });
 
   // ── Fabcheck runs (docs/fabcheck-link.md) ────────────────
   function isFabcheck(def) { return !!(def && def.source && def.source.tool === 'fabcheck'); }
@@ -6863,6 +7043,9 @@
       case 'goto-item': if (id) gotoItem(id); break;
       case 'discard': discard(); break;
       case 'pic-side': { ui.picSide = el.dataset.key; var pp = current(); if (pp) showPicture(pp); break; }
+      case 'model-attach': { var mp = current(); if (mp && MODELS && S.model3d) modelSheet(mp); break; }
+      case 'model-remove': { var mr = current(); if (mr && MODELS) removeModel(mr); break; }
+      case 'model-step': { var ms = current(); if (ms && MODELS) downloadModelStep(ms); break; }
       case 'open-fabcheck': openFabcheck(el); break;
       case 'open-pincheck': openPincheck(el); break;
       case 'runs-reload': { var rp = current(); if (rp) { loadRuns(rp, true); renderPage(); } break; }

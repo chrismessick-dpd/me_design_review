@@ -1,0 +1,68 @@
+{
+ "v": 1,
+ "tool": "partcheck",
+ "runId": "demo-bracket",
+ "at": "",
+ "hero": "2100410-020-iso",
+ "images": [
+  {
+   "key": "2100410-020-iso",
+   "file": "2100410-020-iso.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-020-top",
+   "file": "2100410-020-top.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-020-front",
+   "file": "2100410-020-front.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-020-right",
+   "file": "2100410-020-right.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  }
+ ],
+ "parts": [
+  {
+   "key": "2100410-020",
+   "partNumber": "2100410-020",
+   "revision": "B",
+   "name": "WALL BRACKET, SMART THERMOSTAT",
+   "views": {
+    "iso": "2100410-020-iso",
+    "top": "2100410-020-top",
+    "front": "2100410-020-front",
+    "right": "2100410-020-right"
+   },
+   "mesh": {
+    "file": "2100410-020.plm.gz",
+    "size": 6079,
+    "tris": 852,
+    "srcTris": 852,
+    "bboxMm": [
+     70,
+     114.8,
+     6
+    ]
+   },
+   "massG": 69.4,
+   "material": "Steel"
+  }
+ ],
+ "package": {
+  "name": "Wall bracket rev B (to the sheet-metal shop)",
+  "sha256": "957f9e30cccd70781e7d9dbb8b5ad7e72f0cd7be1f734367d59189ada607f065"
+ }
+}

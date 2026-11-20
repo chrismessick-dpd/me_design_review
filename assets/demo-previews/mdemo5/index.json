@@ -1,0 +1,121 @@
+{
+ "v": 1,
+ "tool": "partcheck",
+ "runId": "demo-enclosure",
+ "at": "",
+ "hero": "2100410-011-iso",
+ "images": [
+  {
+   "key": "2100410-011-iso",
+   "file": "2100410-011-iso.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-011-top",
+   "file": "2100410-011-top.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-011-front",
+   "file": "2100410-011-front.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-011-right",
+   "file": "2100410-011-right.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-012-iso",
+   "file": "2100410-012-iso.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-012-top",
+   "file": "2100410-012-top.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-012-front",
+   "file": "2100410-012-front.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  },
+  {
+   "key": "2100410-012-right",
+   "file": "2100410-012-right.webp",
+   "type": "image/webp",
+   "w": 480,
+   "h": 360
+  }
+ ],
+ "parts": [
+  {
+   "key": "2100410-011",
+   "partNumber": "2100410-011",
+   "revision": "B",
+   "name": "FRONT COVER, SMART THERMOSTAT",
+   "views": {
+    "iso": "2100410-011-iso",
+    "top": "2100410-011-top",
+    "front": "2100410-011-front",
+    "right": "2100410-011-right"
+   },
+   "mesh": {
+    "file": "2100410-011.plm.gz",
+    "size": 9332,
+    "tris": 1248,
+    "srcTris": 1248,
+    "bboxMm": [
+     90,
+     90,
+     14
+    ]
+   },
+   "massG": 25.5,
+   "material": "PC/ABS"
+  },
+  {
+   "key": "2100410-012",
+   "partNumber": "2100410-012",
+   "revision": "B",
+   "name": "BACK COVER, SMART THERMOSTAT",
+   "views": {
+    "iso": "2100410-012-iso",
+    "top": "2100410-012-top",
+    "front": "2100410-012-front",
+    "right": "2100410-012-right"
+   },
+   "mesh": {
+    "file": "2100410-012.plm.gz",
+    "size": 4111,
+    "tris": 576,
+    "srcTris": 576,
+    "bboxMm": [
+     90,
+     90,
+     10
+    ]
+   },
+   "massG": 22.9,
+   "material": "PC/ABS"
+  }
+ ],
+ "package": {
+  "name": "Enclosure rev B (to the molder)",
+  "sha256": "82ef759ba736cddd3ef0013ac9612d06fe00e7fda408ed95dae33bea8234d297"
+ }
+}
