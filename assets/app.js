@@ -3783,10 +3783,23 @@
     var p = current(); if (!p) return;
     var card = anchor && anchor.closest && anchor.closest('.spec-map-card'), live = card && card.querySelector('svg.spec-map');
     var what = card && card.dataset.card === 'ptree' ? 'power tree' : 'block diagram';
-    menu(anchor, [['png', 'PNG picture'], ['svg', 'SVG drawing'], ['pdf', 'PDF, landscape, with a title block']]).then(function (ch) {
+    // The block diagram's SVG also carries it as a draw.io diagram (Chris, 2026-11-20): a .drawio.svg.
+    var dio = what === 'block diagram' && specDrawioOn() && !!live && live.classList.contains('spec-flow');
+    menu(anchor, [['png', 'PNG picture'], ['svg', dio ? 'SVG drawing, editable in draw.io' : 'SVG drawing'], ['pdf', 'PDF, landscape, with a title block']]).then(function (ch) {
       var x = specExportSvg(live); if (!x) { toast('Nothing to export yet'); return; }
       x.what = what;
-      if (ch === 'svg') { specSaveBlob(specExportName(p, 'svg', what), new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n' + x.svg], { type: 'image/svg+xml' })); return; }
+      var head = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      if (ch === 'svg' && dio) {
+        Promise.resolve().then(function () { return DRAWIO.svgWithFile(x.svg, [DRAWIO.scribePage(specDrawioSnap(p))]); }).then(function (s) {
+          specSaveBlob(specExportName(p, 'drawio.svg', what), new Blob([head + s], { type: 'image/svg+xml' }));
+          toast('Saved. It’s a picture anywhere, and an editable diagram in draw.io; Import from draw.io in the ☰ menu reads it back.', null, 6000);
+        }).catch(function () {
+          specSaveBlob(specExportName(p, 'svg', what), new Blob([head + x.svg], { type: 'image/svg+xml' }));
+          toast('Saved as a plain SVG: the draw.io diagram couldn’t be added');
+        });
+        return;
+      }
+      if (ch === 'svg') { specSaveBlob(specExportName(p, 'svg', what), new Blob([head + x.svg], { type: 'image/svg+xml' })); return; }
       if (ch === 'png') {
         var img = new Image(), url = URL.createObjectURL(new Blob([x.svg], { type: 'image/svg+xml' }));
         img.onload = function () {
@@ -3803,6 +3816,234 @@
       if (ch === 'pdf') specDiagramSheet(p, x);
     });
   }
+  // ── draw.io (Chris, 2026-11-20) ──
+  // The block diagram's SVG export carries it as a draw.io diagram too, and Import from draw.io (the ☰ menu) reads
+  // one back as Scribe edits, listed before they're made. The mapping is assets/drawio.js (window.SignoffDrawio);
+  // here the snapshot is taken from the drawn diagram and the plan is applied. docs/scribe-ee.md, *draw.io*.
+  var DRAWIO = window.SignoffDrawio || null;
+  function specDrawioOn() { return SPEC_FLOW && !!DRAWIO && typeof CompressionStream === 'function' && typeof DecompressionStream === 'function'; }
+  // The drawn diagram as a snapshot. It's drawn with its section boxes for this, even when Sections is off.
+  function specDrawioSnap(p) {
+    var svg = document.querySelector('svg.spec-flow');
+    if (svg && ui.specBoxes !== false) return specDrawioRead(svg, p);
+    var keep = { view: ui.view, specView: ui.specView, boxes: ui.specBoxes };
+    ui.view = 'spec'; if (!svg) ui.specView = 'map'; ui.specBoxes = true;
+    try { renderPage(); svg = document.querySelector('svg.spec-flow'); if (!svg) throw new Error('No diagram to read'); return specDrawioRead(svg, p); }
+    finally { ui.view = keep.view; ui.specView = keep.specView; ui.specBoxes = keep.boxes; renderPage(); }
+  }
+  function specDrawioRead(svg, p) {
+    var a = M.specAnalysis(p), byId = {}, n = function (el, k) { return +el.getAttribute(k); };
+    a.sections.forEach(function (x) { byId[x.sec.id] = x; });
+    var snap = { review: { id: p.id, name: p.meta.name || '', tool: C.toolName || '' }, sections: [], blocks: [], lines: [], legend: null };
+    Array.prototype.forEach.call(svg.querySelectorAll('g.spec-group-g'), function (g) {
+      var x = byId[g.dataset.id]; if (!x) return;
+      var b = g.dataset.box.split(' ').map(Number);
+      snap.sections.push({ id: x.sec.id, title: x.sec.title || '', gist: x.gist || '', parent: g.dataset.parent || '', x: b[0], y: b[1], w: b[2], h: b[3], grow: x.sec.grow || { l: 0, t: 0, r: 0, b: 0 } });
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll('g.spec-node'), function (g) {
+      var x = byId[g.dataset.id], r = g.querySelector('rect'); if (!x || !r) return;
+      // Its rails' pictures, where they're drawn (a power flag's stem starts at the block's top edge).
+      var flags = Array.prototype.filter.call(svg.querySelectorAll('g.spec-flag[data-for="' + CSS.escape(x.sec.id) + '"]'), function (f) {
+        var t = f.querySelector('title'); return t && /^(Makes|Uses) /.test(t.textContent);
+      });
+      var power = (x.power || []).map(function (q, i) {
+        var f = flags[i], d = f && f.querySelector('path'), m = d && /M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/.exec(d.getAttribute('d'));
+        var fx = m ? +m[1] - 8 : n(r, 'x') + n(r, 'width') - 46 * (i + 1), fy = m ? +m[2] - 15 : n(r, 'y') - 15;
+        return { rail: q.rail, role: q.role, tree: !!q.tree, x: fx, y: fy, w: Math.min(110, 22 + q.rail.length * 6.2) };
+      });
+      snap.blocks.push({ id: x.sec.id, title: x.sec.title || '', gist: x.gist || '', parent: g.dataset.parent || '', kept: !!x.sec.pos,
+        x: n(r, 'x'), y: n(r, 'y'), w: n(r, 'width'), h: n(r, 'height'), parts: x.parts || [], power: power,
+        reqs: (x.links || []).map(function (id) { return a.ctx.reqs[id] ? a.ctx.reqs[id].ref : ''; }).filter(Boolean) });
+    });
+    var lines = {}; ((specFlowLast && specFlowLast.model.lines) || []).forEach(function (L) { lines[L.key] = L; });
+    Array.prototype.forEach.call(svg.querySelectorAll('path.spec-edge[data-line]'), function (el) {
+      var key = el.dataset.line, L = lines[key], nums = (el.getAttribute('d').match(/-?\d+(\.\d+)?/g) || []).map(Number), pts = [];
+      for (var i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+      if (pts.length < 2) return;
+      var lab = svg.querySelector('g.spec-edge-label[data-line="' + CSS.escape(key) + '"]'), txt = lab && lab.querySelector('.spec-pill text');
+      var ms = !!el.getAttribute('marker-start'), me2 = !!el.getAttribute('marker-end');
+      snap.lines.push({ key: key, a: el.dataset.a, b: el.dataset.b, word: L ? L.word : key.split('|').pop(), dir: ms && me2 ? 'both' : ms ? 'in' : 'out',
+        signal: txt ? txt.textContent : '', t: lab ? +lab.dataset.t || 0.5 : 0.5, pa: pts[0], pb: pts[pts.length - 1], corners: specDrawioCorners(pts),
+        shaped: !!(L && L.shape), srcA: L ? L.srcA : el.dataset.a, rkey: L ? L.rkey : '' });
+    });
+    var lg = svg.querySelector('g.spec-legend path'), lm = lg && /M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/.exec(lg.getAttribute('d'));
+    if (lm) snap.legend = { x: +lm[1] - 8, y: +lm[2] - 15 };
+    return snap;
+  }
+  // A drawn line's path rounds its corners into short runs: keep the corners of its straight runs.
+  function specDrawioCorners(pts) {
+    var segs = [], out = [];
+    for (var i = 0; i < pts.length - 1; i++) {
+      var A = pts[i], B = pts[i + 1], dx = Math.abs(B.x - A.x), dy = Math.abs(B.y - A.y);
+      if (Math.max(dx, dy) > 3 && (dx < 0.01 || dy < 0.01)) segs.push({ h: dy < 0.01, x: A.x, y: A.y });
+    }
+    for (var j = 0; j < segs.length - 1; j++) { var s = segs[j], t = segs[j + 1]; if (s.h !== t.h) out.push(s.h ? { x: t.x, y: s.y } : { x: s.x, y: t.y }); }
+    return out;
+  }
+  function specDrawioImport() {
+    var p = current(); if (!p) return;
+    if (HIST.compare.isCopy(p)) { HIST.compare.refuse(); return; }
+    if (specEditing) { toast('Save or cancel the edit first'); return; }
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.svg,.drawio,.xml,image/svg+xml';
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0]; if (!f) return;
+      if (f.size > 20 * 1024 * 1024) { toast('That file is too big for a block diagram'); return; }
+      f.text().then(DRAWIO.read).then(function (doc) {
+        var page = doc.pages.filter(function (pg) { return pg.root && pg.root.scribeFormat; })[0] || doc.pages[0];
+        var q = current(); if (!q || q.id !== p.id) return;
+        var snap = specDrawioSnap(q), plan = DRAWIO.scribePlan(page, snap);
+        if (doc.pages.length > 1) plan.unshift({ op: 'skip', text: 'The file has ' + doc.pages.length + ' pages; only “' + (page.name || 'the first') + '” was read' });
+        specDrawioSheet(q, plan, snap, f.name);
+      }).catch(function (err) { toast((err && err.message) || 'Couldn’t read that file'); });
+    });
+    inp.click();
+  }
+  function specDrawioSheet(p, plan, snap, fname) {
+    var edits = plan.filter(function (c) { return c.op !== 'skip' && c.op !== 'review'; });
+    var notes = plan.filter(function (c) { return c.op === 'skip' || c.op === 'review'; });
+    if (!edits.length) { toast(notes.length ? 'Nothing to change. ' + notes[0].text : 'Nothing to change: the file matches the diagram', null, 6000); return; }
+    var w = sheet('<div class="sheet-head"><h2>Import from draw.io</h2><p>' + esc(fname) + ' asks for these changes to ' + esc(SPEC_LABEL) + '. Untick any you don’t want. Removals start unticked. It’s one step you can undo, and it waits for Sync like any edit.</p></div>' +
+      '<div class="sheet-body">' + (notes.length ? '<div class="spec-dio-notes">' + notes.map(function (c) { return '<p class="note">' + esc(c.text) + '</p>'; }).join('') + '</div>' : '') +
+      '<div class="spec-dio-list">' + edits.map(function (c, i) {
+        return '<label class="spec-dio-row' + (c.ask ? ' ask' : '') + '"><input type="checkbox" data-i="' + i + '"' + (c.ask ? '' : ' checked') + '> <span>' + esc(c.text) + '</span></label>';
+      }).join('') + '</div>' +
+      '<p class="note">Kept from draw.io: names, sections, places, connections and their signals and arrows, where lines meet blocks, Parts, and rails. Not kept: line shapes (they route again), colors, fonts, and other shapes.</p></div>' +
+      '<div class="sheet-foot"><span class="spacer"></span><button class="btn" data-sheet="cancel">Cancel</button><button class="btn btn-primary" data-sheet="ok">Make the changes</button></div>');
+    w.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-sheet]'); if (!b) return;
+      if (b.dataset.sheet === 'cancel') { closeSheet(); return; }
+      var pick = Array.prototype.filter.call(w.querySelectorAll('.spec-dio-list input'), function (x) { return x.checked; }).map(function (x) { return edits[+x.dataset.i]; });
+      closeSheet();
+      if (!pick.length) return;
+      var q = current(); if (!q || q.id !== p.id) return;
+      var res = specDrawioApply(q, pick, snap);
+      if (!res.recs.length) { toast(res.notes[0] || 'Nothing changed'); return; }
+      specPutAll(q, res.recs);
+      var hu = specHistOf(q).undo, last = hu[hu.length - 1];
+      if (last && res.recs.every(function (r) { return r.id in last.cur; })) { last.label = 'importing from draw.io'; renderPage(); }
+      toast('Imported from draw.io: ' + plural(pick.length, 'change') + (res.notes.length ? '. ' + res.notes.join(' ') : ''), { label: 'Undo', run: function () { specHistStep(true); } }, 8000);
+    });
+  }
+  // The plan's changes as Scribe records, made on a working copy in a fixed order: new blocks and sections,
+  // renames, sections, connections, signals and arrows, Parts and rails, places, ports, routes, and removals.
+  function specDrawioApply(p, plan, snap) {
+    var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) }), newId = {}, notes = [], who = me();
+    var put = function (recs) { recs.forEach(function (r) { view.spec[r.id] = r; }); };
+    var rec = function (id) { return view.spec[id]; };
+    var idOf = function (k) { return k && k.indexOf('new:') === 0 ? newId[k] || '' : k; };
+    var titleOf = function (id) { var r = rec(id); return r ? r.title : ''; };
+    var taken = function (t, id) { return M.liveSpec(view).some(function (s) { return s.id !== id && s.title.toLowerCase() === t.toLowerCase(); }); };
+    var uniq = function (t) { var x = t, i = 2; while (taken(x)) x = t + ' ' + i++; return x; };
+    var edit = function (id, f) { var r = rec(id); if (r) put([M.specStamp(Object.assign({}, r, f), who)]); };
+    var setBody = function (id, fn) { var r = rec(id); if (!r) return; var b = fn(String(r.body || '')); if (b !== r.body) edit(id, { body: b }); };
+    var of = function (op) { return plan.filter(function (c) { return c.op === op; }); };
+    var lineOf = {}; snap.lines.forEach(function (L) { lineOf[L.key] = L; });
+    var word0 = M.specOfferWords()[0];
+    of('add-block').forEach(function (c) { var r = M.specAddBlock(view, { title: uniq(c.title) }, who); if (r.length) { put(r); newId[c.key] = r[0].id; } });
+    // New sections, inner ones first: each groups the blocks (and sections) inside it.
+    var secs = of('add-section'), guard = 0;
+    while (secs.length && guard++ < 50) secs = secs.filter(function (c) {
+      var ids = c.members.map(idOf);
+      if (ids.some(function (x) { return !x; })) return true;
+      var t = uniq(c.title), r = ids.length ? M.specGroup(view, ids, t, who) : M.specAddBlock(view, { title: t }, who);
+      put(r);
+      var made = r.filter(function (x) { return x.title === t && !p.spec[x.id]; })[0];
+      if (made) newId[c.key] = made.id;
+      return false;
+    });
+    // Grouping makes the heading where its first block was: put it where it was drawn (a section, or the board).
+    of('add-section').forEach(function (c) {
+      var id = idOf(c.key); if (!id || (c.parent && c.parent.indexOf('new:') === 0)) return;
+      put(M.specNest(view, [id], c.parent || null, who));
+    });
+    of('rename').forEach(function (c) {
+      if (!rec(c.id)) return;
+      if (taken(c.to, c.id)) { notes.push('Not renamed to ' + c.to + ': another section has that name.'); return; }
+      put(M.specRename(view, c.id, c.to, who));
+    });
+    // Which section each block is in: a move into a new section was made by grouping it.
+    of('nest').concat(of('add-block')).forEach(function (c) {
+      var id = c.op === 'nest' ? c.id : idOf(c.key), to = c.op === 'nest' ? c.to : c.parent;
+      if (!id || (to && to.indexOf('new:') === 0)) return;
+      if (c.op === 'add-block' && !to) return;
+      put(M.specNest(view, [id], to || null, who));
+    });
+    var setItems = function (id, word, fn) {
+      setBody(id, function (body) { return M.specSetLine(body, word, M.specLinkText(fn(M.specUsesItems(body, word)))); });
+    };
+    of('add-link').forEach(function (c) {
+      var a = idOf(c.from), b = idOf(c.to); if (!a || !b || !rec(a) || !rec(b)) return;
+      var tb = titleOf(b);
+      setItems(a, word0, function (items) {
+        if (items.some(function (it) { return M.specUseIs(it, tb); })) return items;
+        return items.concat([{ name: tb, label: String(c.signal || '').replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim(), dir: c.dir === 'out' ? '' : c.dir }]);
+      });
+    });
+    var wordOf = function (c) { return M.specLinkWord(c.word) || word0; };
+    of('signal').forEach(function (c) {
+      var parts = String(c.to || '').split(' / '), two = parts.length === 2;
+      var clean = function (s) { return String(s || '').replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim(); };
+      var ta = titleOf(c.a), tb = titleOf(c.b), wd = wordOf(c);
+      setItems(c.a, wd, function (items) { return items.map(function (it) { return M.specUseIs(it, tb) ? Object.assign({}, it, { label: clean(two ? parts[0] : c.to) }) : it; }); });
+      setItems(c.b, wd, function (items) { return items.map(function (it) { return M.specUseIs(it, ta) ? Object.assign({}, it, { label: clean(two ? parts[1] : c.to) }) : it; }); });
+    });
+    of('dir').forEach(function (c) {
+      var ta = titleOf(c.a), tb = titleOf(c.b), wd = wordOf(c), back = c.to === 'both' ? 'both' : c.to === 'in' ? 'out' : 'in';
+      setItems(c.a, wd, function (items) { return items.map(function (it) { return M.specUseIs(it, tb) ? Object.assign({}, it, { dir: c.to === 'out' ? '' : c.to }) : it; }); });
+      setItems(c.b, wd, function (items) { return items.map(function (it) { return M.specUseIs(it, ta) ? Object.assign({}, it, { dir: back === 'out' ? '' : back }) : it; }); });
+    });
+    of('parts').forEach(function (c) { setBody(c.id, function (body) { return M.specSetLine(body, 'parts', c.to); }); });
+    of('power').forEach(function (c) {
+      var id = idOf(c.id); if (!id) return;
+      setBody(id, function (body) { return M.specSetLine(body, 'power', M.specPowerText(c.items)); });
+    });
+    // Places: a move or a resize keeps every block's place from then on, as a drag does.
+    var moves = of('move'), grows = of('grow'), frozen = snap.blocks.some(function (b) { return b.kept; });
+    if (moves.length || grows.length) {
+      var to = {}; moves.forEach(function (c) { to[c.id] = c; });
+      snap.blocks.forEach(function (b) {
+        if (!rec(b.id) || rec(b.id).deleted) return;
+        var c = to[b.id];
+        if (c) edit(b.id, { pos: { x: c.x, y: c.y } });
+        else if (!b.kept) edit(b.id, { pos: { x: specSnap(b.x), y: specSnap(b.y) } });
+      });
+      frozen = true;
+    }
+    if (frozen) of('add-block').forEach(function (c) { var id = idOf(c.key); if (id && rec(id)) edit(id, { pos: { x: c.x, y: c.y } }); });
+    grows.forEach(function (c) {
+      var r = rec(c.id); if (!r) return;
+      var nr = Object.assign({}, r), g = c.grow;
+      if (g.l || g.t || g.r || g.b) nr.grow = g; else delete nr.grow;
+      put([M.specStamp(nr, who)]);
+    });
+    of('port').forEach(function (c) {
+      var r = rec(c.block); if (!r) return;
+      var ports = Object.assign({}, r.ports || {});
+      ports[c.other + '|' + String(c.word).toLowerCase()] = specPortAt(c.box, c.at);
+      edit(c.block, { ports: ports });
+    });
+    of('route').forEach(function (c) {
+      var L = lineOf[c.line], r = L && rec(L.srcA); if (!r || !r.routes || !r.routes[L.rkey]) return;
+      var rt = Object.assign({}, r.routes); delete rt[L.rkey];
+      var nr = Object.assign({}, r); if (Object.keys(rt).length) nr.routes = rt; else delete nr.routes;
+      put([M.specStamp(nr, who)]);
+    });
+    of('delete-link').forEach(function (c) {
+      var ta = titleOf(c.a), tb = titleOf(c.b), wd = wordOf(c);
+      setItems(c.a, wd, function (items) { return items.filter(function (it) { return !M.specUseIs(it, tb); }); });
+      setItems(c.b, wd, function (items) { return items.filter(function (it) { return !M.specUseIs(it, ta); }); });
+    });
+    of('delete-block').forEach(function (c) {
+      if (!rec(c.id)) return;
+      // A section's blocks move up a level first, so deleting the heading takes only its own text.
+      if (snap.sections.some(function (s) { return s.id === c.id; })) put(M.specUngroup(view, c.id, who));
+      if (rec(c.id) && !rec(c.id).deleted) edit(c.id, { deleted: true });
+    });
+    var recs = Object.keys(view.spec).filter(function (id) { return view.spec[id] !== (p.spec || {})[id]; }).map(function (id) { return view.spec[id]; });
+    return { recs: recs, notes: notes };
+  }
+
   // The landscape sheet: the diagram over the page, and a title block at the bottom right with the
   // review's details. Print or save as PDF from the print view (the browser's own PDF printer).
   // The title block follows Dovetail's Altium schematic sheets (Chris, 2026-11-13): the review's title
@@ -4032,12 +4273,19 @@
         });
       });
     }
-    [[R0.A, R0.A.from, 0], [R0.B, R0.B.to, n - 1]].forEach(function (e) {
-      var lx = specLeadX(e[0], e[1]);
-      if (lx == null || Math.abs(v[e[2]] - lx) < 0.5) return;
-      var w = v.slice(); w[e[2]] = lx;
-      if (!specFits(R0.A, R0.B, w) || blocked(w) || along(w)) return;
-      v = w; done = true;
+    // At each end: move its vertical run under the port, or, when that would turn back toward the block, drop the
+    // runs up to a later vertical run instead (Chris, 2026-11-20: a line looped under a port, the engine stepping
+    // aside, back up between the block and its lead point, and over again before heading down). The fewest runs
+    // dropped that fit, clear the blocks, and lie along no other line.
+    [['A', R0.A.from], ['B', R0.B.to]].forEach(function (e) {
+      var T = e[0] === 'A' ? R0.A : R0.B, lx = specLeadX(T, e[1]), m = v.length;
+      if (lx == null || !m) return;
+      for (var k = 0; k < m; k += 2) {
+        var w = e[0] === 'A' ? [lx].concat(v.slice(k + 1)) : v.slice(0, m - 1 - k).concat([lx]);
+        if (w.join(',') === v.join(',')) return;
+        if (!specFits(R0.A, R0.B, w) || blocked(w) || along(w)) continue;
+        v = w; done = true; return;
+      }
     });
     return done ? v : null;
   }
@@ -4626,6 +4874,7 @@
   // outline: every move is a heading moved in the text (model.specNest).
   var ICON_GRIP = '<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="7" cy="13" r="1.3"/></svg>';
   var ICON_SECTION = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M2.5 7.5h15"/></svg>';
+  var SPEC_TREE_BOARD = '@board';
   function specTreeHtml(p, a, T) {
     var root = a.sections.filter(function (x) { return x.sec.level === 1 && (a.sections.some(function (y) { return y.parent === x.sec.id; })); })[0];
     var sel = specBlockSel();
@@ -4654,11 +4903,20 @@
         (closed ? '' : kids(list)) + '</div>';
     }
     var top = T.ch[''] || [];
+    // Folding (Chris, 2026-11-20): the board folds the whole hierarchy to one block, and Collapse all / Expand all
+    // folds every section at once. Kept in ui.specClosed (the board under SPEC_TREE_BOARD), for the session.
+    var shut = ui.specClosed || {}, boardShut = !!shut[SPEC_TREE_BOARD];
+    var secIds = T.items.filter(function (y) { return T.isSec(y); }).map(function (y) { return y.sec.id; });
+    var nBlocks = T.items.filter(function (y) { return !T.isSec(y); }).length;
+    var allOpen = !boardShut && secIds.some(function (sid) { return !shut[sid]; });
+    var foldAll = secIds.length || boardShut ? '<button class="btn btn-sm" data-act="spec-tree-all" data-mode="' + (allOpen ? 'close' : 'open') + '">' + (allOpen ? 'Collapse all' : 'Expand all') + '</button>' : '';
     return '<div class="card spec-tree" aria-label="Hierarchy"><div class="st-title"><b>Hierarchy</b><span>Drag a block or section onto a section to move it in, onto a block to put it just before, or onto the board to take it out of its section. The text follows.</span>' +
-      '<span class="spacer"></span><button class="btn btn-sm" data-act="spec-new-section">+ Section</button><button class="btn btn-sm btn-primary" data-act="spec-add-block" data-kind="">+ Block</button></div>' +
+      '<span class="spacer"></span>' + foldAll + '<button class="btn btn-sm" data-act="spec-new-section">+ Section</button><button class="btn btn-sm btn-primary" data-act="spec-add-block" data-kind="">+ Block</button></div>' +
       '<div class="st"><div class="st-trunk" data-sdrop=""><div class="st-head st-top-head"><span class="st-top"><span class="st-eyebrow">Board</span><span class="st-top-name">' + esc(root ? root.sec.title : p.meta.name) + '</span>' +
-      (root && root.links.length ? '<span class="st-sub">' + esc(plural(root.links.length, 'requirement') + ' on the board itself') + '</span>' : '') + '</span></div>' +
-      (top.length ? kids(top) : '<div class="st-kids"><div class="st-item st-leaves"><div class="map-empty">Nothing yet: add a block.</div></div></div>') + '</div></div></div>';
+      (root && root.links.length ? '<span class="st-sub">' + esc(plural(root.links.length, 'requirement') + ' on the board itself') + '</span>' : '') +
+      (boardShut ? '<span class="st-sub">' + esc([plural(secIds.length, 'section'), plural(nBlocks, 'block')].join(' · ')) + '</span>' : '') + '</span>' +
+      (top.length ? '<button class="icon-btn st-fold' + (boardShut ? ' closed' : '') + '" data-act="spec-tree-fold" data-id="' + SPEC_TREE_BOARD + '" title="' + (boardShut ? 'Expand' : 'Collapse to the board') + '" aria-expanded="' + !boardShut + '">' + ICON.chev + '</button>' : '') + '</div>' +
+      (boardShut ? '' : top.length ? kids(top) : '<div class="st-kids"><div class="st-item st-leaves"><div class="map-empty">Nothing yet: add a block.</div></div></div>') + '</div></div></div>';
   }
   // A new section from the hierarchy: a name and the blocks to put in it.
   function specNewSectionSheet() {
@@ -7290,10 +7548,12 @@
         var mp = current(); if (!mp) break;
         var has = M.liveSpec(mp).length, guide = specGuideId() && window.SignoffSpecGuide;
         menu(el, (guide ? [['guide', 'Guide: a walk through ' + SPEC_LABEL]] : []).concat([['writing', 'Writing guide'], '-', ['paste', 'Paste text…']])
+          .concat(specDrawioOn() ? [['drawio', 'Import from draw.io…']] : [])
           .concat(has ? ['-', ['md', 'Export as Markdown (.md)'], ['print', 'Print or save as PDF']] : [])).then(function (ch) {
           if (ch === 'guide') { closeSheet(); window.SignoffSpecGuide.start(); }
           else if (ch === 'writing') specGuideSheet();
           else if (ch === 'paste') specPasteSheet();
+          else if (ch === 'drawio') specDrawioImport();
           else if (ch === 'md') download(mp.slug + '-description.md', M.specMarkdown(mp), 'text/markdown');
           else if (ch === 'print') specPrint(mp);
         });
@@ -7318,6 +7578,12 @@
       case 'spec-fit': specZoom = null; renderPage(); break;
       case 'spec-export': specExport(el); break;
       case 'spec-new-section': specNewSectionSheet(); break;
+      case 'spec-tree-all': {
+        var tp = current(); if (!tp) break;
+        var tT = specFlowTree(M.specAnalysis(tp)), tc = {};
+        if (el.dataset.mode === 'close') tT.items.forEach(function (y) { if (tT.isSec(y)) tc[y.sec.id] = true; });
+        ui.specClosed = tc; saveUi(); renderPage(); break;
+      }
       case 'spec-tree-fold': { var fc = Object.assign({}, ui.specClosed || {}); if (fc[id]) delete fc[id]; else fc[id] = true; ui.specClosed = fc; saveUi(); renderPage(); break; }
       case 'spec-ungroup': {
         var gp = current(); if (!gp) break;

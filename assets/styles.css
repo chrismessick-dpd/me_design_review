@@ -1368,6 +1368,13 @@ svg.spec-flow.moving .spec-port, svg.spec-flow.moving .spec-edge-hit { pointer-e
 .spec-legend { pointer-events: none; }
 .spec-legend path { stroke: var(--text-2); stroke-width: 1.4; fill: none; }
 .spec-legend .spec-flag-bar { stroke-width: 2; stroke-linecap: round; }
+/* Import from draw.io (2026-11-20): the list of changes it asks for. */
+.spec-dio-list { display: flex; flex-direction: column; gap: 2px; max-height: 46vh; overflow: auto; margin: 4px 0 10px; }
+.spec-dio-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; line-height: 1.4; }
+.spec-dio-row:hover { background: var(--bg-sunk); }
+.spec-dio-row input { margin-top: 3px; flex: none; }
+.spec-dio-row.ask span { color: var(--text-2); }
+.spec-dio-notes .note { margin: 0 0 6px; }
 .spec-legend .spec-flag-ring { stroke: var(--text-2); stroke-width: 1.4; fill: var(--bg-elev); }
 .spec-legend text { font-size: 10.5px; font-weight: 600; fill: var(--text-2); }
 .spec-flag:hover path { stroke: var(--accent); }
