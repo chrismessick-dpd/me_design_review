@@ -6707,7 +6707,7 @@
   // IndexedDB: Fabcheck's runs, hand-offs, and PL's pictures and model files waiting to upload.
   // signoff-local-<ns>: the reviews' local store (assets/localstore.js); keep this list in step with the hub's
   // sidefoot.js and Signoff PL's.
-  var SUITE_DBS = ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo', 'signoff-pl-pictures', 'signoff-pl-uploads', 'pincheck-runs', 'signoff-local-signoff.v1.', 'signoff-local-signoff-me.v1.', 'signoff-local-signoff-fw.v1.'];
+  var SUITE_DBS = ['fabcheck', 'dovetail-handoff', 'dovetail-handoff-demo', 'signoff-pl-pictures', 'signoff-pl-uploads', 'pincheck-runs', 'signoff-local-signoff.v1.', 'signoff-local-signoff-me.v1.', 'signoff-local-signoff-fw.v1.', 'jig-local', 'jig-local-demo'];
   function signOut() {
     var unsynced = 0;
     SUITE_NS.forEach(function (ns) {
