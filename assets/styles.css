@@ -1815,3 +1815,7 @@ svg .pv-body { fill: var(--bg-sunk); }
 body.pv-open { overflow: hidden; }
 @media (max-width: 960px) { .pv-full-head { padding: 14px 16px 8px; } .pv-full-body { padding: 0 16px 24px; } }
 .pv-ep .pv-pad { opacity: .45; }
+/* An MCU block's lines in the diagram carry their peripheral and pins (2026-11-20); a problem or a check is hatched. */
+.spec-pill.pin-issue rect { stroke: var(--issue); stroke-width: 1.5; }
+.spec-pill.pin-issue text { fill: var(--issue); }
+.spec-pill.pin-warn rect { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 3 2; }

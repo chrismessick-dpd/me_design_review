@@ -3862,10 +3862,10 @@
       var key = el.dataset.line, L = lines[key], nums = (el.getAttribute('d').match(/-?\d+(\.\d+)?/g) || []).map(Number), pts = [];
       for (var i = 0; i + 1 < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
       if (pts.length < 2) return;
-      var lab = svg.querySelector('g.spec-edge-label[data-line="' + CSS.escape(key) + '"]'), txt = lab && lab.querySelector('.spec-pill text');
+      var lab = svg.querySelector('g.spec-edge-label[data-line="' + CSS.escape(key) + '"]'), txt = lab && lab.querySelector('.spec-pill');
       var ms = !!el.getAttribute('marker-start'), me2 = !!el.getAttribute('marker-end');
       snap.lines.push({ key: key, a: el.dataset.a, b: el.dataset.b, word: L ? L.word : key.split('|').pop(), dir: ms && me2 ? 'both' : ms ? 'in' : 'out',
-        signal: txt ? txt.textContent : '', t: lab ? +lab.dataset.t || 0.5 : 0.5, pa: pts[0], pb: pts[pts.length - 1], corners: specDrawioCorners(pts),
+        signal: txt ? (txt.dataset.text != null ? txt.dataset.text : (txt.querySelector('text') || txt).textContent) : '', t: lab ? +lab.dataset.t || 0.5 : 0.5, pa: pts[0], pb: pts[pts.length - 1], corners: specDrawioCorners(pts),
         shaped: !!(L && L.shape), srcA: L ? L.srcA : el.dataset.a, rkey: L ? L.rkey : '' });
     });
     var lg = svg.querySelector('g.spec-legend path'), lm = lg && /M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/.exec(lg.getAttribute('d'));
@@ -4423,14 +4423,16 @@
   // drag: { from, key, d, anchor, t } makes the label draggable (Chris, 2026-11-13): along its line, or off
   // it, where a leader ends in a dot at its place on the line (anchor, at t along d, the line's curve). The
   // dot drags along the line too, and the leader follows both live (labelLead).
-  function pill(x, y, text, drag) {
-    var w = Math.min(150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
+  function pill(x, y, text, drag, tag) {
+    var plain = text;                            // the label alone: the draw.io export reads it, never the marks
+    if (tag && tag.text) text = text + ' · ' + tag.text;
+    var w = Math.min(tag ? 230 : 150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
     var lead = drag ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + (an ? an.x + ' ' + an.y : x + ' ' + y) + '"' + (off ? '' : ' style="display:none"') + '/>' +
       '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
       '<circle class="spec-lead-hit" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="8"/><circle class="spec-lead-pt" cx="' + (an ? an.x : x) + '" cy="' + (an ? an.y : y) + '" r="3"/></g>' : '';
     return '<g class="spec-edge-label' + (drag ? ' drag' : '') + '"' + (drag ? ' data-from="' + esc(drag.from) + '" data-key="' + esc(drag.key) + '" data-route="' + drag.d + '" data-cx="' + x + '" data-cy="' + y + '"' +
       (drag.t != null ? ' data-t="' + drag.t + '"' : '') + (drag.line ? ' data-line="' + esc(drag.line) + '"' : '') + (an ? ' data-ax="' + an.x + '" data-ay="' + an.y + '"' : '') : '') + '>' + lead +
-      '<g class="spec-pill">' + (drag ? '<title>Drag along its line, or off it</title>' : '') +
+      '<g class="spec-pill' + (tag ? ' pin-' + tag.sev : '') + '" data-text="' + esc(plain) + '">' + (drag || tag ? '<title>' + esc([tag && tag.title, drag ? 'Drag along its line, or off it' : ''].filter(Boolean).join('\n')) + '</title>' : '') +
       '<rect x="' + (x - w / 2) + '" y="' + (y - 10) + '" width="' + w + '" height="20" rx="10"/><text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle">' + esc(cutText(text, Math.floor((w - 12) / 6.6))) + '</text></g></g>';
   }
   function specFlowHtml(p, a) {
@@ -4615,6 +4617,7 @@
     }
     var routed = specRouter() ? specRouteSet(model) : {};
     specFlowLast = { model: model, routed: routed };
+    var pinTags = specPinTags(a);
     // The frame takes in lines routed past the blocks (round the top block, say).
     var rx0 = minX, ry0 = minY, rx1 = minX + VW, ry1 = minY + VH;
     Object.keys(routed).forEach(function (k) { routed[k].pts.forEach(function (q) { rx0 = Math.min(rx0, q.x - 24); ry0 = Math.min(ry0, q.y - 30); rx1 = Math.max(rx1, q.x + 24); ry1 = Math.max(ry1, q.y + 30); }); });
@@ -4638,8 +4641,14 @@
       svg += '<path class="spec-edge uses' + cls + (L.ab && L.ba ? ' both' : '') + '"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '"' +
         (L.ab ? ' marker-end="url(#spec-arrow)"' : '') + (L.ba ? ' marker-start="url(#spec-arrow)"' : '') + '/>' + specPulse(rt.d, l.key) + hit(L.src, rt.d, L, l.key);
       if (L.labels.length) {
-        var lt = L.labels.join(' / '), key = L.src.b + '|' + L.word.toLowerCase(), kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt);
-        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t, line: l.key });
+        var lt = L.labels.join(' / '), key = L.src.b + '|' + L.word.toLowerCase();
+        var tags = L.labels.map(function (t) { return pinTags[L.a + '|' + L.b + '|' + t.toLowerCase()]; }), tag = null;
+        if (tags.some(Boolean)) {
+          var worst = tags.filter(Boolean).map(function (t) { return t.sev; }).sort(function (s1, s2) { return ['issue', 'warn', 'ok'].indexOf(s1) - ['issue', 'warn', 'ok'].indexOf(s2); })[0];
+          tag = { sev: worst, text: tags.map(function (t) { return t ? t.text : ''; }).filter(Boolean).join(' / '), title: tags.map(function (t) { return t ? t.title : ''; }).filter(Boolean).join(' ') };
+        }
+        var kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt + (tag ? ' · ' + tag.text : ''));
+        svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t, line: l.key }, tag);
       }
     });
     blocks.forEach(function (x) {
@@ -5679,19 +5688,21 @@
   function pinIsMcu(f) {
     return !!f && (f.kind === 'mcu' || (f.pins || []).some(function (q) { return (q.functions || []).some(function (fn) { return /^[A-Z][A-Z0-9]*_\S+\s+AF\d+$/.test(fn); }); }));
   }
-  var pinMemo = { key: '', res: null };
+  var pinCache = {};
+  function pinRes(id) { return pinCache[id] ? pinCache[id].res : null; }
   // The plan for a block, worked out again only when its part, connections, or picks change.
   function pinPlan(a, x) {
     var copy = x.sec.pins && x.sec.pins.part;
     if (!copy) return null;
     var conns = M.specMcuConns(a, x.sec.id), map = (x.sec.pins && x.sec.pins.map) || {};
     var key = x.sec.id + '|' + JSON.stringify([copy.mpn, copy.from || null, copy.pins.length]) + '|' + JSON.stringify(conns.map(function (c) { return [c.id, c.label, c.dir, c.block]; })) + '|' + JSON.stringify(map);
-    if (pinMemo.key !== key) {
+    var c = pinCache[x.sec.id];
+    if (!c || c.key !== key) {
       var part = PIN.part(copy), res = PIN.plan(part, conns, map);
       res.part = part; res.conns = conns;
-      pinMemo = { key: key, res: res };
+      c = pinCache[x.sec.id] = { key: key, res: res };
     }
-    return pinMemo.res;
+    return c.res;
   }
   var PIN_MARK = { issue: '✕', warn: '▲', ok: '✓' };
   function pinWhat(r) { return r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : ''); }
@@ -5738,6 +5749,29 @@
     return html + (window.SignoffPinView ? '<div class="spec-acts" style="margin-top:10px"><button class="btn" data-act="spec-pins-map">Open pin map</button></div>' : '') +
       '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
   }
+  // Marks on the diagram's lines (Chris, 2026-11-20): a connection an MCU block's plan covers shows its peripheral and
+  // pins after its label ("I2C · I2C1 PB6/PB7"), with ✕ or ▲ when the part can't do it or it needs a look.
+  // { '<a>|<b>|<label, lower case>': { sev, text } }, a and b in either order.
+  function specPinTags(a) {
+    var out = {};
+    if (!pinsOn()) return out;
+    a.sections.forEach(function (x) {
+      var res = x.sec.pins && x.sec.pins.part ? pinPlan(a, x) : null;
+      if (!res) return;
+      res.reqs.forEach(function (r) {
+        var sev = PIN.sevOf(r), inst = r.type === 'PINS' ? '' : r.inst || r.want || '';
+        var pins = r.type === 'PINS' ? '' : r.slots.map(function (sl) { return sl.gpio; }).sort(PIN.nat).join('/');
+        r.users.forEach(function (u) {
+          var lab = String(u.conn.label || '');
+          var bits = [inst && inst.toLowerCase() !== lab.toLowerCase() ? inst : '', pins].filter(Boolean).join(' ');
+          var text = sev === 'issue' ? '✕ ' + (r.problems[0] && r.problems[0].code === 'no-type' ? 'not on ' + res.part.meta.mpn : r.problems[0] && r.problems[0].code === 'no-instance' ? 'no ' + (r.item.inst || r.type) : 'no room') : (sev === 'warn' ? '▲ ' : '') + bits;
+          [u.conn.from + '|' + u.conn.to, u.conn.to + '|' + u.conn.from].forEach(function (k) { out[k + '|' + lab.toLowerCase()] = { sev: sev, text: text, title: r.problems.map(function (q) { return q.text; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return n.text; })).join(' ') }; });
+        });
+      });
+    });
+    return out;
+  }
+
   // The full-window pin map (assets/pinview.js): the plan's five views. A pick on a pin is written to the section's
   // pins.map (one Scribe edit, with Back), and the map draws again from the new plan.
   var pinFull = null;
@@ -5757,7 +5791,7 @@
       part: res.part, result: res, map: (x.sec.pins && x.sec.pins.map) || {}, view: ui.pinView || 'package',
       canEdit: !HIST.compare.isCopy(p),
       onView: function (v) { ui.pinView = v; saveUi(); },
-      onPick: function (pad, fn, req, gpio) { specPinsMap(function (m) { return PIN.pick(m, pinMemo.res, pinMemo.res.part, pad, fn, req, gpio); }); },
+      onPick: function (pad, fn, req, gpio) { var r0 = pinRes(id); if (r0) specPinsMap(function (m) { return PIN.pick(m, r0, r0.part, pad, fn, req, gpio); }); },
       onUnpick: function (pad) { specPinsMap(function (m) { return PIN.unpick(m, pad); }); },
       onFix: function (reqId) { specPinsFix(reqId); }
     });
@@ -5783,7 +5817,7 @@
   }
   function specPinsMap(fn) {
     var p = current(), cur = p && pinFull && (p.spec || {})[pinFull.id];
-    if (!cur || !pinMemo.res) return;
+    if (!cur || !pinRes(pinFull.id)) return;
     var pins = Object.assign({}, cur.pins || {}), map = fn(pins.map || {});
     if (Object.keys(map).length) pins.map = map; else delete pins.map;
     specPutAll(p, [M.specStamp(Object.assign({}, cur, { pins: pins }), me())]);
@@ -5809,7 +5843,8 @@
   // A label the part can't do, rewritten as the planner suggests ("DAC2" as "DAC1 OUT2"), in whichever block's
   // Connects line holds it.
   function specPinsFix(reqId) {
-    var p = current(), r = pinMemo.res && pinMemo.res.reqs.filter(function (q) { return q.id === reqId; })[0];
+    var p = current(), r = null;
+    Object.keys(pinCache).forEach(function (k) { (pinCache[k].res.reqs || []).forEach(function (q) { if (!r && q.id === reqId) r = q; }); });
     if (!p || !r || !r.fix) return;
     var c = r.users[0].conn, from = (p.spec || {})[c.from];
     if (!from) return;
