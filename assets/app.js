@@ -5424,6 +5424,7 @@
       if (!o) return 'adding ' + title(ids[0]);
       if (r.deleted && !o.deleted) return 'deleting ' + title(ids[0]);
       if (o.title !== r.title && o.body === r.body) return 'renaming ' + (o.title || 'Untitled') + ' to ' + title(ids[0]);
+      if (o.title === r.title && o.body === r.body && JSON.stringify(o.pins || null) !== JSON.stringify(r.pins || null)) return 'the pin change on ' + title(ids[0]);
       return 'the change to ' + title(ids[0]);
     }
     var added = ids.filter(function (k) { return !e.old[k]; }).length;
@@ -5461,10 +5462,11 @@
     try { specPutAll(p, recs); } finally { specHistOff = false; }
     to.push({ old: was, cur: now, at: 0, label: e.label });
     renderPage();
+    specPinsRefresh();
     toast((back ? 'Undone: ' : 'Redone: ') + e.label, { label: back ? 'Redo' : 'Undo', run: function () { specHistStep(!back); } });
     // Show where it happened.
     var live = recs.filter(function (r) { return !r.deleted; })[0];
-    if (live && ui.specView !== 'map') {
+    if (live && ui.specView !== 'map' && !pinFull) {
       var el = document.getElementById('spec-' + live.id);
       if (el) { specScrollTo(el, 'start'); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
     }
@@ -5697,11 +5699,11 @@
   function pinPlan(a, x) {
     var copy = x.sec.pins && x.sec.pins.part;
     if (!copy) return null;
-    var conns = M.specMcuConns(a, x.sec.id), map = (x.sec.pins && x.sec.pins.map) || {};
-    var key = x.sec.id + '|' + JSON.stringify([copy.mpn, copy.from || null, copy.pins.length]) + '|' + JSON.stringify(conns.map(function (c) { return [c.id, c.label, c.dir, c.block]; })) + '|' + JSON.stringify(map);
+    var conns = M.specMcuConns(a, x.sec.id), map = (x.sec.pins && x.sec.pins.map) || {}, types = (x.sec.pins && x.sec.pins.types) || {};
+    var key = x.sec.id + '|' + JSON.stringify([copy.mpn, copy.from || null, copy.pins.length]) + '|' + JSON.stringify(conns.map(function (c) { return [c.id, c.label, c.dir, c.block]; })) + '|' + JSON.stringify(map) + '|' + JSON.stringify(types);
     var c = pinCache[x.sec.id];
     if (!c || c.key !== key) {
-      var part = PIN.part(copy), res = PIN.plan(part, conns, map);
+      var part = PIN.part(copy), res = PIN.plan(part, conns, map, types);
       res.part = part; res.conns = conns;
       c = pinCache[x.sec.id] = { key: key, res: res };
     }
@@ -5748,7 +5750,7 @@
         (pins ? '<div class="spec-pins-pins">' + pins + '</div>' : '') + (lines ? '<ul class="spec-pins-why">' + lines + '</ul>' : '') +
         (r.fix ? '<button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-fix" data-req="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';
     }).join('') + res.stray.map(function (st) {
-      return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">Picked on the pin, but no connection asks for it: not in Scribe.</li></ul></div>';
+      return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">You picked this function on the pin, but no connection to the MCU asks for it.</li></ul></div>';
     }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
     return html + (window.SignoffPinView ? '<div class="spec-acts" style="margin-top:10px"><button class="btn" data-act="spec-pins-map">Open pin map</button>' + (lib && pinEditorOn() ? '<button class="btn btn-plain" data-act="spec-part-edit">Edit part…</button>' : '') + '</div>' : '') +
       '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
@@ -5788,21 +5790,37 @@
     wrap.className = 'pv-full';
     wrap.setAttribute('role', 'dialog');
     wrap.setAttribute('aria-modal', 'true');
-    wrap.innerHTML = '<div class="pv-full-head"><div><div class="eyebrow">Pin map</div><h2 class="pv-full-title"></h2></div><button class="icon-btn" data-pv-close aria-label="Close">' + ICON.close + '</button></div><div class="pv-full-body"></div>';
+    wrap.innerHTML = '<div class="pv-full-head"><div><div class="eyebrow">Pin map</div><h2 class="pv-full-title"></h2></div><span class="pv-full-tools"><span class="pv-full-hist"></span><button class="icon-btn" data-pv-close aria-label="Close">' + ICON.close + '</button></span></div><div class="pv-full-body"></div>';
     document.body.appendChild(wrap);
     document.body.classList.add('pv-open');
     var view = window.SignoffPinView.mount(wrap.querySelector('.pv-full-body'), {
       part: res.part, result: res, map: (x.sec.pins && x.sec.pins.map) || {}, view: ui.pinView || 'package',
       canEdit: !HIST.compare.isCopy(p),
       onView: function (v) { ui.pinView = v; saveUi(); },
-      onPick: function (pad, fn, req, gpio) { var r0 = pinRes(id); if (r0) specPinsMap(function (m) { return PIN.pick(m, r0, r0.part, pad, fn, req, gpio); }); },
-      onUnpick: function (pad) { specPinsMap(function (m) { return PIN.unpick(m, pad); }); },
+      onPick: function (pad, fn, req, gpio) { var r0 = pinRes(id); if (r0) specPinsMap(function (m) { return PIN.pick(m, r0, r0.part, pad, fn, req, gpio); }, 'Picked ' + (fn || 'GPIO') + ' on ' + pinName(r0, pad, gpio)); },
+      onUnpick: function (pad) { var r0 = pinRes(id); specPinsMap(function (m) { return PIN.unpick(m, pad); }, 'Removed your pick on ' + pinName(r0, pad)); },
+      // A connection's picks all at once: the planner places it again.
+      // A connection's Type, over its label: the old requirement's picks go (they were for the other type).
+      onType: function (reqId, keys, val) {
+        specPinsEdit(function (pins) {
+          var t = Object.assign({}, pins.types || {}), m = {};
+          keys.forEach(function (k) { if (val) t[k] = val; else delete t[k]; });
+          Object.keys(pins.map || {}).forEach(function (k) { if (pins.map[k].req !== reqId) m[k] = pins.map[k]; });
+          return Object.assign({}, pins, { types: t, map: m });
+        }, val ? 'Set the type to ' + val : 'The type comes from the label again');
+      },
+      onClear: function (reqId) { specPinsMap(function (m) { var o = {}; Object.keys(m).forEach(function (k) { if (m[k].req !== reqId) o[k] = m[k]; }); return o; }, 'Cleared your picks'); },
       onFix: function (reqId) { specPinsFix(reqId); }
     });
-    wrap.addEventListener('click', function (e) { if (e.target.closest('[data-pv-close]')) specPinsClose(); });
+    wrap.addEventListener('click', function (e) {
+      if (e.target.closest('[data-pv-close]')) { specPinsClose(); return; }
+      var hb = e.target.closest('.pv-full-hist [data-act]');
+      if (hb && !hb.disabled) { e.stopPropagation(); specHistStep(hb.dataset.act === 'spec-undo'); }
+    });
     pinFull = { id: id, wrap: wrap, view: view };
     specPinsRefresh();
   }
+  function pinName(res, pad, gpio) { var q = res && res.part.byNum[pad]; return (gpio || (q ? q.names[0] : '')) + ' (pin ' + pad + ')'; }
   function specPinsClose() {
     if (!pinFull) return;
     pinFull.view.destroy();
@@ -5818,14 +5836,20 @@
     if (!res) { specPinsClose(); return; }
     pinFull.wrap.querySelector('.pv-full-title').textContent = x.sec.title + ' · ' + [res.part.meta.mpn, res.part.meta.package].filter(Boolean).join(', ');
     pinFull.view.update({ part: res.part, result: res, map: (x.sec.pins && x.sec.pins.map) || {} });
+    pinFull.wrap.querySelector('.pv-full-hist').innerHTML = HIST.compare.isCopy(p) ? '' : specHistHtml(p);   // Back and Forward, as on Scribe's toolbar
   }
-  function specPinsMap(fn) {
+  function specPinsMap(fn, what) {
+    specPinsEdit(function (pins) { return Object.assign({}, pins, { map: fn(pins.map || {}) }); }, what);
+  }
+  // Any change to the block's pins record (picks, types), as one Scribe edit with Undo.
+  function specPinsEdit(fn, what) {
     var p = current(), cur = p && pinFull && (p.spec || {})[pinFull.id];
     if (!cur || !pinRes(pinFull.id)) return;
-    var pins = Object.assign({}, cur.pins || {}), map = fn(pins.map || {});
-    if (Object.keys(map).length) pins.map = map; else delete pins.map;
+    var pins = fn(Object.assign({}, cur.pins || {}));
+    ['map', 'types'].forEach(function (k) { if (!pins[k] || !Object.keys(pins[k]).length) delete pins[k]; });
     specPutAll(p, [M.specStamp(Object.assign({}, cur, { pins: pins }), me())]);
     specPinsRefresh();
+    if (what) toast(what, { label: 'Undo', run: function () { specHistStep(true); } });
   }
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !pinFull) return;

@@ -849,7 +849,8 @@
     if (pins) out.pins = pins;
     return out;
   }
-  // { part: <the part file's copy, specPinPart>, map: { '<pad>': { req, sig, fn, gpio } } }. Null when empty.
+  // { part: <the part file's copy, specPinPart>, map: { '<pad>': { req, sig, fn, gpio } }, types: { '<conn id>#<item>': 'I2C' } }.
+  // Null when empty.
   function specPins(v) {
     if (!v || typeof v !== 'object') return null;
     var out = {}, part = specPinPart(v.part), map = {}, n = 0;
@@ -862,6 +863,14 @@
       if (e.sig || e.fn) { map[k] = e; n++; }
     });
     if (n) out.map = map;
+    // Types set in the pin map over a connection's label (2026-11-21): { '<conn id>#<item>': 'I2C' | 'I2C2' | … }.
+    var types = {}, nt = 0;
+    if (v.types && typeof v.types === 'object') Object.keys(v.types).forEach(function (k) {
+      var t = v.types[k];
+      if (nt >= 500 || k.length > 240 || !/^[^\s]+#\d+$/.test(k) || typeof t !== 'string' || !/^[A-Z][A-Z0-9]{0,15}$/.test(t)) return;
+      types[k] = t; nt++;
+    });
+    if (nt) out.types = types;
     return Object.keys(out).length ? out : null;
   }
   // The part file's copy kept with the plan, so everyone the review is shared with sees the same pins (Chris: copy

@@ -8,13 +8,13 @@
      map,                          // the picks the plan was made with ({ pad: { req, sig, fn, gpio } })
      view, sel,                    // which view ('package', 'block', 'ports', 'matrix', 'table'), selected requirement
      canEdit,                      // false: no picks, no fixes (the views still show everything)
-     onPick(pad, fn, reqId, gpio), onUnpick(pad), onFix(reqId), onView(view)
+     onPick(pad, fn, reqId, gpio), onUnpick(pad), onClear(reqId), onType(reqId, itemKeys, value), onFix(reqId), onView(view)
    });
    view.update({ part, result, map })   draws again, keeping the view and the selection
    view.destroy()
 
    A connection (requirement) in the list lights the pins it could use in every view; a pin opens its functions,
-   and a click on one is a pick for the requirement it serves (or for nothing: "not in Scribe"). Every state has a
+   and a click on one is a pick for the requirement it serves (or for none: a function no connection asks for). Every state has a
    mark or a pattern as well as a color (Chris is colorblind).
 */
 (function () {
@@ -52,7 +52,7 @@
       if (u.fn) return u.fn.full;
       return u.req.type === 'PINS' || u.req.type === 'GPIO' ? 'GPIO' : u.sig;
     }
-    const padFor = num => { const u = S.result.used[num]; return u && u.req ? u.req.users.map(x => x.block).join(', ') : u && u.stray ? 'not in Scribe' : ''; };
+    const padFor = num => { const u = S.result.used[num]; return u && u.req ? u.req.users.map(x => x.block).join(', ') : u && u.stray ? 'no connection' : ''; };
     const isCand = num => Object.prototype.hasOwnProperty.call(S.cand, num);
     const isMine = num => { const u = S.result.used[num]; return !!(u && u.req && u.req.id === S.sel); };
     const what = r => r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : '');
@@ -69,17 +69,29 @@
         (c.problems ? '<span class="pv-tag issue">✕ ' + c.problems + (c.problems === 1 ? ' problem' : ' problems') + '</span>' : '') +
         (c.warnings ? '<span class="pv-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
         (!c.problems && !c.warnings ? '<span class="pv-tag ok">✓ All placed</span>' : '');
+      const groups = P.typeOptions(S.part);
+      // Type: what the planner takes the connection to be, over the label (Chris, 2026-11-21: "Sense1_I2C" as I2C).
+      const typeSel = r => {
+        if (r.type === 'PINS' || !can() || !opts.onType) return '';
+        const sets = [...new Set(r.users.map(u => (u.item && u.item.set) || ''))], cur = sets.length === 1 ? sets[0] : '';
+        const o = (v, t) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>';
+        return '<label class="pv-type-l">Type <select class="pv-type" data-req="' + esc(r.id) + '" title="What the planner takes this connection to be; the label stays as written">' +
+          o('', cur ? 'From the label' : 'From the label (' + (r.inst || r.want || r.type) + ')') + o('GPIO', 'GPIO') +
+          groups.map(g => g.insts.length ? '<optgroup label="' + esc(TYPES[g.type].name || g.type) + '">' + o(g.type, g.type + ', any') + g.insts.map(i => o(i, i)).join('') + '</optgroup>' : o(g.type, g.type)).join('') +
+          '</select></label>';
+      };
       const rows = S.result.reqs.map(r => {
         const sev = sevOf(r);
         const pins = r.slots.slice().sort((a, b) => nat(a.sig, b.sig)).map(s => '<span class="pv-pin' + (s.lock ? ' lock' : '') + '">' + esc(s.gpio) + (s.sig && s.sig !== s.gpio && s.sig !== 'GPIO' ? ' <i>' + esc(s.sig) + '</i>' : '') + '</span>').join('');
         const notes = r.problems.map(t => '<li class="issue">' + esc(t.text) + '</li>').concat(r.notes.map(n => '<li class="' + esc(n.sev) + '">' + esc(n.text) + '</li>')).join('');
         return '<div class="pv-conn ' + sev + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
           '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(what(r)) + '</span><span class="pv-blocks">' + esc(r.users.map(u => u.block).join(', ')) + '</span></div>' +
-          '<div class="pv-conn-label">“' + esc(r.item.text || r.label) + '”' + (r.dir !== 'out' ? ' · ' + esc(r.dir) : '') + '</div>' +
+          '<div class="pv-conn-label">“' + esc(r.item.text || r.label) + '”' + (r.dir !== 'out' ? ' · ' + esc(r.dir) : '') + typeSel(r) + '</div>' +
           (pins ? '<div class="pv-pins">' + pins + '</div>' : '') + (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') +
-          (r.fix && can() && opts.onFix ? '<button class="btn btn-plain btn-sm pv-fix" data-fix="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';
+          (r.fix && can() && opts.onFix ? '<button class="btn btn-plain btn-sm pv-fix" data-fix="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') +
+          (r.slots.some(sl => sl.lock) && can() && opts.onClear ? '<button class="btn btn-plain btn-sm pv-fix" data-clear="' + esc(r.id) + '" title="Remove your picks for this connection; the planner places it again">Clear picks</button>' : '') + '</div>';
       }).join('');
-      const stray = S.result.stray.map(s => '<div class="pv-conn warn"><div class="pv-conn-top"><span class="pv-mark warn">▲</span><span class="pv-what">' + esc(s.fn) + '</span><span class="pv-blocks">' + esc((S.part.byNum[s.pad] || { names: [s.pad] }).names[0]) + '</span></div><div class="pv-conn-label">Picked on the pin, but no connection asks for it: not in Scribe.</div>' +
+      const stray = S.result.stray.map(s => '<div class="pv-conn warn"><div class="pv-conn-top"><span class="pv-mark warn">▲</span><span class="pv-what">' + esc(s.fn) + '</span><span class="pv-blocks">' + esc((S.part.byNum[s.pad] || { names: [s.pad] }).names[0]) + '</span></div><div class="pv-conn-label">You picked this function on the pin, but no connection to the MCU asks for it. The pin stays reserved for it.</div>' +
         (can() && opts.onUnpick ? '<button class="btn btn-plain btn-sm pv-fix" data-unpick="' + esc(s.pad) + '">Remove the pick</button>' : '') + '</div>').join('');
       $('.pv-conns').innerHTML = rows + stray || '<p class="pv-hint">No connections yet. Connect blocks to the MCU, naming the interface: IMU (I2C1), Wi-Fi module (UART).</p>';
     }
@@ -258,7 +270,7 @@
       const mine = fam => (r && TYPES[r.type] && (TYPES[r.type].fams || []).includes(fam) ? 0 : 1);
       const items = Object.keys(groups).sort((a, b) => mine(a) - mine(b) || nat(a, b)).map(fam => '<div class="pv-pop-g">' + esc(fam) + '</div>' + groups[fam].map(c => {
         const f = c.fn, q = c.req, on = u && u.fn && u.fn.full === f.full && u.fn.gpio === f.gpio;
-        return '<button class="pv-pop-i' + (on ? ' on' : '') + (q ? ' fit' : '') + '" data-fn="' + esc(f.full) + '" data-gpio="' + esc(f.gpio) + '" data-req="' + (q ? esc(q.id) : '') + '"' + (can() ? '' : ' disabled') + '><span>' + esc(f.full) + (p.bonded ? ' <small>[' + esc(f.gpio) + ']</small>' : '') + '</span><small>' + (f.af != null ? 'AF' + f.af : 'analog or extra') + (q ? ' · ' + esc(q.users[0].block) : ' · not in Scribe') + '</small></button>';
+        return '<button class="pv-pop-i' + (on ? ' on' : '') + (q ? ' fit' : '') + '" data-fn="' + esc(f.full) + '" data-gpio="' + esc(f.gpio) + '" data-req="' + (q ? esc(q.id) : '') + '"' + (can() ? '' : ' disabled') + '><span>' + esc(f.full) + (p.bonded ? ' <small>[' + esc(f.gpio) + ']</small>' : '') + '</span><small>' + (f.af != null ? 'AF' + f.af : 'analog or extra') + (q ? ' · for ' + esc(q.users[0].block) : ' · no connection uses it') + '</small></button>';
       }).join('')).join('');
       const gpio = r && (r.type === 'GPIO' || r.type === 'PINS') && p.gpio && can() ? '<button class="pv-pop-i fit" data-fn="" data-req="' + esc(r.id) + '"><span>GPIO</span><small>' + esc(r.users[0].block) + '</small></button>' : '';
       pop.innerHTML = '<div class="pv-pop-h"><b>' + esc(p.num) + ' · ' + esc(p.names.join(' / ')) + '</b>' + (p.also ? ' <span class="pv-dim">' + esc(p.also) + '</span>' : '') +
@@ -280,6 +292,7 @@
 
     function onClick(e) {
       const t = e.target;
+      if (t.closest('.pv-type-l')) return;                       // the Type list, not the row
       if (t.closest('.pv-pop')) {
         const b = t.closest('button'); if (!b || b.disabled) return;
         const num = pop.dataset.pad;
@@ -293,6 +306,8 @@
       if (vb) { S.view = vb.dataset.view; closePop(); render(); if (opts.onView) opts.onView(S.view); return; }
       const fx = t.closest('[data-fix]');
       if (fx) { if (opts.onFix) opts.onFix(fx.dataset.fix); return; }
+      const cl = t.closest('[data-clear]');
+      if (cl) { if (opts.onClear) opts.onClear(cl.dataset.clear); return; }
       const up = t.closest('[data-unpick]');
       if (up) { if (opts.onUnpick) opts.onUnpick(up.dataset.unpick); return; }
       const padEl = t.closest('.pv-view [data-pad]');
@@ -305,7 +320,14 @@
       if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pv-conn')) e.target.click();
       if (e.key === 'Escape' && !pop.hidden) { closePop(); e.stopPropagation(); }
     }
+    function onChange(e) {
+      const sel = e.target.closest && e.target.closest('select.pv-type');
+      if (!sel || !opts.onType) return;
+      const r = S.result.reqs.find(q => q.id === sel.dataset.req);
+      if (r) opts.onType(r.id, r.users.map(u => u.key), sel.value);
+    }
     root.addEventListener('click', onClick);
+    root.addEventListener('change', onChange);
     root.addEventListener('keydown', onKey);
     const outside = e => { if (!root.contains(e.target)) closePop(); };
     document.addEventListener('mousedown', outside);
@@ -321,7 +343,7 @@
       },
       state() { return { view: S.view, sel: S.sel }; },
       closePop,
-      destroy() { root.removeEventListener('click', onClick); root.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', outside); root.innerHTML = ''; },
+      destroy() { root.removeEventListener('click', onClick); root.removeEventListener('keydown', onKey); root.removeEventListener('change', onChange); document.removeEventListener('mousedown', outside); root.innerHTML = ''; },
     };
   }
 

@@ -11,9 +11,12 @@
 
      part(file)                     → the part, read for planning ({ meta, pads, insts, byName, byNum })
      parseLabel(label)              → { dir, items: [{ type, inst, sig, count, pins, guessed, extra, text }] }
-     plan(part, conns, map)         → { reqs, used, stray, counts }
+     plan(part, conns, map, types)  → { reqs, used, stray, counts }
          conns: [{ id, block, label, dir? }]   one per Scribe connection into or out of the MCU block
          map:   { "<pad num>": { req, sig, fn } }   the person's picks (locks), as stored on the section
+         types: { "<conn id>#<item>": "I2C" | "I2C2" | "GPIO" | … }   a type set in the pin map, over the label's
+                (Chris, 2026-11-21: "Sense1_I2C" set to I2C); the label stays as written
+     typeOptions(part)              → [{ type, insts }]   what the pin map's Type list offers: the part's own
      candidates(part, req, used)    → { "<pad num>": { f, taken } }   pads that could serve a requirement
      choices(part, result, pad)     → [{ fn, req }]   what a pad could do, and for which requirement
      pick(map, result, part, pad, fn, reqId) → a new map with that pick (and the bus's other picks kept in step)
@@ -111,16 +114,33 @@
     return { dir, items: items.length ? items : [{ type: 'GPIO', guessed: true, inst: null, sig: null, count: 1, extra: [], text: '', pins: null }] };
   }
 
+  // A type set in the pin map: a TYPES name ("I2C", "GPIO") or one of its instances ("I2C2", "TIM14").
+  function typeOf(v) {
+    v = String(v || '').toUpperCase();
+    if (TYPES[v] && v !== 'PINS') return { type: v, inst: null };
+    const fam = /\d$/.test(v) ? famOf(v) : '';                     // I2C1 → I2C, TIM14 → TIM
+    const t = fam && Object.keys(TYPES).find(k => (TYPES[k].fams || []).includes(fam));
+    return t ? { type: t, inst: v } : null;
+  }
+  function setType(it, v) {
+    const t = typeOf(v);
+    if (!t || it.type === 'PINS') return it;
+    return Object.assign({}, it, { type: t.type, inst: t.inst, sig: TYPES[t.type].bus ? null : it.sig, guessed: false, signal: false, extra: [], set: v,
+      count: TYPES[t.type].bus ? 1 : it.count });
+  }
+
   // One requirement per interface; a bus label on several blocks is one requirement.
-  function requirements(conns) {
+  function requirements(conns, types) {
     const reqs = [], byKey = {};
     (conns || []).forEach(c => {
       const parsed = parseLabel(c.label);
       const dir = c.dir || parsed.dir;
-      parsed.items.forEach((it, ii) => {
+      parsed.items.forEach((it0, ii) => {
+        const ikey = String(c.id) + '#' + ii;
+        const it = types && types[ikey] ? setType(it0, types[ikey]) : it0;
         const T = TYPES[it.type];
         const key = T.bus ? it.type + '|' + (it.inst || it.text.toLowerCase()) : null;
-        const user = { block: c.block, id: c.id, conn: c };
+        const user = { block: c.block, id: c.id, conn: c, key: ikey, item: it };
         if (key && byKey[key]) { byKey[key].users.push(user); return; }
         const r = { id: key ? 'bus:' + key : String(c.id) + '#' + ii, key, type: it.type, item: it, label: c.label, dir,
           users: [user], slots: [], problems: [], notes: [], inst: null, fix: null, dead: false };
@@ -154,6 +174,7 @@
   function check(part, r) {
     const T = TYPES[r.type];
     const it = r.item;
+    if (it.set) r.notes.push({ sev: 'info', code: 'set', text: `Type set in the pin map: ${it.set}.` });
     if (it.signal) r.notes.push({ sev: 'info', code: 'signal', text: `“${it.text}” is a signal name: planned as ${it.count > 1 ? it.count + ' GPIOs' : 'one GPIO'}.` });
     if (it.guessed) r.notes.push({ sev: 'warn', code: 'guessed', text: `“${it.text}” names no interface; planned as ${it.count > 1 ? it.count + ' GPIOs' : 'one GPIO'}.` });
     else if (it.extra.length) r.notes.push({ sev: 'info', code: 'extra', text: `Read past: ${it.extra.join(' ')}.` });
@@ -174,8 +195,8 @@
     } else r.problems.push({ code: 'no-instance', text: `No ${it.inst} on this part. It has ${have.join(', ')}.` });
   }
 
-  function plan(part, conns, map) {
-    const reqs = requirements(conns);
+  function plan(part, conns, map, types) {
+    const reqs = requirements(conns, types);
     const used = {}, claimed = {};
     const take = (pad, r, sig, fn, lock) => {
       used[pad.num] = { req: r, sig, fn, lock: !!lock };
@@ -226,7 +247,8 @@
       return;
     }
     if (r.type === 'GPIO') {
-      const need = it.count - r.slots.length;
+      const need = Math.max(0, it.count - r.slots.length);   // never negative: slice(0, -1) would take every free pin
+      over(r);
       const pads = part.pads.filter(p => p.gpio && p.role === 'io' && !used[p.num]).sort((a, b) => cost(a) - cost(b) || nat(a.num, b.num));
       pads.slice(0, need).forEach(p => take(p, r, 'GPIO', null));
       if (pads.length < need) r.problems.push({ code: 'short', text: `Only ${pads.length} free GPIO left for ${need}.` });
@@ -264,11 +286,18 @@
       return;
     }
     // Channels (ADC, DAC, timer, touch): any instance unless named, distinct pads.
-    const need = it.count - r.slots.length;
+    const need = Math.max(0, it.count - r.slots.length);
+    over(r);
     const okFn = f => T.fams.includes(f.fam) && T.pat.test(f.sig) && (!r.want || f.inst === r.want) && (!it.sig || f.sig === it.sig);
     const pads = part.pads.filter(p => !used[p.num] && p.fns.some(okFn)).sort((a, b) => cost(a) - cost(b) || nat(a.num, b.num));
     pads.slice(0, need).forEach(p => { const f = p.fns.find(okFn); take(p, r, f.sig, f); });
     if (pads.length < need) r.problems.push({ code: 'short', text: `Only ${pads.length} free ${r.type} ${T.one}${pads.length === 1 ? '' : 's'} for ${need}.` });
+  }
+
+  // More picks than the label asks for (a pin picked to move one, before the old pick came off): keep them, and say so.
+  function over(r) {
+    const n = r.slots.length, want = r.item.count;
+    if (n > want) r.notes.push({ sev: 'warn', code: 'over', text: `${n} pins picked, but “${r.item.text || r.label}” asks for ${want}. Remove a pick (click the pin, then Let the planner choose), or Clear picks.` });
   }
 
   function sevOf(r) { return r.problems.length ? 'issue' : r.notes.some(n => n.sev === 'warn') ? 'warn' : 'ok'; }
@@ -305,7 +334,7 @@
     });
   }
 
-  // A pick: the pad takes that function for that requirement (or for nothing: "not in Scribe"). A bus pick
+  // A pick: the pad takes that function for that requirement (or for none: a function no connection asks for). A bus pick
   // moves the bus onto that instance, so its picks on other instances go; one pick per signal.
   function pick(map, result, part, num, fnFull, reqId, gpio) {
     const out = Object.assign({}, map);
@@ -324,7 +353,13 @@
     if (f && f.gpio !== pad.names[0]) out[num].gpio = f.gpio;
     return out;
   }
+  // The Type list: GPIO, then each kind of peripheral the part has, with its instances.
+  function typeOptions(part) {
+    // SWD's block is SYS, and USB's instance is USB itself: those list the type alone.
+    return Object.keys(TYPES).filter(k => TYPES[k].fams).map(k => ({ type: k, all: instsOf(part, TYPES[k]) })).filter(g => g.all.length)
+      .map(g => ({ type: g.type, insts: g.type === 'SWD' ? [] : g.all.filter(i => i !== g.type) }));
+  }
   function unpick(map, num) { const out = Object.assign({}, map); delete out[num]; return out; }
 
-  root.SignoffPinmap = { TYPES, FIXED, part, parseFn, parseLabel, requirements, plan, candidates, choices, pick, unpick, sevOf, serves, portOf, baseName, nat };
+  root.SignoffPinmap = { TYPES, FIXED, part, parseFn, parseLabel, requirements, plan, typeOptions, typeOf, candidates, choices, pick, unpick, sevOf, serves, portOf, baseName, nat };
 })(typeof window !== 'undefined' ? window : globalThis);
