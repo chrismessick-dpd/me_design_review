@@ -4426,7 +4426,7 @@
   // dot drags along the line too, and the leader follows both live (labelLead).
   function pill(x, y, text, drag, tag) {
     var plain = text;                            // the label alone: the draw.io export reads it, never the marks
-    if (tag && tag.text) text = text + ' · ' + tag.text;
+    if (tag && tag.text) text = text + ' ' + tag.text;
     var w = Math.min(tag ? 230 : 150, 14 + text.length * 6.6), an = drag && drag.anchor, off = an && Math.hypot(an.x - x, an.y - y) > 12;
     var lead = drag ? '<path class="spec-lead" d="M' + x + ' ' + y + ' L' + (an ? an.x + ' ' + an.y : x + ' ' + y) + '"' + (off ? '' : ' style="display:none"') + '/>' +
       '<g class="spec-lead-dot"' + (off ? '' : ' style="display:none"') + '><title>Drag along the line to move where the label points</title>' +
@@ -4648,7 +4648,7 @@
           var worst = tags.filter(Boolean).map(function (t) { return t.sev; }).sort(function (s1, s2) { return ['issue', 'warn', 'ok'].indexOf(s1) - ['issue', 'warn', 'ok'].indexOf(s2); })[0];
           tag = { sev: worst, text: tags.map(function (t) { return t ? t.text : ''; }).filter(Boolean).join(' / '), title: tags.map(function (t) { return t ? t.title : ''; }).filter(Boolean).join(' ') };
         }
-        var kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt + (tag ? ' · ' + tag.text : ''));
+        var kept = keptLabel(L.src.a, key, rt) || labelAt(rt, lt + (tag ? ' ' + tag.text : ''));
         svg += pill(kept.q.x, kept.q.y, lt, { from: L.src.a, key: key, d: rt.cd, anchor: kept.anchor, t: kept.t, line: l.key }, tag);
       }
     });
@@ -5765,13 +5765,17 @@
       var res = x.sec.pins && x.sec.pins.part ? pinPlan(a, x) : null;
       if (!res) return;
       res.reqs.forEach(function (r) {
-        var sev = PIN.sevOf(r), inst = r.type === 'PINS' ? '' : r.inst || r.want || '';
-        var pins = r.type === 'PINS' ? '' : r.slots.map(function (sl) { return sl.gpio; }).sort(PIN.nat).join('/');
+        var sev = PIN.sevOf(r);
+        if (sev === 'ok') return;                 // Chris, 2026-11-21: the label shows the net name only, no peripheral or pins
+        var why = r.problems.map(function (q) { return q.text; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return n.text; })).join(' ');
         r.users.forEach(function (u) {
-          var lab = String(u.conn.label || '');
-          var bits = [inst && inst.toLowerCase() !== lab.toLowerCase() ? inst : '', pins].filter(Boolean).join(' ');
-          var text = sev === 'issue' ? '✕ ' + (r.problems[0] && r.problems[0].code === 'no-type' ? 'not on ' + res.part.meta.mpn : r.problems[0] && r.problems[0].code === 'no-instance' ? 'no ' + (r.item.inst || r.type) : 'no room') : (sev === 'warn' ? '▲ ' : '') + bits;
-          [u.conn.from + '|' + u.conn.to, u.conn.to + '|' + u.conn.from].forEach(function (k) { out[k + '|' + lab.toLowerCase()] = { sev: sev, text: text, title: r.problems.map(function (q) { return q.text; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return n.text; })).join(' ') }; });
+          var lab = String(u.conn.label || '').toLowerCase();
+          // An entry with several signals ("I2C2 + ALERT") has a requirement each: the line keeps the worst.
+          [u.conn.from + '|' + u.conn.to, u.conn.to + '|' + u.conn.from].forEach(function (k) {
+            var key = k + '|' + lab, was = out[key];
+            if (was && (was.sev === 'issue' || sev === 'warn')) { was.title += ' ' + why; return; }
+            out[key] = { sev: sev, text: sev === 'issue' ? '✕' : '▲', title: (was ? was.title + ' ' : '') + why };
+          });
         });
       });
     });
