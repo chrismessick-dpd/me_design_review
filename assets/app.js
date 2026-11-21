@@ -5680,6 +5680,8 @@
     if (pinLib.list || pinLib.loading || !window.PK || !window.PK.library) return;
     pinLib.loading = true;
     window.PK.DEMO = !!DEMO;                    // before the library first opens its database: ?demo reads pincheck-demo
+    window.PK.tokenSource = getToken;            // the library syncs with pincheck_data on EE's sign-in
+    window.PK.toast = function (t) { toast(t); };
     window.PK.library.all().then(function (l) {
       pinLib.list = (l || []).filter(function (f) { return f && Array.isArray(f.pins) && f.pins.length && !(f.local && f.local.conflictOf); });
     }, function () { pinLib.list = []; }).then(function () { pinLib.loading = false; if (selected && specBlockSel()) renderInspector(); });
@@ -5716,10 +5718,11 @@
     if (!x.part && !copy) return html;
     html += '<div class="field spec-pins"><span class="field-label">Pins</span>';
     if (!copy) {
-      if (lib && pinIsMcu(lib)) html += '<p class="note" style="margin:0 0 8px">' + esc(lib.mpn) + ' is in the part library. A pin plan checks this block’s connections against its pins and alternate functions, and places them.</p><button class="btn btn-sm" data-act="spec-pins-start">Start a pin plan</button>';
-      else if (lib) html += '<p class="note" style="margin:0">' + esc(lib.mpn) + ' is in the part library, but not as an MCU: its pins list no alternate functions.</p>';
+      if (lib && pinIsMcu(lib)) html += '<p class="note" style="margin:0 0 8px">' + esc(lib.mpn) + ' is in the part library. A pin plan checks this block’s connections against its pins and alternate functions, and places them.</p><div class="spec-acts"><button class="btn btn-sm" data-act="spec-pins-start">Start a pin plan</button>' + (pinEditorOn() ? '<button class="btn btn-sm btn-plain" data-act="spec-part-edit">Edit part…</button>' : '') + '</div>';
+      else if (lib) html += '<p class="note" style="margin:0 0 8px">' + esc(lib.mpn) + ' is in the part library, but not as an MCU: its pins list no alternate functions.' + (pinEditorOn() ? ' Add them in the part window (Import from CubeMX… for an STM32).' : '') + '</p>' + (pinEditorOn() ? '<div class="spec-acts"><button class="btn btn-sm" data-act="spec-part-edit">Edit part…</button></div>' : '');
       else if (fte && pinLib.loading) html += '<p class="note" style="margin:0">Looking in the part library…</p>';
-      else if (fte) html += '<p class="note" style="margin:0">' + esc(x.part) + ' isn’t in the part library in this browser. Make or sync it in <a href="../pincheck/' + (DEMO ? '?demo' : '') + '">Pincheck</a> (Import from CubeMX… for an STM32), then come back.</p>';
+      else if (fte) html += '<p class="note" style="margin:0 0 8px">' + esc(x.part) + ' isn’t in the part library in this browser.' + (pinEditorOn() ? ' Make it here: the part window is Pincheck’s, and for an STM32 its Import from CubeMX… reads the pins and alternate functions from STM32CubeMX on this computer.' : ' Make it in <a href="../pincheck/' + (DEMO ? '?demo' : '') + '">Pincheck</a>, then come back.') + '</p>' +
+        '<div class="spec-acts">' + (pinEditorOn() ? '<button class="btn btn-sm" data-act="spec-part-new">New part…</button>' : '') + (DEMO ? '' : '<button class="btn btn-sm btn-plain" data-act="spec-part-sync">' + (pinLib.syncing ? 'Syncing…' : 'Sync the part library') + '</button>') + '</div>';
       else html += '<p class="note" style="margin:0">No pin plan yet.</p>';
       return html + '</div>';
     }
@@ -5746,7 +5749,7 @@
     }).join('') + res.stray.map(function (st) {
       return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">Picked on the pin, but no connection asks for it: not in Scribe.</li></ul></div>';
     }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
-    return html + (window.SignoffPinView ? '<div class="spec-acts" style="margin-top:10px"><button class="btn" data-act="spec-pins-map">Open pin map</button></div>' : '') +
+    return html + (window.SignoffPinView ? '<div class="spec-acts" style="margin-top:10px"><button class="btn" data-act="spec-pins-map">Open pin map</button>' + (lib && pinEditorOn() ? '<button class="btn btn-plain" data-act="spec-part-edit">Edit part…</button>' : '') + '</div>' : '') +
       '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
   }
   // Marks on the diagram's lines (Chris, 2026-11-20): a connection an MCU block's plan covers shows its peripheral and
@@ -5829,6 +5832,41 @@
     var pop = pinFull.wrap.querySelector('.pv-pop');
     if (pop && !pop.hidden) pinFull.view.closePop(); else specPinsClose();
   }, true);
+  // Pincheck's part window (../pincheck/assets/editor.js, PK.editor; Chris, 2026-11-20: one part maker for both
+  // tools): New part… for a part number the library lacks, Edit part… for one it has. A save goes into the shared
+  // library in this browser (IndexedDB `pincheck`, Pincheck's own) and syncs to pincheck_data on EE's sign-in, so the
+  // part is in Pincheck at once and everywhere after the sync. FTEs only.
+  function pinEditorOn() { return !!(window.PK && window.PK.editor && window.PK.library) && (isFte() || !!DEMO); }
+  function specPartOpen(isNew) {
+    var p = current(), id = specBlockSel(), a = p && M.specAnalysis(p), x = a && a.sections.filter(function (y) { return y.sec.id === id; })[0];
+    if (!x || !x.part || !pinEditorOn()) return;
+    var L = window.PK.library, now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    var file = isNew ? { schema: L.SCHEMA, id: L.slug(x.part), mpn: x.part, match: [], manufacturer: '', kind: 'mcu', description: '', package: '',
+      datasheet: { title: '', rev: '', url: '', sha256: '' }, pins: [], domains: ['VDD'], values: [], status: 'imported',
+      made: { by: settings.login ? '@' + settings.login : me(), at: now, how: 'by hand (Signoff EE)' }, updated: now } : pinLibFind(x.part);
+    if (!file) return;
+    window.PK.editor.open({
+      file: file, isNew: isNew, tab: 'pins', who: settings.login ? '@' + settings.login : me(),
+      onSave: function (f) {
+        var was = (pinLib.list || []).filter(function (g) { return g.id === f.id; })[0];
+        if (isNew && was && !confirm('A part file named ' + f.id + ' is in the library. Replace it?')) return;
+        f.local = was ? was.local : f.local;
+        L.save(f).then(function () { toast('Saved ' + f.mpn + ' to the part library'); pinLibReload(); pinLibSync(); }, function (e) { toast('Couldn’t save: ' + e.message); });
+      },
+      onDelete: function (f) { L.remove(f).then(function () { toast('Deleted ' + f.mpn); pinLibReload(); }, function (e) { toast(e.message); }); }
+    });
+  }
+  function pinLibReload() { pinLib.list = null; pinLib.loading = false; pinLibLoad(); }
+  // Pull parts made elsewhere and push this browser's edits (Pincheck's own sync, on EE's sign-in).
+  function pinLibSync() {
+    var L = window.PK && window.PK.library;
+    if (!L || DEMO || pinLib.syncing || !getToken()) return;
+    pinLib.syncing = true; if (selected && specBlockSel()) renderInspector();
+    L.sync().then(function (r) {
+      if (r && (r.pulled || r.pushed || r.conflicts)) toast('Part library: ' + [r.pulled ? r.pulled + ' read' : '', r.pushed ? r.pushed + ' saved to pincheck_data' : '', r.conflicts ? r.conflicts + ' in conflict (open Pincheck to resolve)' : ''].filter(Boolean).join(', '));
+    }, function (e) { toast('Part library didn’t sync: ' + e.message); }).then(function () { pinLib.syncing = false; pinLibReload(); });
+  }
+
   // Start a plan, or refresh its copy: the library's file, stripped to what the planner reads, onto the section.
   function specPinsStart() {
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id];
@@ -7794,6 +7832,9 @@
       case 'spec-pins-start': specPinsStart(); break;
       case 'spec-pins-fix': specPinsFix(el.dataset.req); break;
       case 'spec-pins-map': specPinsOpen(); break;
+      case 'spec-part-new': specPartOpen(true); break;
+      case 'spec-part-edit': specPartOpen(false); break;
+      case 'spec-part-sync': pinLibSync(); break;
       case 'spec-ctag-open': {
         var op2 = current(), oc = op2 && op2.comments[id];
         if (!oc) break;

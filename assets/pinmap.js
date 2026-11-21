@@ -97,6 +97,10 @@
       const body = cm ? cm[2] : chunk;
       const im = INST_RE.exec(body), sm = SIG_RE.exec(body);
       const words = body.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      // A net name (USB_LDO_EN, SPI_CS, I2C_INT) is one signal, not the interface a word in it names (Chris,
+      // 2026-11-20: USB_LDO_EN, an LDO's enable, was read as a second USB port).
+      if (!im && /^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+$/.test(body.trim()))
+        return { type: 'GPIO', guessed: false, signal: true, inst: null, sig: null, count, extra: [], text: chunk, pins: null };
       let type = null;
       if (im) type = Object.keys(TYPES).find(t => (TYPES[t].fams || []).includes(im[1].toUpperCase()));
       if (!type) type = Object.keys(TYPES).find(t => TYPES[t].words.some(w => words.includes(w)));
@@ -150,6 +154,7 @@
   function check(part, r) {
     const T = TYPES[r.type];
     const it = r.item;
+    if (it.signal) r.notes.push({ sev: 'info', code: 'signal', text: `“${it.text}” is a signal name: planned as ${it.count > 1 ? it.count + ' GPIOs' : 'one GPIO'}.` });
     if (it.guessed) r.notes.push({ sev: 'warn', code: 'guessed', text: `“${it.text}” names no interface; planned as ${it.count > 1 ? it.count + ' GPIOs' : 'one GPIO'}.` });
     else if (it.extra.length) r.notes.push({ sev: 'info', code: 'extra', text: `Read past: ${it.extra.join(' ')}.` });
     if (r.users.length > 1) r.notes.push({ sev: 'info', code: 'shared', text: `One bus for ${r.users.length} blocks.` });
