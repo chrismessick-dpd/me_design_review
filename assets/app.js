@@ -5735,8 +5735,66 @@
     }).join('') + res.stray.map(function (st) {
       return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">Picked on the pin, but no connection asks for it: not in Scribe.</li></ul></div>';
     }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
-    return html + '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
+    return html + (window.SignoffPinView ? '<div class="spec-acts" style="margin-top:10px"><button class="btn" data-act="spec-pins-map">Open pin map</button></div>' : '') +
+      '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
   }
+  // The full-window pin map (assets/pinview.js): the plan's five views. A pick on a pin is written to the section's
+  // pins.map (one Scribe edit, with Back), and the map draws again from the new plan.
+  var pinFull = null;
+  function specPinsOpen() {
+    var p = current(), id = specBlockSel(), a = p && M.specAnalysis(p), x = a && a.sections.filter(function (y) { return y.sec.id === id; })[0];
+    var res = x && pinPlan(a, x);
+    if (!res || !window.SignoffPinView) return;
+    specPinsClose();
+    var wrap = document.createElement('div');
+    wrap.className = 'pv-full';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.innerHTML = '<div class="pv-full-head"><div><div class="eyebrow">Pin map</div><h2 class="pv-full-title"></h2></div><button class="icon-btn" data-pv-close aria-label="Close">' + ICON.close + '</button></div><div class="pv-full-body"></div>';
+    document.body.appendChild(wrap);
+    document.body.classList.add('pv-open');
+    var view = window.SignoffPinView.mount(wrap.querySelector('.pv-full-body'), {
+      part: res.part, result: res, map: (x.sec.pins && x.sec.pins.map) || {}, view: ui.pinView || 'package',
+      canEdit: !HIST.compare.isCopy(p),
+      onView: function (v) { ui.pinView = v; saveUi(); },
+      onPick: function (pad, fn, req, gpio) { specPinsMap(function (m) { return PIN.pick(m, pinMemo.res, pinMemo.res.part, pad, fn, req, gpio); }); },
+      onUnpick: function (pad) { specPinsMap(function (m) { return PIN.unpick(m, pad); }); },
+      onFix: function (reqId) { specPinsFix(reqId); }
+    });
+    wrap.addEventListener('click', function (e) { if (e.target.closest('[data-pv-close]')) specPinsClose(); });
+    pinFull = { id: id, wrap: wrap, view: view };
+    specPinsRefresh();
+  }
+  function specPinsClose() {
+    if (!pinFull) return;
+    pinFull.view.destroy();
+    pinFull.wrap.remove();
+    pinFull = null;
+    document.body.classList.remove('pv-open');
+  }
+  // Draw the open pin map again from the current review (after a pick, a sync, an edit, or Back).
+  function specPinsRefresh() {
+    if (!pinFull) return;
+    var p = current(), a = p && specOn(p) ? M.specAnalysis(p) : null, x = a && a.sections.filter(function (y) { return y.sec.id === pinFull.id; })[0];
+    var res = x && pinPlan(a, x);
+    if (!res) { specPinsClose(); return; }
+    pinFull.wrap.querySelector('.pv-full-title').textContent = x.sec.title + ' · ' + [res.part.meta.mpn, res.part.meta.package].filter(Boolean).join(', ');
+    pinFull.view.update({ part: res.part, result: res, map: (x.sec.pins && x.sec.pins.map) || {} });
+  }
+  function specPinsMap(fn) {
+    var p = current(), cur = p && pinFull && (p.spec || {})[pinFull.id];
+    if (!cur || !pinMemo.res) return;
+    var pins = Object.assign({}, cur.pins || {}), map = fn(pins.map || {});
+    if (Object.keys(map).length) pins.map = map; else delete pins.map;
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, { pins: pins }), me())]);
+    specPinsRefresh();
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !pinFull) return;
+    e.stopPropagation(); e.preventDefault();
+    var pop = pinFull.wrap.querySelector('.pv-pop');
+    if (pop && !pop.hidden) pinFull.view.closePop(); else specPinsClose();
+  }, true);
   // Start a plan, or refresh its copy: the library's file, stripped to what the planner reads, onto the section.
   function specPinsStart() {
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id];
@@ -5759,7 +5817,8 @@
     if (!it) { toast('That connection changed; try again'); renderInspector(); return; }
     it.label = c.label.replace(r.fix.from, r.fix.to);
     specPutAll(p, [M.specStamp(Object.assign({}, from, { body: M.specSetLine(from.body, c.word, M.specLinkText(items)) }), me())]);
-    toast('Wrote ' + r.fix.to + ' on ' + from.title + '’s line.', { label: 'Undo', run: function () { specHistStep(true); } });
+    specPinsRefresh();
+    toast('Wrote ' + r.fix.to + ' on ' + from.title + '’s line.', { label: 'Undo', run: function () { specHistStep(true); specPinsRefresh(); } });
   }
 
   // The block panel's Within (Chris, 2026-11-20): the section the block is in, and a list to move it to another one
@@ -7699,6 +7758,7 @@
       case 'spec-block-label': specLinkLabel(el.dataset.word, el.dataset.name); break;
       case 'spec-pins-start': specPinsStart(); break;
       case 'spec-pins-fix': specPinsFix(el.dataset.req); break;
+      case 'spec-pins-map': specPinsOpen(); break;
       case 'spec-ctag-open': {
         var op2 = current(), oc = op2 && op2.comments[id];
         if (!oc) break;
@@ -8098,7 +8158,7 @@
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 
   // ── Boot ─────────────────────────────────────────────────
-  function render() { var f = focusNow(); renderSidebar(); renderSyncState(); drawPage(); drawInspector(); restoreFocus(f); }
+  function render() { var f = focusNow(); renderSidebar(); renderSyncState(); drawPage(); drawInspector(); restoreFocus(f); if (pinFull) specPinsRefresh(); }
 
   // Version comparison (assets/history.js): Restore this version puts back everything but the comments
   // (Chris, 2026-11-14), as new edits (model.restorePlan), and Undo in its toast puts it all back.
