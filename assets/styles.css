@@ -1165,6 +1165,11 @@ html.embed .compare-bar { display: none !important; }
 .spec-view-acts { position: absolute; top: 8px; right: 8px; z-index: 2; display: flex; gap: 6px; align-items: center; }
 .spec-view-tools { position: absolute; top: calc(8px + env(safe-area-inset-top)); left: calc(8px + env(safe-area-inset-left)); z-index: 2; display: flex; gap: 6px; align-items: center; }
 .spec-view-tools .chip { box-shadow: var(--shadow-sm); }
+/* Sync and Discard in the full-screen diagram's bar (Chris, 2026-11-20): the toolbar's buttons, compact, raised like
+   the bar's other buttons. */
+.spec-view-sync { display: flex; gap: 6px; }
+.spec-view-sync:empty { display: none; }
+.spec-view-sync .btn { height: 32px; padding: 0 10px; font-size: 13px; background: var(--bg-elev); border: 1px solid var(--hair-2); box-shadow: var(--shadow); }
 .spec-expand { width: 32px; height: 32px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--hair-2); box-shadow: var(--shadow); }
 .spec-expand svg { width: 16px; height: 16px; }
 .spec-map-card.expanded { position: fixed; inset: 0; z-index: 38; margin: 0; border-radius: 0; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }

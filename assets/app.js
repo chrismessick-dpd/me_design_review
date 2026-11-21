@@ -3721,7 +3721,8 @@
     var ex = specExpanded === card;
     return '<div class="card spec-map-card' + (ex ? ' expanded' : '') + '" data-card="' + card + '">' +
       (ex && tools ? '<div class="spec-view-tools">' + tools + '</div>' : '') +
-      '<div class="spec-view-acts">' + (ex ? '<button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
+      // Full screen, the page's Sync and Discard come along (Chris, 2026-11-20), left of Fit; none in the demo.
+      '<div class="spec-view-acts">' + (ex ? '<span class="spec-view-sync">' + syncButtons() + '</span><button class="chip" data-act="spec-fit" title="Show the whole diagram">Fit</button>' : '') +
       '<button class="icon-btn spec-expand" data-act="spec-export" title="Save the diagram as a picture or a PDF" aria-label="Export the diagram" aria-haspopup="menu">' + ICON_SAVE + '</button>' +
       '<button class="icon-btn spec-expand" data-act="spec-expand" data-card="' + card + '" title="' + (ex ? 'Back to the page (Esc)' : 'Expand the diagram: zoom and pan') + '" aria-label="' + (ex ? 'Collapse the diagram' : 'Expand the diagram') + '">' + (ex ? ICON_SHRINK : ICON_EXPAND) + '</button></div>' +
       (ex ? '<div class="spec-zoom-hint"><span class="hint-mouse">Scroll to zoom · middle or right drag to pan · Esc to close</span><span class="hint-touch">Pinch to zoom · drag empty space to pan</span></div>' : '') +
