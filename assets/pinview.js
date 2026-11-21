@@ -201,15 +201,27 @@
           const h = Math.max(groupH(r), r.users.length * 26), sev = sevOf(r), edge = isLeft ? bx : bx + bw;
           const tx = isLeft ? bx + 10 : bx + bw - 10, anchor = isLeft ? 'start' : 'end';
           g += '<g class="pv-grp' + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '"><text class="pv-ghead ' + sev + '" x="' + tx + '" y="' + (y + 12) + '" text-anchor="' + anchor + '">' + (sev === 'ok' ? '' : MARK[sev] + ' ') + esc(what(r)) + '</text>';
+          const ys = [];
           (r.slots.length ? r.slots.slice().sort((a, b) => nat(a.sig, b.sig)) : [null]).forEach((s, i) => {
             const yy = y + headH + i * rowH + rowH / 2;
+            ys.push(yy);
             if (s) g += padRect(s.pad, isLeft ? edge - 16 : edge, yy - 5, 16, 10) + '<text class="pv-prow" x="' + tx + '" y="' + yy + '" text-anchor="' + anchor + '" dominant-baseline="central">' + esc(s.gpio) + (s.sig !== s.gpio && s.sig !== 'GPIO' ? ' · ' + esc(s.sig) : '') + '</text>';
             else g += '<text class="pv-prow issue" x="' + tx + '" y="' + yy + '" text-anchor="' + anchor + '" dominant-baseline="central">no pins</text>';
           });
-          const midY = y + h / 2, ux = isLeft ? 20 : bx + bw + 60, uw = 170;
+          // Lines end on the pins (Chris, 2026-11-21: they met the group's middle, beside the pins): one pin takes the
+          // line at its own height; several are joined by a short bar just outside them, and the lines meet its middle.
+          const out = isLeft ? -1 : 1, padOut = edge + out * 16, pc = (ys[0] + ys[ys.length - 1]) / 2;
+          let endX = padOut;
+          if (r.slots.length > 1) {
+            endX = padOut + out * 12;
+            ys.forEach(yy => { g += '<line class="pv-wire ' + sev + '" x1="' + padOut + '" y1="' + yy + '" x2="' + endX + '" y2="' + yy + '"/>'; });
+            g += '<line class="pv-wire ' + sev + '" x1="' + endX + '" y1="' + ys[0] + '" x2="' + endX + '" y2="' + ys[ys.length - 1] + '"/>';
+          }
+          const ux = isLeft ? 20 : bx + bw + 60, uw = 170, n = r.users.length;
+          const top = Math.min(Math.max(pc - (n * 26) / 2, y), y + h - n * 26);
           r.users.forEach((u, i) => {
-            const uy = midY - (r.users.length * 26) / 2 + i * 26 + 2, c1 = isLeft ? edge - 40 : edge + 40;
-            g += '<path class="pv-wire ' + sev + '" d="M' + (isLeft ? ux + uw : ux) + ' ' + (uy + 11) + ' C ' + c1 + ' ' + (uy + 11) + ', ' + c1 + ' ' + midY + ', ' + (isLeft ? edge - 16 : edge + 16) + ' ' + midY + '"/>' +
+            const uy = top + i * 26 + 2, ex = isLeft ? ux + uw : ux, c1 = (ex + endX) / 2;
+            g += '<path class="pv-wire ' + sev + '" d="M' + ex + ' ' + (uy + 11) + ' C ' + c1 + ' ' + (uy + 11) + ', ' + c1 + ' ' + pc + ', ' + endX + ' ' + pc + '"/>' +
               '<rect class="pv-ublock" x="' + ux + '" y="' + uy + '" width="' + uw + '" height="22" rx="4"/><text class="pv-utext" x="' + (ux + 8) + '" y="' + (uy + 11) + '" dominant-baseline="central">' + esc(trunc(u.block, 24)) + '</text>';
           });
           g += '</g>';
