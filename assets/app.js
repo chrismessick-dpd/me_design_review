@@ -5146,7 +5146,9 @@
     var ids = Object.keys(e.cur);
     var title = function (id) { var r = e.cur[id], o = e.old[id]; return (r && r.title) || (o && o.title) || 'Untitled'; };
     var moved = function (id) { var r = e.cur[id], o = e.old[id]; return !!(o && r && !r.deleted && (o.order !== r.order || o.level !== r.level) && o.body === r.body && o.title === r.title); };
-    if (ids.every(moved)) return 'moving ' + title(ids[0]);
+    // A move rewrites the neighbors it renumbers too: name the one that went furthest (a change of level first).
+    var far = function (id) { var r = e.cur[id], o = e.old[id]; return (o.level !== r.level ? 1e9 : 0) + Math.abs((r.order || 0) - (o.order || 0)); };
+    if (ids.every(moved)) return 'moving ' + title(ids.slice().sort(function (u, v) { return far(v) - far(u); })[0]);
     if (ids.length === 1) {
       var r = e.cur[ids[0]], o = e.old[ids[0]];
       if (!o) return 'adding ' + title(ids[0]);
@@ -5387,7 +5389,7 @@
         return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? kindLabel(k) : 'None') + '</button>';
       }).join('') + '</div></div>' : '') +
       '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
-      linkFields + fromFields + specPowerField(a, x) +
+      linkFields + fromFields + (FT ? specWithinField(FT, x) : '') + specPowerField(a, x) +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced + x.counts.note, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : '', x.notes.length ? plural(x.notes.length, 'review note') : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       specGapList(x) + specNoteList(x) +
@@ -5396,6 +5398,17 @@
       '<button class="btn btn-danger" data-act="spec-block-delete" data-id="' + esc(id) + '">Delete</button></div>' +
       '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
     el.dataset.item = selected;
+  }
+  // The block panel's Within (Chris, 2026-11-20): the section the block is in, and a list to move it to another one
+  // or out under the board, as the hierarchy's drag does (M.specNest; the text follows).
+  function specWithinField(T, x) {
+    var cur = T.dparent(x), secs = T.items.filter(function (y) { return T.isSec(y); });
+    return '<div class="field"><label for="spec-block-within">Within</label><select class="input" id="spec-block-within">' +
+      '<option value=""' + (cur ? '' : ' selected') + '>The board (no section)</option>' +
+      secs.map(function (y) {
+        var depth = T.anc(y).length;
+        return '<option value="' + esc(y.sec.id) + '"' + (cur === y.sec.id ? ' selected' : '') + '>' + '   '.repeat(depth) + esc(y.sec.title || 'Untitled') + '</option>';
+      }).join('') + '</select></div>';
   }
   // The block panel's Power (EE, config.spec.power; Chris, 2026-11-19): the rails the block uses or makes.
   function specPowerField(a, x) {
@@ -7616,6 +7629,13 @@
       if (fsrc && fme) {
         specPutAll(fp, [M.specStamp(Object.assign({}, fsrc, { body: M.specSetLine(fsrc.body, fw, M.specLinkText(M.specUsesItems(fsrc.body, fw).concat([{ name: fme.title, label: '' }]))) }), me())]);
         toast('Added ' + fme.title + ' to ' + fsrc.title + '’s ' + fw + ' line. Name the ' + (/suppl/i.test(fw) ? 'rail' : 'signal') + ' in ' + fsrc.title + '’s panel.');
+      }
+    }
+    if (e.target.id === 'spec-block-within') {
+      var wp = current(), wid = specBlockSel(), wT = wp && specFlowTree(M.specAnalysis(wp)), wx = wT && wT.byId[wid], wto = e.target.value || null;
+      if (wx && (wT.dparent(wx) || null) !== wto) {
+        var wrecs = M.specNest(wp, [wid], wto, me());
+        if (wrecs.length) { specPutAll(wp, wrecs); toast(wx.sec.title + (wto ? ' is in ' + wT.byId[wto].sec.title : ' is under the board') + '. The text follows.', { label: 'Undo', run: function () { specHistStep(true); } }); }
       }
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
