@@ -29,7 +29,7 @@
   function mount(root, opts) {
     const P = window.SignoffPinmap, FIXED = P.FIXED, TYPES = P.TYPES, nat = P.nat, sevOf = P.sevOf;
     const id = 'pv' + (++uid);                    // SVG pattern ids, unique per mounted view
-    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, cand: {} };
+    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, cand: {}, open: new Set() };
     const can = () => opts.canEdit !== false;
     root.innerHTML = '<div class="pv"><aside class="pv-side"><div class="pv-sum"></div><div class="pv-conns"></div></aside>' +
       '<section class="pv-stage"><div class="pv-tabs"><div class="seg pv-views" role="tablist">' + VIEWS.map(v => '<button data-view="' + v[0] + '">' + v[1] + '</button>').join('') + '</div><div class="pv-legend"></div></div><div class="pv-view"></div></section>' +
@@ -70,26 +70,51 @@
         (c.warnings ? '<span class="pv-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
         (!c.problems && !c.warnings ? '<span class="pv-tag ok">✓ All placed</span>' : '');
       const groups = P.typeOptions(S.part);
-      // Type: what the planner takes the connection to be, over the label (Chris, 2026-11-21: "Sense1_I2C" as I2C).
-      const typeSel = r => {
-        if (r.type === 'PINS' || !can() || !opts.onType) return '';
-        const sets = [...new Set(r.users.map(u => (u.item && u.item.set) || ''))], cur = sets.length === 1 ? sets[0] : '';
+      // Type: what the planner takes a signal to be, over the label (Chris, 2026-11-21: "Sense1_I2C" as I2C). It sets
+      // this connection's signal only, even on a bus other blocks share.
+      const typeSel = (r, u) => {
+        if (r.type === 'PINS' || !can() || !opts.onType || !u) return '';
+        const cur = (u.item && u.item.set) || '';
         const o = (v, t) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>';
-        return '<label class="pv-type-l">Type <select class="pv-type" data-req="' + esc(r.id) + '" title="What the planner takes this connection to be; the label stays as written">' +
+        return '<label class="pv-type-l">Type <select class="pv-type" data-req="' + esc(r.id) + '" data-keys="' + esc(u.key) + '" title="What the planner takes this signal to be; the label stays as written">' +
           o('', cur ? 'From the label' : 'From the label (' + (r.inst || r.want || r.type) + ')') + o('GPIO', 'GPIO') +
           groups.map(g => g.insts.length ? '<optgroup label="' + esc(TYPES[g.type].name || g.type) + '">' + o(g.type, g.type + ', any') + g.insts.map(i => o(i, i)).join('') + '</optgroup>' : o(g.type, g.type)).join('') +
           '</select></label>';
       };
-      const rows = S.result.reqs.map(r => {
-        const sev = sevOf(r);
-        const pins = r.slots.slice().sort((a, b) => nat(a.sig, b.sig)).map(s => '<span class="pv-pin' + (s.lock ? ' lock' : '') + '">' + esc(s.gpio) + (s.sig && s.sig !== s.gpio && s.sig !== 'GPIO' ? ' <i>' + esc(s.sig) + '</i>' : '') + '</span>').join('');
+      const pinsOf = r => r.slots.slice().sort((a, b) => nat(a.sig, b.sig)).map(s => '<span class="pv-pin' + (s.lock ? ' lock' : '') + '">' + esc(s.gpio) + (s.sig && s.sig !== s.gpio && s.sig !== 'GPIO' ? ' <i>' + esc(s.sig) + '</i>' : '') + '</span>').join('');
+      // One signal: its status, what it is, its pins, notes, and fixes. `kid` when it sits inside a connection's fold.
+      const sigRow = (r, u, kid, c) => {
+        const sev = sevOf(r), pins = pinsOf(r);
         const notes = r.problems.map(t => '<li class="issue">' + esc(t.text) + '</li>').concat(r.notes.map(n => '<li class="' + esc(n.sev) + '">' + esc(n.text) + '</li>')).join('');
-        return '<div class="pv-conn ' + sev + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
-          '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(what(r)) + '</span><span class="pv-blocks">' + esc(r.users.map(u => u.block).join(', ')) + '</span></div>' +
-          '<div class="pv-conn-label">“' + esc(r.item.text || r.label) + '”' + (r.dir !== 'out' ? ' · ' + esc(r.dir) : '') + typeSel(r) + '</div>' +
+        return '<div class="pv-conn ' + sev + (kid ? ' kid' : '') + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
+          '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(kid ? what(r) : c.block) + '</span><span class="pv-blocks">' + esc(kid ? ((u.item.text || '').toLowerCase() === what(r).toLowerCase() ? '' : u.item.text || '') : what(r)) + '</span></div>' +
+          '<div class="pv-conn-label">' + (kid ? '' : '“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '')) + typeSel(r, u) + '</div>' +
           (pins ? '<div class="pv-pins">' + pins + '</div>' : '') + (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') +
           (r.fix && can() && opts.onFix ? '<button class="btn btn-plain btn-sm pv-fix" data-fix="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') +
-          (r.slots.some(sl => sl.lock) && can() && opts.onClear ? '<button class="btn btn-plain btn-sm pv-fix" data-clear="' + esc(r.id) + '" title="Remove your picks for this connection; the planner places it again">Clear picks</button>' : '') + '</div>';
+          (r.slots.some(sl => sl.lock) && can() && opts.onClear ? '<button class="btn btn-plain btn-sm pv-fix" data-clear="' + esc(r.id) + '" title="Remove your picks for this signal; the planner places it again">Clear picks</button>' : '') + '</div>';
+      };
+      // One row per connection into the MCU (Chris, 2026-11-21), in the order Scribe lists them; a connection with
+      // several signals ("LCD SPI2 + EXTCOMIN") folds open to a row per signal. A shared bus shows under each block.
+      const order = {}; (S.result.conns || []).forEach((c, i) => { order[c.id] = i; });
+      const conns = [], byId = {};
+      S.result.reqs.forEach(r => r.users.forEach(u => {
+        const id = u.conn.id;
+        let c = byId[id];
+        if (!c) { c = byId[id] = { id, block: u.block, label: u.conn.label || '', dir: u.conn.dir || r.dir, items: [] }; conns.push(c); }
+        c.items.push({ r, u, ii: +String(u.key || '').split('#').pop() || 0 });
+      }));
+      conns.sort((a, b) => (order[a.id] != null ? order[a.id] : 1e6) - (order[b.id] != null ? order[b.id] : 1e6));
+      const worst = list => list.map(x => sevOf(x.r)).sort((a, b) => ['issue', 'warn', 'ok'].indexOf(a) - ['issue', 'warn', 'ok'].indexOf(b))[0];
+      const rows = conns.map(c => {
+        c.items.sort((a, b) => a.ii - b.ii);
+        if (c.items.length === 1) return sigRow(c.items[0].r, c.items[0].u, false, c);
+        const sev = worst(c.items), open = S.open.has(c.id) || c.items.some(x => x.r.id === S.sel);
+        return '<div class="pv-cgrp ' + sev + (open ? ' open' : '') + '">' +
+          '<div class="pv-conn pv-chead ' + sev + '" data-fold="' + esc(c.id) + '" tabindex="0" aria-expanded="' + open + '">' +
+          '<div class="pv-conn-top"><span class="pv-caret">' + (open ? '▾' : '▸') + '</span><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + c.items.length + ' signals</span></div>' +
+          '<div class="pv-conn-label">“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '') + '</div>' +
+          (open ? '' : '<div class="pv-pins">' + c.items.map(x => pinsOf(x.r)).join('') + '</div>') + '</div>' +
+          (open ? '<div class="pv-kids">' + c.items.map(x => sigRow(x.r, x.u, true, c)).join('') + '</div>' : '') + '</div>';
       }).join('');
       const stray = S.result.stray.map(s => '<div class="pv-conn warn"><div class="pv-conn-top"><span class="pv-mark warn">▲</span><span class="pv-what">' + esc(s.fn) + '</span><span class="pv-blocks">' + esc((S.part.byNum[s.pad] || { names: [s.pad] }).names[0]) + '</span></div><div class="pv-conn-label">You picked this function on the pin, but no connection to the MCU asks for it. The pin stays reserved for it.</div>' +
         (can() && opts.onUnpick ? '<button class="btn btn-plain btn-sm pv-fix" data-unpick="' + esc(s.pad) + '">Remove the pick</button>' : '') + '</div>').join('');
@@ -325,18 +350,20 @@
       const padEl = t.closest('.pv-view [data-pad]');
       if (padEl) { openPop(padEl.dataset.pad, e); return; }
       closePop();
+      const fold = t.closest('[data-fold]');
+      if (fold) { const id = fold.dataset.fold; if (S.open.has(id) || fold.getAttribute('aria-expanded') === 'true') { S.open.delete(id); if (selReq() && selReq().users.some(u => u.conn.id === id)) S.sel = null; } else S.open.add(id); renderSide(); return; }
       const row = t.closest('.pv-conn[data-req], .pv-grp[data-req]');
       if (row) { S.sel = S.sel === row.dataset.req ? null : row.dataset.req; render(); }
     }
     function onKey(e) {
-      if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pv-conn')) e.target.click();
+      if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pv-conn')) e.target.click();   // a row, or a connection's fold
       if (e.key === 'Escape' && !pop.hidden) { closePop(); e.stopPropagation(); }
     }
     function onChange(e) {
       const sel = e.target.closest && e.target.closest('select.pv-type');
       if (!sel || !opts.onType) return;
       const r = S.result.reqs.find(q => q.id === sel.dataset.req);
-      if (r) opts.onType(r.id, r.users.map(u => u.key), sel.value);
+      if (r) opts.onType(r.id, (sel.dataset.keys || '').split(' ').filter(Boolean), sel.value);
     }
     root.addEventListener('click', onClick);
     root.addEventListener('change', onChange);

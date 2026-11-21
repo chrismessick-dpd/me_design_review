@@ -123,6 +123,14 @@
         p.spec[r.id] = r;
       });
     }
+    // An MCU block's pin plan (config.pins: { '<section title>': '<global holding a part file>' }; EE's is
+    // assets/demo-part.js): the part copied onto the section, as Start a pin plan does, so the pin map shows (2026-11-21).
+    if (only.pins && p.spec) Object.keys(only.pins).forEach(function (title) {
+      var file = typeof only.pins[title] === 'string' ? window[only.pins[title]] : only.pins[title];
+      var part = file && M.specPinPart && M.specPinPart(file);
+      var r = Object.keys(p.spec).map(function (k) { return p.spec[k]; }).filter(function (x) { return x.title === title; })[0];
+      if (r && part) r.pins = { part: part };
+    });
     // Bring-up reworks (config.rework), with pictures in assets/demo-previews/ and their discussion.
     if (only.rework && only.rework.length && M.reworkOn(p)) {
       p.rework = {};
@@ -165,14 +173,14 @@
   S.demo = {
     projects: function (templates) {
       return (D.projects || []).map(function (d) {
-        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, rework: d.rework, releases: d.releases, load: d.load });
+        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, pins: d.pins, rework: d.rework, releases: d.releases, load: d.load });
         p.id = demoId(d.seed);
         return p;
       });
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 22
+    VERSION: 23
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

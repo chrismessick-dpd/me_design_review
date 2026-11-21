@@ -1690,6 +1690,11 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .pv-what { font-weight: 650; font-size: 13.5px; white-space: nowrap; }
 .pv-blocks { color: var(--text-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pv-conn-label { color: var(--text-3); font-size: 12px; margin: 2px 0 0 22px; }
+/* A connection with several signals folds open to a row per signal (2026-11-21). */
+.pv-cgrp { display: flex; flex-direction: column; gap: 4px; }
+.pv-caret { width: 12px; color: var(--text-3); font-size: 11px; }
+.pv-kids { display: flex; flex-direction: column; gap: 4px; margin-left: 16px; padding-left: 8px; border-left: 1px solid var(--border); }
+.pv-conn.kid { padding: 7px 10px; }
 .pv-pins { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0 22px; }
 .pv-pin { font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--accent-soft); color: var(--accent-ink); padding: 3px 6px; border-radius: 5px; }
 .pv-pin i { font-style: normal; font-weight: 500; opacity: .75; }

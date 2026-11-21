@@ -223,7 +223,7 @@
 
     const io = part.pads.filter(p => p.gpio);
     const stray = Object.keys(used).filter(n => used[n].stray).map(n => ({ pad: n, fn: used[n].sig }));
-    return { reqs, used, stray, counts: {
+    return { reqs, used, stray, conns: conns || [], counts: {
       io: io.length, used: io.filter(p => used[p.num]).length,
       problems: reqs.filter(r => sevOf(r) === 'issue').length, warnings: reqs.filter(r => sevOf(r) === 'warn').length + stray.length } };
   }
