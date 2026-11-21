@@ -6033,11 +6033,8 @@
       '<h2 class="spec-edge-title">' + esc(L.from.title || 'Untitled') + ' <span>' + esc(linkVerb(L.word)) + '</span> ' + esc(L.to.title || 'Untitled') + '</h2>' +
       '<div class="field"><span class="field-label">From</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.a) + '">' + esc(L.from.title || 'Untitled') + '</button></div></div>' +
       '<div class="field"><span class="field-label">To</span><div class="chips"><button class="chip" style="border:none" data-act="spec-block" data-id="' + esc(L.s.b) + '">' + esc(L.to.title || 'Untitled') + '</button></div></div>' +
-      (words.length > 1 ? '<div class="field"><label for="spec-edge-label">Signal, bus, or rail</label><input class="input" id="spec-edge-label" value="' + esc(L.it.label || '') + '" placeholder="' + (M.specLinkWord('supplies') && L.word.toLowerCase() === M.specLinkWord('supplies').toLowerCase() ? '3V3' : 'I2C') + '"></div>' : '') +
-      (isSupply ? '' : '<div class="field"><label for="spec-edge-dir">Direction</label><select class="input" id="spec-edge-dir">' +
-        [['', 'Out: ' + (L.from.title || 'this block') + ' → ' + (L.to.title || 'the other')], ['in', 'In: ' + (L.to.title || 'the other') + ' → ' + (L.from.title || 'this block')], ['both', 'Both ways ↔']].map(function (o) {
-          return '<option value="' + o[0] + '"' + ((L.it.dir === 'out' ? '' : L.it.dir || '') === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
-        }).join('') + '</select></div>') +
+      (isSupply ? '' : specSignalsHtml(L)) +
+      (words.length > 1 && isSupply ? '<div class="field"><label for="spec-edge-label">Signal, bus, or rail</label><input class="input" id="spec-edge-label" value="' + esc(L.it.label || '') + '" placeholder="' + (M.specLinkWord('supplies') && L.word.toLowerCase() === M.specLinkWord('supplies').toLowerCase() ? '3V3' : 'I2C') + '"></div>' : '') +
       '<p class="note">It’s the <code>' + esc(L.word) + ':</code> line in ' + esc(L.from.title || 'its block') + '’s text' +
         (L.back ? ', and ' + esc(L.to.title || 'the other block') + '’s names it too, so the diagram draws one line both ways. Delete removes both.' : '.') + '</p>' +
       '<div class="spec-acts"><button class="btn" data-act="spec-goto" data-id="' + esc(L.s.a) + '">Show in document</button>' +
@@ -6063,6 +6060,36 @@
       if (ch) out.push(M.specStamp(n, me()));
     });
     if (out.length) specPutAll(p, out);
+  }
+  // A line's signals (Chris, 2026-11-21: "I2C/alert" on a line whose panel said only I2C): every interface on the
+  // line, from both blocks' entries, since the diagram joins both into one line. An entry holds several, written
+  // "I2C2 + ALERT" (the pin planner reads each on its own), and one direction for them all.
+  function specSigSplit(label) { return String(label || '').split(/\s*\+\s*/).map(function (t) { return t.trim(); }).filter(Boolean); }
+  function specSignalsHtml(L) {
+    var entry = function (side, it, from, to) {
+      var sigs = specSigSplit(it.label), d = it.dir === 'out' ? '' : it.dir || '';
+      var dirs = [['', 'Out: ' + (from.title || 'this block') + ' → ' + (to.title || 'the other')], ['in', 'In: ' + (to.title || 'the other') + ' → ' + (from.title || 'this block')], ['both', 'Both ways ↔']];
+      return '<div class="spec-sig-entry"><div class="spec-sig-head">In ' + esc(from.title || 'Untitled') + '’s text</div>' +
+        sigs.map(function (t, i) {
+          return '<div class="spec-sig-row"><input class="input spec-sig-name" data-side="' + side + '" data-i="' + i + '" value="' + esc(t) + '" aria-label="Signal">' +
+            '<button class="icon-btn" data-act="spec-sig-del" data-side="' + side + '" data-i="' + i + '" title="Remove ' + esc(t) + '" aria-label="Remove">' + ICON.close + '</button></div>';
+        }).join('') +
+        (sigs.length ? '' : '<p class="note" style="margin:2px 0 6px">No signal named.</p>') +
+        '<input class="input spec-sig-add" data-side="' + side + '" placeholder="Add a signal, e.g. ' + (sigs.length ? 'ALERT' : 'I2C') + ' (Enter)">' +
+        '<select class="input spec-sig-dir" data-side="' + side + '" aria-label="Direction">' + dirs.map(function (o) { return '<option value="' + o[0] + '"' + (d === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>';
+    };
+    return '<div class="field"><span class="field-label">Signals</span>' + entry('a', L.it, L.from, L.to) + (L.back ? entry('b', L.back, L.to, L.from) : '') +
+      '<p class="note" style="margin-top:4px">' + (L.back ? 'Both blocks name this connection, so the line carries both entries. ' : '') + 'Signals in one entry share its direction.</p></div>';
+  }
+  // Change one block's entry for this line ('a', the From block's; 'b', the To block's), written back into its text.
+  function specSigEdit(side, fn) {
+    var p = current(), L = specEdgeItem(p); if (!L) return;
+    var sec = side === 'b' ? L.to : L.from, other = side === 'b' ? L.from : L.to;
+    var items = M.specUsesItems(sec.body, L.word), it = items.filter(function (n) { return M.specUseIs(n, other.title); })[0];
+    if (!it) return;
+    var sigs = specSigSplit(it.label), next = fn(sigs.slice(), it);
+    if (next) it.label = next.map(function (t) { return String(t).replace(/[(),+]/g, ' ').replace(/\s+/g, ' ').trim(); }).filter(Boolean).join(' + ');
+    specPutAll(p, [M.specStamp(Object.assign({}, sec, { body: M.specSetLine(sec.body, L.word, M.specLinkText(items)) }), me())]);
   }
   function specEdgeLabel(value) {
     var p = current(), L = specEdgeItem(p); if (!L) return;
@@ -7833,6 +7860,7 @@
       case 'spec-pt-edge': if (!specDragJustEnded) specOpenPt(el.dataset.a, el.dataset.b, el.dataset.rail); break;
       case 'spec-pt-reset': specPtReset(); break;
       case 'spec-edge-delete': specEdgeDelete(); break;
+      case 'spec-sig-del': { var sdi = +el.dataset.i; specSigEdit(el.dataset.side, function (sg) { sg.splice(sdi, 1); return sg; }); break; }
       case 'spec-edge-reset': specEdgeReset(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
       case 'spec-power-tree': { var ti = +el.dataset.i, ton = !!el.checked; specPowerSet(function (it) { if (it[ti]) { if (ton) it[ti] = Object.assign({}, it[ti], { tree: true }); else { it[ti] = Object.assign({}, it[ti]); delete it[ti].tree; } } return it; }); break; }
@@ -8178,6 +8206,9 @@
     if (e.target.id === 'spec-power-add' && e.target.value.trim()) { var prail = e.target.value.trim(); specPowerSet(function (it) { return it.concat([{ rail: prail, role: 'sink' }]); }); }
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
     if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);
+    if (e.target.classList && e.target.classList.contains('spec-sig-name')) { var sni = +e.target.dataset.i, snv = e.target.value; specSigEdit(e.target.dataset.side, function (sg) { sg[sni] = snv; return sg; }); }
+    if (e.target.classList && e.target.classList.contains('spec-sig-add') && e.target.value.trim()) { var sav = e.target.value.trim(); specSigEdit(e.target.dataset.side, function (sg) { return sg.concat([sav]); }); }
+    if (e.target.classList && e.target.classList.contains('spec-sig-dir')) { var sdv = e.target.value; specSigEdit(e.target.dataset.side, function (sg, it) { it.dir = sdv === 'in' || sdv === 'both' ? sdv : ''; return null; }); }
   });
   document.addEventListener('keydown', function (e) {
     if (e.target.dataset && e.target.dataset.add && e.key === 'Enter') {

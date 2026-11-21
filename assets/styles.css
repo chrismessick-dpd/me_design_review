@@ -1830,3 +1830,8 @@ body.pv-open { overflow: hidden; }
 .spec-pill.pin-issue rect { stroke: var(--issue); stroke-width: 1.5; }
 .spec-pill.pin-issue text { fill: var(--issue); }
 .spec-pill.pin-warn rect { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 3 2; }
+/* A line's Signals in its panel (2026-11-21): one box per block's entry, a row per signal. */
+.spec-sig-entry { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.spec-sig-head { font-size: 12px; color: var(--text-3); }
+.spec-sig-row { display: flex; gap: 6px; align-items: center; }
+.spec-sig-row .input { flex: 1; min-width: 0; }
