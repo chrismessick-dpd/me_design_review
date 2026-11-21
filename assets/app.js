@@ -5693,7 +5693,7 @@
   function pinIsMcu(f) {
     return !!f && (f.kind === 'mcu' || (f.pins || []).some(function (q) { return (q.functions || []).some(function (fn) { return /^[A-Z][A-Z0-9]*_\S+\s+AF\d+$/.test(fn); }); }));
   }
-  var pinCache = {};
+  var pinCache = {}, pinOpen = {};   // pinOpen: the side panel's open folds, { '<section id>': { '<conn id>': true } }
   function pinRes(id) { return pinCache[id] ? pinCache[id].res : null; }
   // The plan for a block, worked out again only when its part, connections, or picks change.
   function pinPlan(a, x) {
@@ -5740,15 +5740,41 @@
       (c.warnings ? '<span class="spec-pins-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
       (!c.problems && !c.warnings ? '<span class="spec-pins-tag ok">✓ All placed</span>' : '') + '</div>' +
       notes.map(function (n) { return '<p class="note spec-pins-note">' + n + '</p>'; }).join('');
-    html += '<div class="spec-pins-list">' + res.reqs.map(function (r) {
-      var sev = PIN.sevOf(r);
-      var pins = r.slots.slice().sort(function (p1, p2) { return PIN.nat(p1.sig, p2.sig); }).map(function (sl) {
+    // One row per connection, as the pin map lists them (Chris, 2026-11-21): a connection with several signals folds
+    // open to a row per signal (pinOpen remembers which, per block).
+    var pinsOf = function (r) {
+      return r.slots.slice().sort(function (p1, p2) { return PIN.nat(p1.sig, p2.sig); }).map(function (sl) {
         return '<span class="spec-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + (sl.sig && sl.sig !== sl.gpio && sl.sig !== 'GPIO' ? ' <i>' + esc(sl.sig) + '</i>' : '') + '</span>';
       }).join('');
+    };
+    var sigRow = function (r, u, kid, cn) {
+      var sev = PIN.sevOf(r), pins = pinsOf(r), what = pinWhat(r), name = String(u.item.text || '');
       var lines = r.problems.map(function (q) { return '<li class="issue">' + esc(q.text) + '</li>'; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return '<li class="warn">' + esc(n.text) + '</li>'; })).join('');
-      return '<div class="spec-pins-row ' + sev + '"><div class="spec-pins-top"><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(pinWhat(r)) + '</b><span class="spec-pins-blocks">' + esc(r.users.map(function (u) { return u.block; }).join(', ')) + '</span></div>' +
+      return '<div class="spec-pins-row ' + sev + (kid ? ' kid' : '') + '"><div class="spec-pins-top"><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(kid ? what : cn.block) + '</b><span class="spec-pins-blocks">' + esc(kid ? (name.toLowerCase() === what.toLowerCase() ? '' : name) : what) + '</span></div>' +
         (pins ? '<div class="spec-pins-pins">' + pins + '</div>' : '') + (lines ? '<ul class="spec-pins-why">' + lines + '</ul>' : '') +
         (r.fix ? '<button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-fix" data-req="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';
+    };
+    var corder = {}; (res.conns || []).forEach(function (cn, i) { corder[cn.id] = i; });
+    var conns = [], cById = {};
+    res.reqs.forEach(function (r) {
+      r.users.forEach(function (u) {
+        var cn = cById[u.conn.id];
+        if (!cn) { cn = cById[u.conn.id] = { id: u.conn.id, block: u.block, label: u.conn.label || '', items: [] }; conns.push(cn); }
+        cn.items.push({ r: r, u: u, ii: +String(u.key || '').split('#').pop() || 0 });
+      });
+    });
+    conns.sort(function (c1, c2) { return (corder[c1.id] != null ? corder[c1.id] : 1e6) - (corder[c2.id] != null ? corder[c2.id] : 1e6); });
+    var openSet = pinOpen[s.id] || {};
+    html += '<div class="spec-pins-list">' + conns.map(function (cn) {
+      cn.items.sort(function (i1, i2) { return i1.ii - i2.ii; });
+      if (cn.items.length === 1) return sigRow(cn.items[0].r, cn.items[0].u, false, cn);
+      var sev = cn.items.map(function (it) { return PIN.sevOf(it.r); }).sort(function (s1, s2) { return ['issue', 'warn', 'ok'].indexOf(s1) - ['issue', 'warn', 'ok'].indexOf(s2); })[0];
+      var open = !!openSet[cn.id];
+      return '<div class="spec-pins-grp' + (open ? ' open' : '') + '"><button class="spec-pins-row spec-pins-head ' + sev + '" data-act="spec-pins-fold" data-id="' + esc(cn.id) + '" aria-expanded="' + open + '">' +
+        '<div class="spec-pins-top"><span class="spec-pins-caret">' + (open ? '▾' : '▸') + '</span><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(cn.block) + '</b><span class="spec-pins-blocks">' + cn.items.length + ' signals</span></div>' +
+        '<div class="spec-pins-label">“' + esc(cn.label) + '”</div>' +
+        (open ? '' : '<div class="spec-pins-pins">' + cn.items.map(function (it) { return pinsOf(it.r); }).join('') + '</div>') + '</button>' +
+        (open ? '<div class="spec-pins-kids">' + cn.items.map(function (it) { return sigRow(it.r, it.u, true, cn); }).join('') + '</div>' : '') + '</div>';
     }).join('') + res.stray.map(function (st) {
       return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">You picked this function on the pin, but no connection to the MCU asks for it.</li></ul></div>';
     }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
@@ -7889,6 +7915,7 @@
       case 'spec-pins-start': specPinsStart(); break;
       case 'spec-pins-fix': specPinsFix(el.dataset.req); break;
       case 'spec-pins-map': specPinsOpen(); break;
+      case 'spec-pins-fold': { var fsec = specBlockSel(), fo = pinOpen[fsec] = pinOpen[fsec] || {}; if (fo[id]) delete fo[id]; else fo[id] = true; renderInspector(); break; }
       case 'spec-part-new': specPartOpen(true); break;
       case 'spec-part-edit': specPartOpen(false); break;
       case 'spec-part-sync': pinLibSync(); break;
@@ -8330,7 +8357,20 @@
     banner.innerHTML = 'You’re exploring a demo of ' + esc(C.product) + ', Dovetail’s ' + esc(C.tagline.toLowerCase()) + ' tool. Changes stay in this browser.<button data-act="reset-demo" id="reset-demo">Reset demo</button>';
     banner.querySelector('#reset-demo').addEventListener('click', function () {
       Object.keys(localStorage).forEach(function (k) { if (k.indexOf(C.storage.demoNs) === 0) localStorage.removeItem(k); });
-      location.reload();
+      // The demo's reviews live in IndexedDB since 2026-11-19 (localstore.js), so clearing localStorage alone kept every
+      // edit (found 2026-11-21): empty its store too, in one transaction, then reload. (Deleting the database waited on
+      // this page's own connection and was dropped by the reload.)
+      var done = false, go = function () { if (!done) { done = true; location.reload(); } };
+      try {
+        if (!LOCAL || !LOCAL.open) { go(); return; }
+        LOCAL.open().then(function (db) {
+          if (!db) { go(); return; }
+          var tx = db.transaction('kv', 'readwrite');
+          tx.objectStore('kv').clear();
+          tx.oncomplete = tx.onerror = tx.onabort = go;
+        }, go);
+        setTimeout(go, 3000);
+      } catch (e) { go(); }
     });
   }
   // ?project=<id> opens that project, &item=<check id> that check, and &req=<requirement id> that

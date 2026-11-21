@@ -1840,3 +1840,9 @@ body.pv-open { overflow: hidden; }
 .spec-sig-head { font-size: 12px; color: var(--text-3); }
 .spec-sig-row { display: flex; gap: 6px; align-items: center; }
 .spec-sig-row .input { flex: 1; min-width: 0; }
+/* The side panel's Pins list by connection (2026-11-21): a connection with several signals folds open. */
+.spec-pins-grp { display: flex; flex-direction: column; gap: 4px; }
+button.spec-pins-head { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 0; border-left: 3px solid transparent; }
+.spec-pins-caret { width: 12px; color: var(--text-3); font-size: 11px; }
+.spec-pins-label { color: var(--text-3); font-size: 12px; margin: 2px 0 0 22px; }
+.spec-pins-kids { display: flex; flex-direction: column; gap: 4px; margin-left: 14px; padding-left: 8px; border-left: 1px solid var(--border); }
