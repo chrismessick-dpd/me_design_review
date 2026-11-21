@@ -1631,3 +1631,29 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-req-pick-list button span { text-align: left; }
 
 .spec-from-note { margin: -4px 0 10px; font-size: 12.5px; }
+
+/* Pins: an MCU block's pin plan in its panel (2026-11-20; assets/pinmap.js). Every state has a mark and a pattern. */
+.spec-pins-sum { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.spec-pins-tag { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+.spec-pins-tag.issue { background: var(--issue-hatch), var(--issue-soft); color: var(--issue); }
+.spec-pins-tag.warn { background: var(--warn-hatch), var(--warn-soft); color: var(--text); }
+.spec-pins-tag.ok { background: var(--accent-soft); color: var(--accent-ink); }
+.spec-pins-note { margin: 0 0 8px; }
+.spec-pins-list { display: flex; flex-direction: column; gap: 6px; }
+.spec-pins-row { background: var(--bg-sunk); border-radius: 8px; padding: 7px 10px; border-left: 3px solid transparent; }
+.spec-pins-row.issue { border-left: 3px solid var(--issue); }
+.spec-pins-row.warn { border-left: 3px dashed var(--warn); }
+.spec-pins-top { display: flex; gap: 7px; align-items: baseline; font-size: 13px; }
+.spec-pins-mark { width: 12px; text-align: center; font-weight: 700; flex: none; }
+.spec-pins-mark.ok { color: var(--accent); } .spec-pins-mark.warn { color: var(--warn); } .spec-pins-mark.issue { color: var(--issue); }
+.spec-pins-blocks { color: var(--text-2); font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spec-pins-pins { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 0 19px; }
+.spec-pin { font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--accent-soft); color: var(--accent-ink); padding: 3px 6px; border-radius: 5px; }
+.spec-pin i { font-style: normal; font-weight: 500; opacity: .75; }
+.spec-pin.lock::before { content: "⚿ "; }
+.spec-pins-why { margin: 5px 0 0 19px; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.4; }
+.spec-pins-why li { padding-left: 16px; text-indent: -16px; }
+.spec-pins-why li.issue { color: var(--issue); } .spec-pins-why li.issue::before { content: "✕  "; }
+.spec-pins-why li.warn::before { content: "▲  "; color: var(--warn); }
+.spec-pins-row .spec-pins-act { margin: 4px 0 0 11px; }
+.spec-pins-note .spec-pins-act { padding: 0 4px; vertical-align: baseline; }

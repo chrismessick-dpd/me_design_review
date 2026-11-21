@@ -553,6 +553,20 @@ test('push refuses a review that doesn’t round-trip (one ID twice)', async () 
   ok(/don’t push/.test(r.err), r.err);
 });
 
+test('a section’s pin plan survives a pull, an edit to its text, and the merge', async () => {
+  const d = clone(fixture), k = M.liveSpec(d)[0].id;
+  d.spec[k].pins = { part: { mpn: 'MADEUP16', manufacturer: 'Made Up', package: 'QFN16', pins: [{ num: '8', name: 'PB6', role: 'io', functions: ['I2C1_SCL AF6'] }] },
+    map: { 8: { req: 'bus:I2C|I2C1', sig: 'SCL', fn: 'I2C1_SCL' } } };
+  const files = cli.pristine(eng, d);
+  eq(cli.buildLocal(eng, d, files, 'Ari Chen').records.spec.length, 0, 'a review with a pin plan round-trips');
+  const lines = files['scribe.md'].split('\n'), h = lines.findIndex((l) => /^#/.test(l));
+  lines.splice(h + 1, 0, 'A sentence added in the terminal.');
+  const b = cli.buildLocal(eng, d, Object.assign({}, files, { 'scribe.md': lines.join('\n') }), 'Ari Chen');
+  eq(b.records.spec.map((r) => r.id), [k], 'only the edited section');
+  const merged = M.mergeProjects(d, Object.assign(clone(d), { spec: Object.assign({}, d.spec, { [k]: b.records.spec[0] }) }));
+  eq(M.liveSpec(merged).filter((x) => x.id === k)[0].pins, d.spec[k].pins, 'the plan is kept');
+});
+
 test('push refuses when the merge would drop something this tool doesn’t know', async () => {
   const dir = path.join(TMP, 'future');
   eq((await sh(['pull', sharedDoc.id, dir])).code, 0);

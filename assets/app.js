@@ -2858,6 +2858,8 @@
         html += '<div class="spec-uses spec-parts"><span>Power</span>' + b.items.map(function (r) { return '<span class="chip spec-part" title="' + esc(r.role === 'source' ? 'It makes this rail' : 'It uses this rail') + '">' + (r.role === 'source' ? '○ ' : '⊤ ') + esc(r.rail) + ' <span class="muted">' + r.role + '</span></span>'; }).join('') + '</div>';
       } else if (b.type === 'parts') {
         html += '<div class="spec-uses spec-parts"><span>Parts</span>' + b.items.map(function (n) { return '<span class="chip spec-part">' + esc(n) + '</span>'; }).join('') + '</div>';
+      } else if (b.type === 'part') {
+        html += '<div class="spec-uses spec-parts"><span>Part</span><span class="chip spec-part">' + esc(b.mpn) + '</span></div>';
       } else if (b.type === 'table' && b.rows.length) {
         var units = b.rowUnits || [], cells = function (r, i) { return units[i] ? specRowCells(units[i]) : r.map(function (c) { return esc(M.specPlain(c)); }); };
         html += '<div class="table-scroll spec-table-wrap"><table class="table spec-table"><thead><tr>' + cells(b.rows[0], 0).map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr></thead><tbody>' +
@@ -3018,7 +3020,7 @@
     if (!ta || ta._se || !window.SignoffSpecEdit) return;
     var p = current(), ctx = p ? M.specContext(p) : null;
     specEd = ta._se = window.SignoffSpecEdit.mount(ta, specDraft, {
-      model: M, words: function () { return M.specLinkWords().concat(M.specPowerOn() ? ['Power'] : []); },
+      model: M, words: function () { return M.specLinkWords().concat(M.specPowerOn() ? ['Power'] : [], M.specPinsOn() ? ['Part'] : []); },
       markLabel: function (inner) { return specMarkLabel(ctx, inner); },
       onBadge: specBadge
     });
@@ -5649,6 +5651,7 @@
       '<div class="field"><label for="spec-block-gist">Gist</label><input class="input" id="spec-block-gist" value="' + esc(x.blocks.filter(function (b) { return b.type === 'gist'; }).map(function (b) { return b.text; })[0] || '') + '" placeholder="' + esc(x.gist || 'One line: what it does') + '"></div>' +
       linkFields + fromFields + (FT ? specWithinField(FT, x) : '') + specPowerField(a, x) +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
+      (pinsOn() ? specPinsField(a, x) : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced + x.counts.note, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : '', x.notes.length ? plural(x.notes.length, 'review note') : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       specGapList(x) + specNoteList(x) +
       '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Edit its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Show in document</button>' +
@@ -5657,6 +5660,108 @@
       '<p class="note">Last changed ' + (s.updatedBy ? 'by ' + esc(s.updatedBy) + ', ' : '') + relTime(s.updatedAt) + '.</p></div>';
     el.dataset.item = selected;
   }
+  // ── Pins (Chris, 2026-11-20): an MCU block's pin plan. The planner is assets/pinmap.js; the part comes from
+  // Pincheck's library in this browser (../pincheck/assets/library.js, IndexedDB `pincheck`) and is copied onto the
+  // section (pins.part) when a plan starts, so everyone the review is shared with plans from the same pins. Picks
+  // are pins.map. See ../pincheck/docs/pin-planner.md. EE only (config.spec.pins). ──
+  var PIN = window.SignoffPinmap;
+  function pinsOn() { return !!(SPEC && SPEC.pins && PIN); }
+  var pinLib = { list: null, loading: false };
+  function pinLibLoad() {
+    if (pinLib.list || pinLib.loading || !window.PK || !window.PK.library) return;
+    pinLib.loading = true;
+    window.PK.DEMO = !!DEMO;                    // before the library first opens its database: ?demo reads pincheck-demo
+    window.PK.library.all().then(function (l) {
+      pinLib.list = (l || []).filter(function (f) { return f && Array.isArray(f.pins) && f.pins.length && !(f.local && f.local.conflictOf); });
+    }, function () { pinLib.list = []; }).then(function () { pinLib.loading = false; if (selected && specBlockSel()) renderInspector(); });
+  }
+  function pinLibFind(mpn) { return mpn && pinLib.list ? window.PK.library.find(pinLib.list, mpn) : null; }
+  function pinIsMcu(f) {
+    return !!f && (f.kind === 'mcu' || (f.pins || []).some(function (q) { return (q.functions || []).some(function (fn) { return /^[A-Z][A-Z0-9]*_\S+\s+AF\d+$/.test(fn); }); }));
+  }
+  var pinMemo = { key: '', res: null };
+  // The plan for a block, worked out again only when its part, connections, or picks change.
+  function pinPlan(a, x) {
+    var copy = x.sec.pins && x.sec.pins.part;
+    if (!copy) return null;
+    var conns = M.specMcuConns(a, x.sec.id), map = (x.sec.pins && x.sec.pins.map) || {};
+    var key = x.sec.id + '|' + JSON.stringify([copy.mpn, copy.from || null, copy.pins.length]) + '|' + JSON.stringify(conns.map(function (c) { return [c.id, c.label, c.dir, c.block]; })) + '|' + JSON.stringify(map);
+    if (pinMemo.key !== key) {
+      var part = PIN.part(copy), res = PIN.plan(part, conns, map);
+      res.part = part; res.conns = conns;
+      pinMemo = { key: key, res: res };
+    }
+    return pinMemo.res;
+  }
+  var PIN_MARK = { issue: '✕', warn: '▲', ok: '✓' };
+  function pinWhat(r) { return r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : ''); }
+  function specPinsField(a, x) {
+    var s = x.sec, copy = s.pins && s.pins.part, fte = isFte() || !!DEMO;
+    if (fte) pinLibLoad();
+    var lib = fte ? pinLibFind(x.part) : null;
+    var mcus = fte && pinLib.list ? pinLib.list.filter(pinIsMcu) : [];
+    var html = '<div class="field"><label for="spec-block-part">Part</label><input class="input" id="spec-block-part" value="' + esc(x.part) + '" placeholder="Part number, such as STM32G0B1CBT6"' + (mcus.length ? ' list="spec-part-list"' : '') + '>' +
+      (mcus.length ? '<datalist id="spec-part-list">' + mcus.map(function (f) { return '<option value="' + esc(f.mpn) + '">' + esc((f.manufacturer || '') + (f.package ? ', ' + f.package : '')) + '</option>'; }).join('') + '</datalist>' : '') + '</div>';
+    if (!x.part && !copy) return html;
+    html += '<div class="field spec-pins"><span class="field-label">Pins</span>';
+    if (!copy) {
+      if (lib && pinIsMcu(lib)) html += '<p class="note" style="margin:0 0 8px">' + esc(lib.mpn) + ' is in the part library. A pin plan checks this block’s connections against its pins and alternate functions, and places them.</p><button class="btn btn-sm" data-act="spec-pins-start">Start a pin plan</button>';
+      else if (lib) html += '<p class="note" style="margin:0">' + esc(lib.mpn) + ' is in the part library, but not as an MCU: its pins list no alternate functions.</p>';
+      else if (fte && pinLib.loading) html += '<p class="note" style="margin:0">Looking in the part library…</p>';
+      else if (fte) html += '<p class="note" style="margin:0">' + esc(x.part) + ' isn’t in the part library in this browser. Make or sync it in <a href="../pincheck/' + (DEMO ? '?demo' : '') + '">Pincheck</a> (Import from CubeMX… for an STM32), then come back.</p>';
+      else html += '<p class="note" style="margin:0">No pin plan yet.</p>';
+      return html + '</div>';
+    }
+    var res = pinPlan(a, x), c = res.counts;
+    var notes = [];
+    if (x.part && copy.mpn && window.PK && window.PK.library ? window.PK.library.norm(copy.mpn) !== window.PK.library.norm(x.part) : x.part && copy.mpn && copy.mpn.toUpperCase() !== x.part.toUpperCase())
+      notes.push('The plan is for ' + esc(copy.mpn) + '; the Part line says ' + esc(x.part) + '.' + (lib && pinIsMcu(lib) ? ' <button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-start">Plan from ' + esc(lib.mpn) + '</button>' : ''));
+    else if (lib && lib.local && lib.local.sha && copy.from && copy.from.sha && lib.local.sha !== copy.from.sha)
+      notes.push('The part library has a newer ' + esc(copy.mpn) + '. <button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-start">Update the plan’s copy</button>');
+    html += '<div class="spec-pins-sum"><span><b>' + c.used + '</b> of ' + c.io + ' I/O pins planned</span>' +
+      (c.problems ? '<span class="spec-pins-tag issue">✕ ' + plural(c.problems, 'problem') + '</span>' : '') +
+      (c.warnings ? '<span class="spec-pins-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
+      (!c.problems && !c.warnings ? '<span class="spec-pins-tag ok">✓ All placed</span>' : '') + '</div>' +
+      notes.map(function (n) { return '<p class="note spec-pins-note">' + n + '</p>'; }).join('');
+    html += '<div class="spec-pins-list">' + res.reqs.map(function (r) {
+      var sev = PIN.sevOf(r);
+      var pins = r.slots.slice().sort(function (p1, p2) { return PIN.nat(p1.sig, p2.sig); }).map(function (sl) {
+        return '<span class="spec-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + (sl.sig && sl.sig !== sl.gpio && sl.sig !== 'GPIO' ? ' <i>' + esc(sl.sig) + '</i>' : '') + '</span>';
+      }).join('');
+      var lines = r.problems.map(function (q) { return '<li class="issue">' + esc(q.text) + '</li>'; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return '<li class="warn">' + esc(n.text) + '</li>'; })).join('');
+      return '<div class="spec-pins-row ' + sev + '"><div class="spec-pins-top"><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(pinWhat(r)) + '</b><span class="spec-pins-blocks">' + esc(r.users.map(function (u) { return u.block; }).join(', ')) + '</span></div>' +
+        (pins ? '<div class="spec-pins-pins">' + pins + '</div>' : '') + (lines ? '<ul class="spec-pins-why">' + lines + '</ul>' : '') +
+        (r.fix ? '<button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-fix" data-req="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';
+    }).join('') + res.stray.map(function (st) {
+      return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">Picked on the pin, but no connection asks for it: not in Scribe.</li></ul></div>';
+    }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
+    return html + '<p class="note">From ' + esc([copy.mpn, copy.package].filter(Boolean).join(', ')) + ', the part library’s copy kept with this review.</p></div>';
+  }
+  // Start a plan, or refresh its copy: the library's file, stripped to what the planner reads, onto the section.
+  function specPinsStart() {
+    var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id];
+    if (!cur) return;
+    var a = M.specAnalysis(p), x = a.sections.filter(function (y) { return y.sec.id === id; })[0], lib = x && pinLibFind(x.part);
+    var copy = lib && M.specPinPart(lib);
+    if (!copy) { toast('That part isn’t in the part library in this browser'); return; }
+    var had = cur.pins && cur.pins.part;
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, { pins: Object.assign({}, cur.pins || {}, { part: copy }) }), me())]);
+    toast((had ? 'Updated the plan’s copy of ' : 'Planning pins from ') + copy.mpn + '.', { label: 'Undo', run: function () { specHistStep(true); } });
+  }
+  // A label the part can't do, rewritten as the planner suggests ("DAC2" as "DAC1 OUT2"), in whichever block's
+  // Connects line holds it.
+  function specPinsFix(reqId) {
+    var p = current(), r = pinMemo.res && pinMemo.res.reqs.filter(function (q) { return q.id === reqId; })[0];
+    if (!p || !r || !r.fix) return;
+    var c = r.users[0].conn, from = (p.spec || {})[c.from];
+    if (!from) return;
+    var ctx = M.specAnalysis(p).ctx, items = M.specUsesItems(from.body, c.word), it = items.filter(function (n) { return M.specUseId(ctx, n) === c.to && (n.label || '') === c.label; })[0];
+    if (!it) { toast('That connection changed; try again'); renderInspector(); return; }
+    it.label = c.label.replace(r.fix.from, r.fix.to);
+    specPutAll(p, [M.specStamp(Object.assign({}, from, { body: M.specSetLine(from.body, c.word, M.specLinkText(items)) }), me())]);
+    toast('Wrote ' + r.fix.to + ' on ' + from.title + '’s line.', { label: 'Undo', run: function () { specHistStep(true); } });
+  }
+
   // The block panel's Within (Chris, 2026-11-20): the section the block is in, and a list to move it to another one
   // or out under the board, as the hierarchy's drag does (M.specNest; the text follows).
   function specWithinField(T, x) {
@@ -5701,6 +5806,7 @@
     if (key === 'gist') f.body = M.specSetLine(cur.body, 'gist', value);
     if (key === 'link') f.body = M.specSetLine(cur.body, word, value);
     if (key === 'parts') f.body = M.specSetLine(cur.body, 'parts', value);
+    if (key === 'part') f.body = M.specSetLine(cur.body, 'part', value);
     specPutAll(p, [M.specStamp(Object.assign({}, cur, f), me())]);
   }
   // Drag-to-connect: `from` gains a link to `to`, with the link its kind makes (Uses in FW; Connects in
@@ -7591,6 +7697,8 @@
         break;
       }
       case 'spec-block-label': specLinkLabel(el.dataset.word, el.dataset.name); break;
+      case 'spec-pins-start': specPinsStart(); break;
+      case 'spec-pins-fix': specPinsFix(el.dataset.req); break;
       case 'spec-ctag-open': {
         var op2 = current(), oc = op2 && op2.comments[id];
         if (!oc) break;
@@ -7905,6 +8013,7 @@
       }
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
+    if (e.target.id === 'spec-block-part') specBlockField('part', e.target.value);
     if (e.target.id === 'spec-power-add' && e.target.value.trim()) { var prail = e.target.value.trim(); specPowerSet(function (it) { return it.concat([{ rail: prail, role: 'sink' }]); }); }
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
     if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);

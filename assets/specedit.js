@@ -8,7 +8,7 @@
    gives back the same text, byte for byte. On the screen:
      - a line's leading markup is a badge: "#" to "####" (H1 to H4, and a heading's " * kind"), list markers ("- ",
        "1. ", drawn as • or 1.1 by level), "> " (Gist), "Check:", and the link words ("Connects:", "Supplies:",
-       "Uses:", "Parts:");
+       "Uses:", "Parts:", and in EE "Part:");
      - a mark, [words]{REQ-001} / {std} / {#Section}, is one badge: its words and a chip naming what it points at;
      - @req is a flag badge;
      - **bold**, *italic*, and ~~struck~~ words are drawn so, their markers kept as faint characters;
@@ -83,7 +83,7 @@
       var words = (o.words ? o.words() : []).concat(['Parts']);
       for (var w = 0; w < words.length; w++) {
         var re = new RegExp('^(\\s*)' + words[w].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*:\\s?', 'i');
-        if ((m = re.exec(raw))) return { raw: m[0], kind: 'word', label: esc(words[w]), cls: ' se-wordb', line: 'se-links', title: words[w] === 'Parts' ? 'Parts: reference designators, separated by commas' : words[w] + ': blocks, separated by commas' };
+        if ((m = re.exec(raw))) return { raw: m[0], kind: 'word', label: esc(words[w]), cls: ' se-wordb', line: 'se-links', title: words[w] === 'Parts' ? 'Parts: reference designators, separated by commas' : words[w] === 'Part' ? 'Part: the block’s part number; an MCU’s pins plan from it' : words[w] + ': blocks, separated by commas' };
       }
       if ((m = /^(\s*)>\s?/.exec(raw))) return { raw: m[0], kind: 'gist', label: 'Gist', cls: ' se-gistb', line: 'se-gist', title: 'The section’s one-line gist' };
       if ((m = LIST.exec(raw))) {
