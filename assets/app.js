@@ -3300,7 +3300,10 @@
     var ol = (view === 'side' ? ui.specOutlineSide : ui.specOutline) || 'auto';
     var wrap = '<div class="spec-wrap depth-' + depth + ' ol-' + ol + (show ? ' spec-show-' + show : '') + '">' + outline + '<div class="spec-doc">' + doc + '</div></div>';
     if (view === 'side') return html.replace('<div class="page spec-page">', '<div class="page spec-page spec-side-page">') +
-      '<div class="spec-side"><div class="spec-side-doc">' + wrap + '</div><div class="spec-side-map">' + specMapHtml(p, a) + '</div></div></div>';
+      // Expanded, the whole view fills the window, the text still beside the diagram (Chris, 2026-11-20).
+      // The handle between the columns drags their split (Chris, 2026-11-20), kept in this browser.
+      '<div class="spec-side' + (specExpanded ? ' expanded' : '') + '" style="--split:' + specSplit() + '"><div class="spec-side-doc">' + wrap + '</div>' +
+      '<div class="spec-side-split" role="separator" aria-orientation="vertical" aria-label="Drag to change the columns’ widths" title="Drag to change the widths; double-click for half and half"></div><div class="spec-side-map">' + specMapHtml(p, a) + '</div></div></div>';
     return html + wrap + '</div>';
   }
   // The window is too narrow for Side by side (and for the outline beside the text).
@@ -3310,6 +3313,20 @@
     return '<button class="spec-ol-toggle" data-act="spec-outline-toggle" title="Show or hide the outline" aria-label="Show or hide the outline">' +
       '<span class="spec-ol-chev" aria-hidden="true">‹</span><span class="spec-ol-label">Outline</span></button>';
   }
+  // Side by side's split: the text column's share of the width, in percent (25 to 75), kept in this browser.
+  function specSplit() { var v = +load('specSideSplit', 50); return isFinite(v) ? Math.max(25, Math.min(75, Math.round(v * 10) / 10)) : 50; }
+  document.addEventListener('pointerdown', function (e) {
+    var h = e.button === 0 && e.target.closest && e.target.closest('.spec-side-split'); if (!h) return;
+    var side = h.parentElement, box = side.getBoundingClientRect(), v = specSplit();
+    e.preventDefault(); h.setPointerCapture && h.setPointerCapture(e.pointerId); side.classList.add('splitting');
+    function move(ev) { v = Math.max(25, Math.min(75, (ev.clientX - box.left) / box.width * 100)); side.style.setProperty('--split', v.toFixed(1)); }
+    function up() { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); side.classList.remove('splitting'); save('specSideSplit', Math.round(v * 10) / 10); }
+    h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  });
+  document.addEventListener('dblclick', function (e) {
+    var h = e.target.closest && e.target.closest('.spec-side-split'); if (!h) return;
+    save('specSideSplit', 50); h.parentElement.style.setProperty('--split', '50');
+  });
   // The view to show text in: Side by side stays (it has the text), Diagram goes to Document.
   function specTextView() { return ui.specView === 'side' ? 'side' : 'doc'; }
 

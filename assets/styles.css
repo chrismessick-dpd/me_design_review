@@ -949,8 +949,27 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 /* Side by side (Chris, 2026-11-20): the document on the left, the diagram on the right, which stays in view
    while the text scrolls (its own scroll for the hierarchy and power tree under it). */
 .page.spec-side-page { max-width: 1800px; }
-.spec-side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.spec-side { display: grid; grid-template-columns: minmax(0, calc(var(--split, 50) * 1% - 12px)) 24px minmax(0, 1fr); align-items: start; }
+/* The handle between the columns (Chris, 2026-11-20): the whole gutter drags; a line shows on hover and while dragging. */
+.spec-side-split { align-self: stretch; position: relative; cursor: col-resize; touch-action: none; min-height: 100%; }
+.spec-side-split::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--hair); transition: background .15s; }
+.spec-side-split:hover::after, .spec-side.splitting .spec-side-split::after { background: var(--accent); }
+.spec-side.splitting { cursor: col-resize; user-select: none; }
+.spec-side.splitting .spec-side-map, .spec-side.splitting .spec-side-doc { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .spec-side-split::after { transition: none; } }
 .spec-side-map { position: sticky; top: 64px; max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px); overflow: auto; padding-bottom: 12px; }
+/* Side by side expanded (Chris, 2026-11-20): the whole view fills the window, the text scrolling on the left and the
+   expanded diagram (zoom, pan, Fit) on the right; the rest of the right pane (notes, hierarchy) steps aside. */
+.spec-side.expanded { position: fixed; inset: 0; z-index: 38; gap: 0; grid-template-rows: 100%; background: var(--bg);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.spec-side.expanded .spec-side-doc { height: 100%; overflow: auto; padding: 20px 24px 80px; }
+.spec-side.expanded .spec-side-split { height: 100%; }
+.spec-side.expanded .spec-outline { top: 0; max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); }
+.spec-side.expanded .spec-side-map { position: static; height: 100%; max-height: none; overflow: hidden; padding: 0; display: flex; flex-direction: column; }
+.spec-side.expanded .spec-side-map > :not(:has(.spec-map-card.expanded)):not(.spec-map-card.expanded),
+.spec-side.expanded .spec-pt > :not(.spec-map-card.expanded) { display: none; }
+.spec-side.expanded .spec-side-map > :has(.spec-map-card.expanded), .spec-side.expanded .spec-pt { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.spec-side.expanded .spec-map-card.expanded { position: relative; inset: auto; z-index: auto; flex: 1; min-height: 0; padding: 0; }
 .spec-gap { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font: 600 11px/1 var(--sans); color: var(--warn); background: var(--warn-hatch), var(--warn-soft); }
 .spec-doc { min-width: 0; }
 .spec-sec { padding: 2px 0 6px; scroll-margin-top: 70px; border-radius: 10px; }
