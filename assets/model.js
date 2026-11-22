@@ -860,6 +860,7 @@
       if (n >= 1000 || !/^[A-Za-z0-9_.-]{1,16}$/.test(k) || !q || typeof q !== 'object') return;
       var e = {};
       ['req', 'sig', 'fn', 'gpio'].forEach(function (f) { if (typeof q[f] === 'string' && q[f]) e[f] = q[f].slice(0, f === 'req' ? 240 : 60); });
+      if (q.auto === true) e.auto = true;       // placed by Auto-assign, unlocked (2026-11-21)
       if (e.sig || e.fn) { map[k] = e; n++; }
     });
     if (n) out.map = map;

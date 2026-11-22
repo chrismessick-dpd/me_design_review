@@ -20,6 +20,8 @@
      candidates(part, req, used)    → { "<pad num>": { f, taken } }   pads that could serve a requirement
      choices(part, result, pad)     → [{ fn, req }]   what a pad could do, and for which requirement
      pick(map, result, part, pad, fn, reqId) → a new map with that pick (and the bus's other picks kept in step)
+     assignAll(map, fullResult, part), unassign(map), lock(map, reqIds, on) → Auto-assign, Unassign, and a row's lock
+                                    (a stored entry with auto: true is unlocked; a pick or a locked row has none)
      sevOf(req)                     → 'issue' | 'warn' | 'ok'
 
    A requirement is one interface a connection asks for. Its id is stable across edits: a bus label shared by
@@ -195,7 +197,11 @@
     } else r.problems.push({ code: 'no-instance', text: `No ${it.inst} on this part. It has ${have.join(', ')}.` });
   }
 
-  function plan(part, conns, map, types) {
+  // opts.auto (default true): place every connection the stored assignments leave open. Scribe EE passes false
+  // (Chris, 2026-11-21: assignments are stored and change only on Auto-assign or a pick), so an open one shows as
+  // not assigned; explicit pins (PB8–PB15) are placed either way, since there's nothing to choose.
+  function plan(part, conns, map, types, opts) {
+    const auto = !opts || opts.auto !== false;
     const reqs = requirements(conns, types);
     const used = {}, claimed = {};
     const take = (pad, r, sig, fn, lock) => {
@@ -212,20 +218,21 @@
       const r = reqs.find(q => q.id === l.req);
       const fn = l.fn ? pad.fns.find(f => f.full === l.fn && (!l.gpio || f.gpio === l.gpio)) || null : null;
       if (r && !r.dead && !used[num]) {
-        take(pad, r, l.sig || (fn ? fn.sig : 'GPIO'), fn, true);
+        take(pad, r, l.sig || (fn ? fn.sig : 'GPIO'), fn, !l.auto);     // an Auto-assign entry is unlocked
         if (fn && TYPES[r.type].bus) { r.inst = fn.inst; claimed[fn.inst] = r; }
       } else if (!used[num]) used[num] = { req: null, sig: l.fn || l.sig || 'GPIO', fn, lock: true, stray: true };
     });
     const order = reqs.filter(r => !r.dead)
       .map(r => ({ r, n: r.type === 'PINS' ? -1 : r.slots.length ? 0 : options(part, r) }))
       .sort((a, b) => a.n - b.n).map(x => x.r);
-    order.forEach(r => place(part, r, used, claimed, take));
+    order.forEach(r => { if (auto || r.type === 'PINS') place(part, r, used, claimed, take); else open(r); });
 
     const io = part.pads.filter(p => p.gpio);
     const stray = Object.keys(used).filter(n => used[n].stray).map(n => ({ pad: n, fn: used[n].sig }));
     return { reqs, used, stray, conns: conns || [], counts: {
       io: io.length, used: io.filter(p => used[p.num]).length,
-      problems: reqs.filter(r => sevOf(r) === 'issue').length, warnings: reqs.filter(r => sevOf(r) === 'warn').length + stray.length } };
+      problems: reqs.filter(r => sevOf(r) === 'issue').length, warnings: reqs.filter(r => sevOf(r) === 'warn').length + stray.length,
+      unassigned: reqs.filter(r => sevOf(r) === 'todo').length } };
   }
 
   function options(part, r) {
@@ -300,7 +307,15 @@
     if (n > want) r.notes.push({ sev: 'warn', code: 'over', text: `${n} pins picked, but “${r.item.text || r.label}” asks for ${want}. Remove a pick (click the pin, then Let the planner choose), or Clear picks.` });
   }
 
-  function sevOf(r) { return r.problems.length ? 'issue' : r.notes.some(n => n.sev === 'warn') ? 'warn' : 'ok'; }
+  // How many pins a requirement takes, and whether the stored assignments leave it open (todo: not assigned yet).
+  function needOf(r) { const T = TYPES[r.type]; return r.type === 'PINS' ? r.item.pins.length : T.bus ? T.sigs.length : r.item.count; }
+  function open(r) {
+    const need = needOf(r), have = r.slots.length;
+    if (have >= need) return;
+    r.todo = true;
+    r.notes.push({ sev: 'info', code: 'todo', text: have ? `${have} of ${need} pins assigned; Auto-assign places the rest.` : 'Not assigned yet: Auto-assign places it.' });
+  }
+  function sevOf(r) { return r.problems.length ? 'issue' : r.notes.some(n => n.sev === 'warn') ? 'warn' : r.todo ? 'todo' : 'ok'; }
 
   // Does a function serve a requirement?
   function serves(r, f) {
@@ -359,7 +374,36 @@
     return Object.keys(TYPES).filter(k => TYPES[k].fams).map(k => ({ type: k, all: instsOf(part, TYPES[k]) })).filter(g => g.all.length)
       .map(g => ({ type: g.type, insts: g.type === 'SWD' ? [] : g.all.filter(i => i !== g.type) }));
   }
+  // Auto-assign: store every pin a full plan (plan(..., { auto: true })) placed that isn't stored yet, unlocked.
+  function assignAll(map, result, part) {
+    const out = Object.assign({}, map);
+    result.reqs.forEach(r => r.type !== 'PINS' && r.slots.forEach(sl => {   // explicit pins are placed anyway
+      if (out[sl.pad]) return;
+      const e = { req: r.id, sig: sl.sig, auto: true };
+      if (sl.fn) { e.fn = sl.fn.full; if (part && part.byNum[sl.pad] && sl.fn.gpio !== part.byNum[sl.pad].names[0]) e.gpio = sl.fn.gpio; }
+      out[sl.pad] = e;
+    }));
+    return out;
+  }
+  // Unassign: every stored pin goes except locked ones (picks and locked rows).
+  function unassign(map) { const out = {}; Object.keys(map || {}).forEach(k => { if (!map[k].auto) out[k] = map[k]; }); return out; }
+  // Lock or unlock requirements' stored pins: a locked pin holds through Auto-assign and Unassign.
+  function lock(map, reqIds, on) {
+    const ids = new Set(reqIds), out = {};
+    Object.keys(map || {}).forEach(k => {
+      const e = Object.assign({}, map[k]);
+      if (ids.has(e.req)) { if (on) delete e.auto; else e.auto = true; }
+      out[k] = e;
+    });
+    return out;
+  }
+  // Lock or unlock single stored pins (a pin row's lock in the pin map).
+  function lockPads(map, pads, on) {
+    const set = new Set(pads.map(String)), out = {};
+    Object.keys(map || {}).forEach(k => { const e = Object.assign({}, map[k]); if (set.has(String(k))) { if (on) delete e.auto; else e.auto = true; } out[k] = e; });
+    return out;
+  }
   function unpick(map, num) { const out = Object.assign({}, map); delete out[num]; return out; }
 
-  root.SignoffPinmap = { TYPES, FIXED, part, parseFn, parseLabel, requirements, plan, typeOptions, typeOf, candidates, choices, pick, unpick, sevOf, serves, portOf, baseName, nat };
+  root.SignoffPinmap = { TYPES, FIXED, part, parseFn, parseLabel, requirements, plan, assignAll, unassign, lock, lockPads, typeOptions, typeOf, candidates, choices, pick, unpick, sevOf, serves, portOf, baseName, nat };
 })(typeof window !== 'undefined' ? window : globalThis);

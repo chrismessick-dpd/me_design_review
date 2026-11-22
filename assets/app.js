@@ -5703,13 +5703,13 @@
     var key = x.sec.id + '|' + JSON.stringify([copy.mpn, copy.from || null, copy.pins.length]) + '|' + JSON.stringify(conns.map(function (c) { return [c.id, c.label, c.dir, c.block]; })) + '|' + JSON.stringify(map) + '|' + JSON.stringify(types);
     var c = pinCache[x.sec.id];
     if (!c || c.key !== key) {
-      var part = PIN.part(copy), res = PIN.plan(part, conns, map, types);
+      var part = PIN.part(copy), res = PIN.plan(part, conns, map, types, { auto: false });   // stored assignments only (2026-11-21)
       res.part = part; res.conns = conns;
       c = pinCache[x.sec.id] = { key: key, res: res };
     }
     return c.res;
   }
-  var PIN_MARK = { issue: '✕', warn: '▲', ok: '✓' };
+  var PIN_MARK = { issue: '✕', warn: '▲', todo: '○', ok: '✓' };
   function pinWhat(r) { return r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : ''); }
   function specPinsField(a, x) {
     var s = x.sec, copy = s.pins && s.pins.part, fte = isFte() || !!DEMO;
@@ -5738,7 +5738,8 @@
     html += '<div class="spec-pins-sum"><span><b>' + c.used + '</b> of ' + c.io + ' I/O pins assigned</span>' +
       (c.problems ? '<span class="spec-pins-tag issue">✕ ' + plural(c.problems, 'problem') + '</span>' : '') +
       (c.warnings ? '<span class="spec-pins-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
-      (!c.problems && !c.warnings ? '<span class="spec-pins-tag ok">✓ All placed</span>' : '') + '</div>' +
+      (c.unassigned ? '<span class="spec-pins-tag todo">○ ' + c.unassigned + ' not assigned</span>' : '') +
+      (!c.problems && !c.warnings && !c.unassigned ? '<span class="spec-pins-tag ok">✓ All placed</span>' : '') + '</div>' +
       notes.map(function (n) { return '<p class="note spec-pins-note">' + n + '</p>'; }).join('');
     // One row per connection, as the pin map lists them (Chris, 2026-11-21): a connection with several signals folds
     // open to a row per signal (pinOpen remembers which, per block).
@@ -5747,12 +5748,21 @@
         return '<span class="spec-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + (sl.sig && sl.sig !== sl.gpio && sl.sig !== 'GPIO' ? ' <i>' + esc(sl.sig) + '</i>' : '') + '</span>';
       }).join('');
     };
-    var sigRow = function (r, u, kid, cn) {
-      var sev = PIN.sevOf(r), pins = pinsOf(r), what = pinWhat(r), name = String(u.item.text || '');
+    var sigRow = function (r, u, kid, cn, noChips) {
+      var sev = PIN.sevOf(r), pins = noChips ? '' : pinsOf(r), what = pinWhat(r), name = String(u.item.text || '');
       var lines = r.problems.map(function (q) { return '<li class="issue">' + esc(q.text) + '</li>'; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return '<li class="warn">' + esc(n.text) + '</li>'; })).join('');
       return '<div class="spec-pins-row ' + sev + (kid ? ' kid' : '') + '"><div class="spec-pins-top"><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(kid ? what : cn.block) + '</b><span class="spec-pins-blocks">' + esc(kid ? (name.toLowerCase() === what.toLowerCase() ? '' : name) : what) + '</span></div>' +
         (pins ? '<div class="spec-pins-pins">' + pins + '</div>' : '') + (lines ? '<ul class="spec-pins-why">' + lines + '</ul>' : '') +
         (r.fix ? '<button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-fix" data-req="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';
+    };
+    // One line per pin inside a fold: its signal, its pin, and the function when it says more.
+    var pinLines = function (r, u) {
+      var T = PIN.TYPES[r.type], net = String(u.item.text || '').replace(/^\d+\s*[x×]?\s+/, '');
+      var ss = r.slots.slice().sort(function (a1, a2) { return T.bus ? T.sigs.indexOf(a1.sig) - T.sigs.indexOf(a2.sig) : PIN.nat(a1.gpio, a2.gpio); });
+      return ss.length ? '<div class="spec-pins-pinrows">' + ss.map(function (sl, i) {
+        var name = r.type === 'PINS' ? sl.gpio : T.bus ? sl.sig : (net || r.type) + (ss.length > 1 ? ' ' + (i + 1) : '');
+        return '<div class="spec-pins-pinrow"><span class="spec-pins-pn">' + esc(name) + '</span><span class="spec-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + '</span>' + (sl.fn && !T.bus ? '<span class="spec-pins-fn">' + esc(sl.fn.full) + '</span>' : '') + '</div>';
+      }).join('') + '</div>' : '';
     };
     var corder = {}; (res.conns || []).forEach(function (cn, i) { corder[cn.id] = i; });
     var conns = [], cById = {};
@@ -5767,14 +5777,15 @@
     var openSet = pinOpen[s.id] || {};
     html += '<div class="spec-pins-list">' + conns.map(function (cn) {
       cn.items.sort(function (i1, i2) { return i1.ii - i2.ii; });
-      if (cn.items.length === 1) return sigRow(cn.items[0].r, cn.items[0].u, false, cn);
-      var sev = cn.items.map(function (it) { return PIN.sevOf(it.r); }).sort(function (s1, s2) { return ['issue', 'warn', 'ok'].indexOf(s1) - ['issue', 'warn', 'ok'].indexOf(s2); })[0];
+      var multi = cn.items.length > 1, nPins = cn.items.reduce(function (n, it) { return n + it.r.slots.length; }, 0);
+      if (!multi && nPins < 2) return sigRow(cn.items[0].r, cn.items[0].u, false, cn);
+      var sev = cn.items.map(function (it) { return PIN.sevOf(it.r); }).sort(function (s1, s2) { return ['issue', 'warn', 'todo', 'ok'].indexOf(s1) - ['issue', 'warn', 'todo', 'ok'].indexOf(s2); })[0];
       var open = !!openSet[cn.id];
       return '<div class="spec-pins-grp' + (open ? ' open' : '') + '"><button class="spec-pins-row spec-pins-head ' + sev + '" data-act="spec-pins-fold" data-id="' + esc(cn.id) + '" aria-expanded="' + open + '">' +
-        '<div class="spec-pins-top"><span class="spec-pins-caret' + (open ? ' open' : '') + '"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(cn.block) + '</b><span class="spec-pins-blocks">' + cn.items.length + ' signals</span></div>' +
+        '<div class="spec-pins-top"><span class="spec-pins-caret' + (open ? ' open' : '') + '"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(cn.block) + '</b><span class="spec-pins-blocks">' + (multi ? cn.items.length + ' signals' : esc(pinWhat(cn.items[0].r))) + '</span></div>' +
         '<div class="spec-pins-label">“' + esc(cn.label) + '”</div>' +
         (open ? '' : '<div class="spec-pins-pins">' + cn.items.map(function (it) { return pinsOf(it.r); }).join('') + '</div>') + '</button>' +
-        (open ? '<div class="spec-pins-kids">' + cn.items.map(function (it) { return sigRow(it.r, it.u, true, cn); }).join('') + '</div>' : '') + '</div>';
+        (open ? '<div class="spec-pins-kids">' + cn.items.map(function (it) { return (multi ? sigRow(it.r, it.u, true, cn, true) : '') + pinLines(it.r, it.u); }).join('') + '</div>' : '') + '</div>';
     }).join('') + res.stray.map(function (st) {
       return '<div class="spec-pins-row warn"><div class="spec-pins-top"><span class="spec-pins-mark warn">▲</span><b>' + esc(st.fn) + '</b><span class="spec-pins-blocks">' + esc((res.part.byNum[st.pad] || { names: [st.pad] }).names[0]) + '</span></div><ul class="spec-pins-why"><li class="warn">You picked this function on the pin, but no connection to the MCU asks for it.</li></ul></div>';
     }).join('') + (res.reqs.length || res.stray.length ? '' : '<p class="note" style="margin:0">No connections yet. Connect blocks to this one, naming the interface: IMU (I2C1), Wi-Fi module (UART), Probe (2 ADC).</p>') + '</div>';
@@ -5792,7 +5803,7 @@
       if (!res) return;
       res.reqs.forEach(function (r) {
         var sev = PIN.sevOf(r);
-        if (sev === 'ok') return;                 // Chris, 2026-11-21: the label shows the net name only, no peripheral or pins
+        if (sev !== 'issue' && sev !== 'warn') return;   // Chris, 2026-11-21: the label shows the net name only, no peripheral or pins
         var why = r.problems.map(function (q) { return q.text; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return n.text; })).join(' ');
         r.users.forEach(function (u) {
           var lab = String(u.conn.label || '').toLowerCase();
@@ -5839,6 +5850,18 @@
           return Object.assign({}, pins, { types: t, map: m });
         }, val ? 'Set the type to ' + val : 'The type comes from the label again');
       },
+      // Auto-assign (a full plan around what's stored, the new pins stored unlocked), Unassign (all but locked), and a
+      // row's lock (Chris, 2026-11-21).
+      onAuto: function () {
+        var r0 = pinRes(id); if (!r0) return;
+        specPinsEdit(function (pins) {
+          var full = PIN.plan(r0.part, r0.conns, pins.map || {}, pins.types || {}, { auto: true });
+          return Object.assign({}, pins, { map: PIN.assignAll(pins.map || {}, full, r0.part) });
+        }, 'Auto-assigned the open connections');
+      },
+      onUnassign: function () { specPinsMap(function (m) { return PIN.unassign(m); }, 'Unassigned every pin but the locked ones'); },
+      onLock: function (ids, on) { specPinsMap(function (m) { return PIN.lock(m, ids, on); }, on ? 'Locked' : 'Unlocked'); },
+      onLockPads: function (pads, on) { specPinsMap(function (m) { return PIN.lockPads(m, pads, on); }, on ? 'Locked the pin' : 'Unlocked the pin'); },
       onClear: function (reqId) { specPinsMap(function (m) { var o = {}; Object.keys(m).forEach(function (k) { if (m[k].req !== reqId) o[k] = m[k]; }); return o; }, 'Cleared your picks'); },
       onFix: function (reqId) { specPinsFix(reqId); }
     });

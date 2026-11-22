@@ -130,6 +130,13 @@
       var part = file && M.specPinPart && M.specPinPart(file);
       var r = Object.keys(p.spec).map(function (k) { return p.spec[k]; }).filter(function (x) { return x.title === title; })[0];
       if (r && part) r.pins = { part: part };
+      // Assignments are stored (2026-11-21): the demo opens Auto-assigned once, so its pin map shows a plan.
+      var PM = window.SignoffPinmap;
+      if (r && part && PM && M.specMcuConns) {
+        var pp = PM.part(part), conns = M.specMcuConns(M.specAnalysis(p), r.id);
+        var map = PM.assignAll({}, PM.plan(pp, conns, {}, {}, { auto: true }), pp);
+        if (Object.keys(map).length) r.pins.map = map;
+      }
     });
     // Bring-up reworks (config.rework), with pictures in assets/demo-previews/ and their discussion.
     if (only.rework && only.rework.length && M.reworkOn(p)) {
@@ -180,7 +187,7 @@
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 23
+    VERSION: 24
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

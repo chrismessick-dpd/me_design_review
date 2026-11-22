@@ -1677,6 +1677,25 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .pv-tabs { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 8px; }
 .pv-hint code { font-size: 11.5px; }
 .pv-conns { display: flex; flex-direction: column; gap: 6px; }
+/* A row per pin inside a connection's fold (2026-11-21). */
+.pv-pinrows { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px 14px; }
+.pv-pinrow { display: flex; align-items: center; gap: 8px; padding: 3px 4px 3px 10px; border-radius: 7px; cursor: pointer; border: 1.5px solid transparent; }
+.pv-pinrow:hover { background: var(--bg-elev); }
+.pv-pinrow.sel, .pv-pinrow:focus-visible { border-color: var(--accent); outline: none; }
+.pv-pr-name { min-width: 64px; font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-2); }
+.pv-pr-fn { font-size: 11.5px; color: var(--text-3); }
+/* Not assigned yet, a row's lock, and Unassign / Auto-assign under the drawing (2026-11-21). */
+.pv-tag.todo { background: var(--bg-sunk); color: var(--text-2); border: 1px dashed var(--text-3); }
+.pv-mark.todo { color: var(--text-3); }
+.pv-conn.todo { border-left: 4px dotted var(--text-3); }
+.pv-lock { margin-left: auto; flex: none; display: inline-grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-3); cursor: pointer; align-self: center; }
+.pv-lock:hover, .pv-lock:focus-visible { background: var(--bg-sunk); color: var(--text); }
+.pv-lock.on { color: var(--text); border-color: var(--border); background: var(--bg-sunk); }
+.pv-conn-top .pv-blocks { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-acts { display: flex; gap: 8px; justify-content: flex-start; margin-top: 8px; position: sticky; bottom: 0; left: 0; width: max-content; padding: 6px 0 2px; }
+.pv-full .pv-stage { display: flex; flex-direction: column; }
+.pv-full .pv-view { flex: 1; min-height: 0; overflow: auto; }
+.pv-acts:empty { display: none; }
 .pv-type-l { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-size: 11.5px; color: var(--text-3); }
 .pv-type { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1px 4px; max-width: 150px; }
 .pv-conn { background: var(--bg-elev); border-radius: 10px; padding: 9px 12px; cursor: pointer; border: 1.5px solid transparent; outline: none; }
@@ -1856,3 +1875,10 @@ button.spec-pins-head { display: block; width: 100%; text-align: left; font: inh
 .spec-pins-caret.open svg { transform: rotate(90deg); }
 .spec-pins-label { color: var(--text-3); font-size: 12px; margin: 2px 0 0 22px; }
 .spec-pins-kids { display: flex; flex-direction: column; gap: 4px; margin-left: 14px; padding-left: 8px; border-left: 1px solid var(--border); }
+.spec-pins-tag.todo { background: var(--bg-sunk); color: var(--text-2); border: 1px dashed var(--text-3); }
+.spec-pins-mark.todo { color: var(--text-3); }
+.spec-pins-row.todo { border-left: 3px dotted var(--text-3); }
+.spec-pins-pinrows { display: flex; flex-direction: column; gap: 2px; margin: 0 0 4px 12px; }
+.spec-pins-pinrow { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.spec-pins-pn { min-width: 60px; font: 600 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-2); }
+.spec-pins-fn { font-size: 11.5px; color: var(--text-3); }

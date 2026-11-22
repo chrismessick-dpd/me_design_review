@@ -8,7 +8,7 @@
      map,                          // the picks the plan was made with ({ pad: { req, sig, fn, gpio } })
      view, sel,                    // which view ('package', 'block', 'ports', 'matrix', 'table'), selected requirement
      canEdit,                      // false: no picks, no fixes (the views still show everything)
-     onPick(pad, fn, reqId, gpio), onUnpick(pad), onClear(reqId), onType(reqId, itemKeys, value), onFix(reqId), onView(view)
+     onPick(pad, fn, reqId, gpio), onUnpick(pad), onClear(reqId), onType(reqId, itemKeys, value), onLock(reqIds, on), onLockPads(pads, on), onAuto(), onUnassign(), onFix(reqId), onView(view)
    });
    view.update({ part, result, map })   draws again, keeping the view and the selection
    view.destroy()
@@ -23,16 +23,19 @@
   const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
   const VIEWS = [['package', 'Package'], ['block', 'Block'], ['ports', 'Ports'], ['matrix', 'Matrix'], ['table', 'Table']];
   const LEGEND = [['used', 'Assigned'], ['cand', 'Could use'], ['taken', 'Could use, taken'], ['issue', 'Problem'], ['warn', 'To check'], ['special', 'Clock or boot'], ['fixed', 'Power and reset'], ['free', 'Free']];
-  const MARK = { issue: '✕', warn: '▲', ok: '✓' };
+  const MARK = { issue: '✕', warn: '▲', todo: '○', ok: '✓' };
+  const RANK = ['issue', 'warn', 'todo', 'ok'];
+  // A row's lock (Chris, 2026-11-21): closed holds its pins through Auto-assign and Unassign.
+  const LOCK_SVG = on => '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="' + (on ? 'M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2' : 'M5.2 7V5a2.8 2.8 0 0 1 5.5-.7') + '" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
   let uid = 0;
 
   function mount(root, opts) {
     const P = window.SignoffPinmap, FIXED = P.FIXED, TYPES = P.TYPES, nat = P.nat, sevOf = P.sevOf;
     const id = 'pv' + (++uid);                    // SVG pattern ids, unique per mounted view
-    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, selConn: null, mineIds: new Set(), cand: {}, open: new Set() };
+    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, selConn: null, selPad: null, mineIds: new Set(), cand: {}, open: new Set() };
     const can = () => opts.canEdit !== false;
     root.innerHTML = '<div class="pv"><aside class="pv-side"><div class="pv-sum"></div><div class="pv-conns"></div></aside>' +
-      '<section class="pv-stage"><div class="pv-tabs"><div class="seg pv-views" role="tablist">' + VIEWS.map(v => '<button data-view="' + v[0] + '">' + v[1] + '</button>').join('') + '</div><div class="pv-legend"></div></div><div class="pv-view"></div></section>' +
+      '<section class="pv-stage"><div class="pv-tabs"><div class="seg pv-views" role="tablist">' + VIEWS.map(v => '<button data-view="' + v[0] + '">' + v[1] + '</button>').join('') + '</div><div class="pv-legend"></div></div><div class="pv-view"></div><div class="pv-acts"></div></section>' +
       '<div class="pv-pop" hidden></div></div>';
     const $ = s => root.querySelector(s);
     const pop = $('.pv-pop');
@@ -57,10 +60,11 @@
     // What's selected: one signal (S.sel, a requirement id), or a whole connection (S.selConn, Chris 2026-11-21: a row
     // with several signals selects them all on the drawing).
     const selIds = () => {
+      if (S.selPad) return new Set();
       if (S.selConn) return new Set(S.result.reqs.filter(r => r.users.some(u => u.conn.id === S.selConn)).map(r => r.id));
       return new Set(S.sel ? [S.sel] : []);
     };
-    const isMine = num => { const u = S.result.used[num]; return !!(u && u.req && S.mineIds && S.mineIds.has(u.req.id)); };
+    const isMine = num => { if (S.selPad) return String(num) === String(S.selPad); const u = S.result.used[num]; return !!(u && u.req && S.mineIds && S.mineIds.has(u.req.id)); };
     const what = r => r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : '');
 
     function render() {
@@ -74,7 +78,15 @@
       $('.pv-sum').innerHTML = '<span><b>' + c.used + '</b> of ' + c.io + ' I/O pins assigned</span>' +
         (c.problems ? '<span class="pv-tag issue">✕ ' + c.problems + (c.problems === 1 ? ' problem' : ' problems') + '</span>' : '') +
         (c.warnings ? '<span class="pv-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
-        (!c.problems && !c.warnings ? '<span class="pv-tag ok">✓ All placed</span>' : '');
+        (c.unassigned ? '<span class="pv-tag todo">○ ' + c.unassigned + ' not assigned</span>' : '') +
+        (!c.problems && !c.warnings && !c.unassigned ? '<span class="pv-tag ok">✓ All placed</span>' : '');
+      // The lock button for one or more requirements: on when every stored pin of theirs is locked.
+      const lockBtn = (rs, label) => {
+        rs = rs.filter(r => r.type !== 'PINS' && r.slots.length);
+        if (!rs.length || !can() || !opts.onLock) return '';
+        const on = rs.every(r => r.slots.every(sl => sl.lock));
+        return '<button class="pv-lock' + (on ? ' on' : '') + '" data-lock="' + esc(rs.map(r => r.id).join(' ')) + '" data-on="' + (on ? '0' : '1') + '" aria-pressed="' + on + '" title="' + (on ? 'Locked: Auto-assign and Unassign leave ' + esc(label) + '. Click to unlock.' : 'Lock ' + esc(label) + '’s pins, so Auto-assign and Unassign leave them') + '">' + LOCK_SVG(on) + '</button>';
+      };
       const groups = P.typeOptions(S.part);
       // Type: what the planner takes a signal to be, over the label (Chris, 2026-11-21: "Sense1_I2C" as I2C). It sets
       // this connection's signal only, even on a bus other blocks share.
@@ -87,20 +99,41 @@
           groups.map(g => g.insts.length ? '<optgroup label="' + esc(TYPES[g.type].name || g.type) + '">' + o(g.type, g.type + ', any') + g.insts.map(i => o(i, i)).join('') + '</optgroup>' : o(g.type, g.type)).join('') +
           '</select></label>';
       };
-      const pinsOf = r => r.slots.slice().sort((a, b) => nat(a.sig, b.sig)).map(s => '<span class="pv-pin' + (s.lock ? ' lock' : '') + '">' + esc(s.gpio) + (s.sig && s.sig !== s.gpio && s.sig !== 'GPIO' ? ' <i>' + esc(s.sig) + '</i>' : '') + '</span>').join('');
-      // One signal: its status, what it is, its pins, notes, and fixes. `kid` when it sits inside a connection's fold.
-      const sigRow = (r, u, kid, c) => {
-        const sev = sevOf(r), pins = pinsOf(r);
-        const notes = r.problems.map(t => '<li class="issue">' + esc(t.text) + '</li>').concat(r.notes.map(n => '<li class="' + esc(n.sev) + '">' + esc(n.text) + '</li>')).join('');
-        return '<div class="pv-conn ' + sev + (kid ? ' kid' : '') + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
-          '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(kid ? what(r) : c.block) + '</span><span class="pv-blocks">' + esc(kid ? ((u.item.text || '').toLowerCase() === what(r).toLowerCase() ? '' : u.item.text || '') : what(r)) + '</span></div>' +
-          '<div class="pv-conn-label">' + (kid ? '' : '“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '')) + typeSel(r, u) + '</div>' +
-          (pins ? '<div class="pv-pins">' + pins + '</div>' : '') + (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') +
-          (r.fix && can() && opts.onFix ? '<button class="btn btn-plain btn-sm pv-fix" data-fix="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') +
-          (r.slots.some(sl => sl.lock) && can() && opts.onClear ? '<button class="btn btn-plain btn-sm pv-fix" data-clear="' + esc(r.id) + '" title="Remove your picks for this signal; the planner places it again">Clear picks</button>' : '') + '</div>';
+      // A requirement's pins in reading order: a bus by its signals (SCK, MOSI, MISO), anything else by pin.
+      const slotsOf = r => { const T = TYPES[r.type]; return r.slots.slice().sort((a, b) => T.bus ? T.sigs.indexOf(a.sig) - T.sigs.indexOf(b.sig) : nat(a.gpio, b.gpio)); };
+      const pinsOf = r => slotsOf(r).map(s => '<span class="pv-pin' + (s.lock ? ' lock' : '') + '">' + esc(s.gpio) + (s.sig && s.sig !== s.gpio && s.sig !== 'GPIO' ? ' <i>' + esc(s.sig) + '</i>' : '') + '</span>').join('');
+      const caret = (id, open, label) => '<button class="pv-caret" data-fold="' + esc(id) + '" aria-expanded="' + open + '" aria-label="' + (open ? 'Close' : 'Open') + ' ' + esc(label) + '’s signals" title="' + (open ? 'Close' : 'Show each signal') + '"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+      const noteList = r => r.problems.map(t => '<li class="issue">' + esc(t.text) + '</li>').concat(r.notes.map(n => '<li class="' + esc(n.sev) + '">' + esc(n.text) + '</li>')).join('');
+      const fixes = r => (r.fix && can() && opts.onFix ? '<button class="btn btn-plain btn-sm pv-fix" data-fix="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') +
+        (r.slots.some(sl => sl.lock) && can() && opts.onClear ? '<button class="btn btn-plain btn-sm pv-fix" data-clear="' + esc(r.id) + '" title="Remove your picks for this signal; it goes back to not assigned">Clear picks</button>' : '');
+      const netName = u => String((u.item && u.item.text) || '').replace(/^\d+\s*[x×]?\s+/, '');
+      // One pin of a requirement (Chris, 2026-11-21: a connection folds open to a row per pin): its signal, pin, and lock.
+      const pinRow = (r, u, sl, i, n) => {
+        const T = TYPES[r.type], name = r.type === 'PINS' ? sl.gpio : T.bus ? sl.sig : (netName(u) || r.type) + (n > 1 ? ' ' + (i + 1) : '');
+        const fn = sl.fn && !T.bus ? sl.fn.full : '';
+        const lk = r.type !== 'PINS' && can() && opts.onLockPads ? '<button class="pv-lock' + (sl.lock ? ' on' : '') + '" data-lockpad="' + esc(sl.pad) + '" data-on="' + (sl.lock ? '0' : '1') + '" aria-pressed="' + !!sl.lock + '" title="' + (sl.lock ? 'Locked. Click to unlock ' : 'Lock ') + esc(name) + ' on ' + esc(sl.gpio) + '">' + LOCK_SVG(!!sl.lock) + '</button>' : '';
+        return '<div class="pv-pinrow' + (S.selPad === sl.pad ? ' sel' : '') + '" data-selpad="' + esc(sl.pad) + '" tabindex="0"><span class="pv-pr-name">' + esc(name) + '</span>' +
+          '<span class="pv-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + '</span>' + (fn ? '<span class="pv-pr-fn">' + esc(fn) + '</span>' : '') + lk + '</div>';
       };
-      // One row per connection into the MCU (Chris, 2026-11-21), in the order Scribe lists them; a connection with
-      // several signals ("LCD SPI2 + EXTCOMIN") folds open to a row per signal. A shared bus shows under each block.
+      const pinRows = (r, u) => { const ss = slotsOf(r); return ss.map((sl, i) => pinRow(r, u, sl, i, ss.length)).join(''); };
+      // A plain row: one connection with one pin, or none yet.
+      const oneRow = (r, u, c) => {
+        const sev = sevOf(r), pins = pinsOf(r), notes = noteList(r);
+        return '<div class="pv-conn ' + sev + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
+          '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + esc(what(r)) + '</span>' + lockBtn([r], c.block) + '</div>' +
+          '<div class="pv-conn-label">“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '') + typeSel(r, u) + '</div>' +
+          (pins ? '<div class="pv-pins">' + pins + '</div>' : '') + (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') + fixes(r) + '</div>';
+      };
+      // An interface inside a connection with several ("SPI2" in "LCD SPI2 + EXTCOMIN"): its heading, then its pins.
+      const ifaceRows = (r, u) => {
+        const sev = sevOf(r), notes = noteList(r), name = netName(u);
+        return '<div class="pv-conn kid ' + sev + (S.sel === r.id ? ' sel' : '') + '" data-req="' + esc(r.id) + '" tabindex="0">' +
+          '<div class="pv-conn-top"><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(what(r)) + '</span><span class="pv-blocks">' + esc(name.toLowerCase() === what(r).toLowerCase() ? '' : name) + '</span>' + lockBtn([r], name || what(r)) + '</div>' +
+          '<div class="pv-conn-label">' + typeSel(r, u) + '</div>' + (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') + fixes(r) + '</div>' +
+          (r.slots.length ? '<div class="pv-pinrows">' + pinRows(r, u) + '</div>' : '');
+      };
+      // One row per connection into the MCU (Chris, 2026-11-21), in the order Scribe lists them. A connection with two
+      // or more pins folds open: to a row per pin, or, with several interfaces, to each interface and its pins.
       const order = {}; (S.result.conns || []).forEach((c, i) => { order[c.id] = i; });
       const conns = [], byId = {};
       S.result.reqs.forEach(r => r.users.forEach(u => {
@@ -110,28 +143,41 @@
         c.items.push({ r, u, ii: +String(u.key || '').split('#').pop() || 0 });
       }));
       conns.sort((a, b) => (order[a.id] != null ? order[a.id] : 1e6) - (order[b.id] != null ? order[b.id] : 1e6));
-      const worst = list => list.map(x => sevOf(x.r)).sort((a, b) => ['issue', 'warn', 'ok'].indexOf(a) - ['issue', 'warn', 'ok'].indexOf(b))[0];
+      const worst = list => list.map(x => sevOf(x.r)).sort((a, b) => RANK.indexOf(a) - RANK.indexOf(b))[0];
       const rows = conns.map(c => {
         c.items.sort((a, b) => a.ii - b.ii);
-        if (c.items.length === 1) return sigRow(c.items[0].r, c.items[0].u, false, c);
-        const sev = worst(c.items), open = S.open.has(c.id) || c.items.some(x => x.r.id === S.sel);
-        // The caret opens and closes the fold; a click elsewhere on the row selects all its signals on the drawing.
+        const multi = c.items.length > 1, nPins = c.items.reduce((n, x) => n + x.r.slots.length, 0);
+        if (!multi && nPins < 2) return oneRow(c.items[0].r, c.items[0].u, c);
+        const sev = worst(c.items), open = S.open.has(c.id) || (multi && c.items.some(x => x.r.id === S.sel)) || c.items.some(x => x.r.slots.some(sl => sl.pad === S.selPad));
+        const one = !multi ? c.items[0] : null, notes = one ? noteList(one.r) : '';
+        // The caret opens and closes the fold; a click elsewhere on the row selects all its pins on the drawing.
         return '<div class="pv-cgrp ' + sev + (open ? ' open' : '') + '">' +
-          '<div class="pv-conn pv-chead ' + sev + (S.selConn === c.id ? ' sel' : '') + '" data-conn="' + esc(c.id) + '" tabindex="0">' +
-          '<div class="pv-conn-top"><button class="pv-caret" data-fold="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + (open ? 'Close' : 'Open') + ' ' + esc(c.block) + '’s signals" title="' + (open ? 'Close' : 'Show its signals') + '"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + c.items.length + ' signals</span></div>' +
-          '<div class="pv-conn-label">“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '') + '</div>' +
-          (open ? '' : '<div class="pv-pins">' + c.items.map(x => pinsOf(x.r)).join('') + '</div>') + '</div>' +
-          (open ? '<div class="pv-kids">' + c.items.map(x => sigRow(x.r, x.u, true, c)).join('') + '</div>' : '') + '</div>';
+          '<div class="pv-conn pv-chead ' + sev + (S.selConn === c.id || (one && S.sel === one.r.id) ? ' sel' : '') + '" data-conn="' + esc(c.id) + '"' + (one ? ' data-req="' + esc(one.r.id) + '"' : '') + ' tabindex="0">' +
+          '<div class="pv-conn-top">' + caret(c.id, open, c.block) + '<span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + (one ? esc(what(one.r)) : c.items.length + ' signals') + '</span>' + lockBtn(c.items.map(x => x.r), c.block) + '</div>' +
+          '<div class="pv-conn-label">“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '') + (one ? typeSel(one.r, one.u) : '') + '</div>' +
+          (open ? '' : '<div class="pv-pins">' + c.items.map(x => pinsOf(x.r)).join('') + '</div>') +
+          (notes ? '<ul class="pv-notes">' + notes + '</ul>' : '') + (one ? fixes(one.r) : '') + '</div>' +
+          (open ? '<div class="pv-kids">' + (one ? '<div class="pv-pinrows">' + pinRows(one.r, one.u) + '</div>' : c.items.map(x => ifaceRows(x.r, x.u)).join('')) + '</div>' : '') + '</div>';
       }).join('');
       const stray = S.result.stray.map(s => '<div class="pv-conn warn"><div class="pv-conn-top"><span class="pv-mark warn">▲</span><span class="pv-what">' + esc(s.fn) + '</span><span class="pv-blocks">' + esc((S.part.byNum[s.pad] || { names: [s.pad] }).names[0]) + '</span></div><div class="pv-conn-label">You picked this function on the pin, but no connection to the MCU asks for it. The pin stays reserved for it.</div>' +
         (can() && opts.onUnpick ? '<button class="btn btn-plain btn-sm pv-fix" data-unpick="' + esc(s.pad) + '">Remove the pick</button>' : '') + '</div>').join('');
       $('.pv-conns').innerHTML = rows + stray || '<p class="pv-hint">No connections yet. Connect blocks to the MCU, naming the interface: IMU (I2C1), Wi-Fi module (UART).</p>';
     }
 
+    // Unassign and Auto-assign, at the drawing's bottom left (Chris, 2026-11-21).
+    function renderActs() {
+      const el = $('.pv-acts');
+      if (!el) return;
+      const unlocked = Object.keys(S.map || {}).some(k => S.map[k].auto), open = S.result.reqs.some(r => r.todo);
+      el.innerHTML = can() && (opts.onAuto || opts.onUnassign) ?
+        (opts.onUnassign ? '<button class="btn btn-sm" data-act-pv="unassign"' + (unlocked ? '' : ' disabled') + ' title="Take every pin off its connection, except locked rows">Unassign</button>' : '') +
+        (opts.onAuto ? '<button class="btn btn-sm btn-primary" data-act-pv="auto"' + (open ? '' : ' disabled') + ' title="Place every connection not assigned yet, around the ones that are">Auto-assign</button>' : '') : '';
+    }
     function renderView() {
+      renderActs();
       $('.pv-legend').innerHTML = LEGEND.map(l => '<span class="pv-lg"><i class="pv-sw ' + l[0] + '"></i>' + l[1] + '</span>').join('');
       S.mineIds = selIds();
-      S.cand = S.selConn ? {} : P.candidates(S.part, selReq(), S.result.used);   // a whole connection lights its own pins only
+      S.cand = S.selConn || S.selPad ? {} : P.candidates(S.part, selReq(), S.result.used);   // a whole connection lights its own pins only
       const v = $('.pv-view');
       v.className = 'pv-view v-' + S.view;
       v.innerHTML = ({ package: viewPackage, block: viewBlock, ports: viewPorts, matrix: viewMatrix, table: viewTable }[S.view] || viewPackage)();
@@ -351,6 +397,14 @@
       if (vb) { S.view = vb.dataset.view; closePop(); render(); if (opts.onView) opts.onView(S.view); return; }
       const fx = t.closest('[data-fix]');
       if (fx) { if (opts.onFix) opts.onFix(fx.dataset.fix); return; }
+      const pa = t.closest('[data-act-pv]');
+      if (pa) { if (pa.disabled) return; if (pa.dataset.actPv === 'auto' && opts.onAuto) opts.onAuto(); if (pa.dataset.actPv === 'unassign' && opts.onUnassign) opts.onUnassign(); return; }
+      const lp = t.closest('[data-lockpad]');
+      if (lp) { if (opts.onLockPads) opts.onLockPads([lp.dataset.lockpad], lp.dataset.on === '1'); return; }
+      const sp = t.closest('[data-selpad]');
+      if (sp) { S.selPad = S.selPad === sp.dataset.selpad ? null : sp.dataset.selpad; S.sel = null; S.selConn = null; render(); return; }
+      const lk = t.closest('[data-lock]');
+      if (lk) { if (opts.onLock) opts.onLock(lk.dataset.lock.split(' ').filter(Boolean), lk.dataset.on === '1'); return; }
       const cl = t.closest('[data-clear]');
       if (cl) { if (opts.onClear) opts.onClear(cl.dataset.clear); return; }
       const up = t.closest('[data-unpick]');
@@ -359,11 +413,13 @@
       if (padEl) { openPop(padEl.dataset.pad, e); return; }
       closePop();
       const fold = t.closest('[data-fold]');
-      if (fold) { const id = fold.dataset.fold; if (fold.getAttribute('aria-expanded') === 'true') { S.open.delete(id); if (selReq() && selReq().users.some(u => u.conn.id === id)) { S.sel = null; S.selConn = id; } } else S.open.add(id); render(); return; }
+      if (fold) { const id = fold.dataset.fold; if (fold.getAttribute('aria-expanded') === 'true') { S.open.delete(id); const inside = S.result.reqs.filter(r => r.users.some(u => u.conn.id === id)); if (S.selPad && inside.some(r => r.slots.some(sl => sl.pad === S.selPad))) S.selPad = null; if (inside.length > 1 && inside.some(r => r.id === S.sel)) { S.sel = null; S.selConn = id; } } else S.open.add(id); render(); return; }
       const head = t.closest('[data-conn]');
-      if (head) { S.selConn = S.selConn === head.dataset.conn ? null : head.dataset.conn; S.sel = null; render(); return; }
+      // One interface: the header selects it, so the pins it could use light too; several: all of them.
+      if (head && head.dataset.req) { S.sel = S.sel === head.dataset.req ? null : head.dataset.req; S.selConn = null; S.selPad = null; render(); return; }
+      if (head) { S.selConn = S.selConn === head.dataset.conn ? null : head.dataset.conn; S.sel = null; S.selPad = null; render(); return; }
       const row = t.closest('.pv-conn[data-req], .pv-grp[data-req]');
-      if (row) { S.sel = S.sel === row.dataset.req ? null : row.dataset.req; S.selConn = null; render(); }
+      if (row) { S.sel = S.sel === row.dataset.req ? null : row.dataset.req; S.selConn = null; S.selPad = null; render(); }
     }
     function onKey(e) {
       if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pv-conn')) e.target.click();   // a row, or a connection's fold
@@ -389,6 +445,7 @@
         if (o.map) S.map = o.map;
         if (S.sel && !S.result.reqs.some(r => r.id === S.sel)) S.sel = null;
         if (S.selConn && !S.result.reqs.some(r => r.users.some(u => u.conn.id === S.selConn))) S.selConn = null;
+        if (S.selPad && !S.result.used[S.selPad]) S.selPad = null;
         closePop(); render();
       },
       state() { return { view: S.view, sel: S.sel }; },
