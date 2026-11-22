@@ -917,7 +917,7 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-drag-ghost { position: fixed; z-index: 91; pointer-events: none; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 12px; border-radius: 9px; background: var(--bg-elev); border: 1px solid var(--hair); box-shadow: var(--shadow); font-size: 13px; font-weight: 600; color: var(--text); }
 .spec-h .spec-add-after + .spec-edit { margin-left: 0; }
 .spec-wrap { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 28px; align-items: start; }
-.spec-outline { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 1px; max-height: calc(100vh - 90px); overflow: auto; padding-bottom: 12px; }
+.spec-outline { position: sticky; top: 64px; display: flex; flex-direction: column; gap: 1px; max-height: calc(100vh - 90px); max-height: calc(var(--main-h, 100vh) - 90px); overflow: auto; padding-bottom: 12px; }
 .spec-outline button { display: flex; align-items: center; gap: 6px; text-align: left; border: none; background: none; padding: 4px 8px; border-radius: 7px; font-size: 13px; color: var(--text-2); }
 .spec-outline button:hover { background: var(--bg-sunk); color: var(--text); }
 .spec-outline button > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
@@ -957,7 +957,7 @@ body.spec-dragging, body.spec-dragging * { cursor: grabbing !important; user-sel
 .spec-side.splitting { cursor: col-resize; user-select: none; }
 .spec-side.splitting .spec-side-map, .spec-side.splitting .spec-side-doc { pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .spec-side-split::after { transition: none; } }
-.spec-side-map { position: sticky; top: 64px; max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px); overflow: auto; padding-bottom: 12px; }
+.spec-side-map { position: sticky; top: 64px; max-height: calc(100vh - 80px); max-height: calc(var(--main-h, 100dvh) - 80px); overflow: auto; padding-bottom: 12px; }
 /* Side by side expanded (Chris, 2026-11-20): the whole view fills the window, the text scrolling on the left and the
    expanded diagram (zoom, pan, Fit) on the right; the rest of the right pane (notes, hierarchy) steps aside. */
 .spec-side.expanded { position: fixed; inset: 0; z-index: 38; gap: 0; grid-template-rows: 100%; background: var(--bg);
@@ -1883,3 +1883,9 @@ button.spec-pins-head { display: block; width: 100%; text-align: left; font: inh
 .spec-pins-pinrow { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .spec-pins-pn { min-width: 60px; font: 600 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-2); }
 .spec-pins-fn { font-size: 11.5px; color: var(--text-3); }
+/* The section being edited in Side by side glows and pulses; the rest dims (2026-11-21). */
+.spec-map.spec-editing .spec-edit-out { opacity: 0.32; transition: opacity 0.2s; }
+.spec-map.spec-editing .spec-edit-out + .spec-pulse { display: none; }
+.spec-edit-me > rect:first-of-type, .spec-edit-me > .spec-group { stroke: var(--accent); stroke-width: 2.2; animation: spec-edit-glow 1.8s ease-in-out infinite; }
+@keyframes spec-edit-glow { 0%, 100% { filter: drop-shadow(0 0 2px var(--accent)); } 50% { filter: drop-shadow(0 0 9px var(--accent)); } }
+@media (prefers-reduced-motion: reduce) { .spec-edit-me > rect:first-of-type, .spec-edit-me > .spec-group { animation: none; filter: drop-shadow(0 0 5px var(--accent)); } }

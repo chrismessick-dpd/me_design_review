@@ -738,6 +738,33 @@
   function ticketEntries() { return ticketsOn() ? [['ticket', 'Open ticket\u2026'], ['tickets', 'Tickets']] : []; }
 
   // ── Pages ────────────────────────────────────────────────
+  // Side by side (Chris, 2026-11-21): the section being edited glows and pulses in the diagrams, with its own blocks
+  // and its lines, and everything else dims.
+  function specEditMark(page) {
+    var map = page.querySelector('.spec-side-map'), id = specEditing;
+    if (!map || !id || id === 'all' || id === 'new') return;
+    var mine = function (el) { return el.dataset.id === id || (el.dataset.anc || '').split(' ').indexOf(id) >= 0; };
+    var ids = {}, parts = '.spec-node[data-id], .spec-group-g[data-id]';
+    ids[id] = 1;   // the power tree's blocks carry no ancestors, so gather the section's blocks from every diagram first
+    Array.prototype.forEach.call(map.querySelectorAll(parts), function (g) { if (mine(g)) ids[g.dataset.id] = 1; });
+    Array.prototype.forEach.call(map.querySelectorAll('svg.spec-map'), function (svg) {
+      var hit = false;
+      Array.prototype.forEach.call(svg.querySelectorAll(parts), function (g) {
+        var m = !!ids[g.dataset.id]; if (m) hit = true;
+        g.classList.add(m ? 'spec-edit-in' : 'spec-edit-out');
+        if (g.dataset.id === id) g.classList.add('spec-edit-me');
+      });
+      if (!hit) return;
+      svg.classList.add('spec-editing');
+      Array.prototype.forEach.call(svg.querySelectorAll('.spec-edge[data-a], .spec-edge-hit[data-a]'), function (e) {
+        e.classList.add(ids[e.dataset.a] || ids[e.dataset.b] ? 'spec-edit-in' : 'spec-edit-out');
+      });
+      Array.prototype.forEach.call(svg.querySelectorAll('.spec-edge-label'), function (l) {
+        var ab = (l.dataset.line || '').split('|')[0].split('>');   // "a>b|word"; FW's map labels name their link
+        l.classList.add(ids[ab[0]] || ids[ab[1]] || ids[l.dataset.from] || ids[l.dataset.id] ? 'spec-edit-in' : 'spec-edit-out');
+      });
+    });
+  }
   function renderPage() { var f = focusNow(); drawPage(); restoreFocus(f); }   // keeps the field being typed in (focusNow)
   function drawPage() {
     var p = current();
@@ -760,6 +787,7 @@
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
     var side2 = sideAt && page.querySelector('.spec-side-map'); if (side2) { side2.scrollTop = sideAt[0]; side2.scrollLeft = sideAt[1]; }
+    if (ui.view === 'spec') specEditMark(page);
   }
 
   function emptyPage() {
@@ -8343,6 +8371,12 @@
   });
   document.addEventListener('pointercancel', function (e) { if (specZp) specZpUp(e); if (specDrag) specDragEnd(); specMove = null; });
   document.addEventListener('mousedown', function (e) { if (e.target.closest && e.target.closest('.spec-kindbar, .spec-fmtbar') && document.activeElement && document.activeElement.id === 'spec-editor') e.preventDefault(); });
+  // The page's own height, for the sticky outline and Side by side's diagram, which 100vh overshoots by the demo
+  // banner or the compare bar above the page.
+  (function () {
+    var mn = $('#main'), set = function () { mn.style.setProperty('--main-h', mn.clientHeight + 'px'); };
+    set(); if (window.ResizeObserver) new ResizeObserver(set).observe(mn); else window.addEventListener('resize', set);
+  })();
   $('#main').addEventListener('scroll', function () { $('#toolbar').classList.toggle('scrolled', $('#main').scrollTop > 60); }, { passive: true });
 
   // ── Boot ─────────────────────────────────────────────────
