@@ -743,6 +743,7 @@
     var p = current();
     var page = $('#page');
     var scroll = $('#main').scrollTop;
+    var side = page.querySelector('.spec-side-map'), sideAt = side ? [side.scrollTop, side.scrollLeft] : null;   // Side by side's diagram scrolls by itself
     drawPeople();
     if (EMBED) { page.innerHTML = peopleOrNotice(); return; }
     ui.page = '';
@@ -758,6 +759,7 @@
     else if (reworkTab(p) && ui.reworkView === 'rework') page.innerHTML = reworkPage(p);
     else page.innerHTML = checklistPage(p, templateById(ui.view));
     $('#main').scrollTop = scroll;
+    var side2 = sideAt && page.querySelector('.spec-side-map'); if (side2) { side2.scrollTop = sideAt[0]; side2.scrollLeft = sideAt[1]; }
   }
 
   function emptyPage() {
