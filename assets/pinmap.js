@@ -75,7 +75,15 @@
     DAC: { fams: ['DAC'], pat: /^OUT\d+$/, words: ['dac'], one: 'output' },
     TIM: { fams: ['TIM', 'LPTIM'], pat: /^CH\d+$/, words: ['pwm', 'tim', 'timer'], one: 'channel' },
     TSC: { fams: ['TSC'], pat: /^G\d+_IO\d+$/, words: ['touch', 'tsc', 'capsense'], one: 'touch channel', name: 'touch controller (TSC)' },
-    PINS: { words: [] },
+    // Clock and special pins (Chris, 2026-11-21: BOOT0, and an oscillator block to connect to). HSE and LSE are the
+    // crystal or oscillator pins (RCC_OSC_IN/OUT, RCC_OSC32_IN/OUT), MCO a clock output; BOOT0 and NRST are found by
+    // the pin's role or name. `fixed`: nothing to choose, so placed without Auto-assign; `single`: no instances to list.
+    HSE: { fams: ['RCC'], sigs: ['OSC_IN', 'OSC_OUT'], bus: true, fixed: true, single: true, words: ['hse', 'crystal', 'xtal', 'oscillator', 'osc'], name: 'HSE (crystal or oscillator)' },
+    LSE: { fams: ['RCC'], sigs: ['OSC32_IN', 'OSC32_OUT'], bus: true, fixed: true, single: true, words: ['lse', '32k', '32khz'], name: 'LSE (32 kHz crystal)' },
+    MCO: { fams: ['RCC'], pat: /^MCO(_\d+)?$/, single: true, words: ['mco'], one: 'clock output', name: 'MCO (clock output)' },
+    BOOT0: { special: p => p.role === 'boot' || p.names.includes('BOOT0') || /\bBOOT0\b/.test(p.name), fixed: true, single: true, words: ['boot0', 'boot'], name: 'BOOT0 pin' },
+    NRST: { special: p => p.role === 'reset' || /\bNRST\b/.test(p.name), fixed: true, single: true, words: ['nrst', 'reset'], name: 'reset pin (NRST)' },
+    PINS: { words: [], fixed: true },
     GPIO: { words: ['gpio', 'drive', 'io', 'digital', 'led', 'relay', 'enable', 'irq', 'interrupt', 'input', 'output'] },
   };
   const KNOWN = new Set([].concat(...Object.values(TYPES).map(t => t.words)));
@@ -120,6 +128,7 @@
   function typeOf(v) {
     v = String(v || '').toUpperCase();
     if (TYPES[v] && v !== 'PINS') return { type: v, inst: null };
+    if (/^RCC\d*$/.test(v)) return null;                          // RCC is the clock types' block, not a type to pick
     const fam = /\d$/.test(v) ? famOf(v) : '';                     // I2C1 → I2C, TIM14 → TIM
     const t = fam && Object.keys(TYPES).find(k => (TYPES[k].fams || []).includes(fam));
     return t ? { type: t, inst: v } : null;
@@ -181,6 +190,7 @@
     if (it.guessed) r.notes.push({ sev: 'warn', code: 'guessed', text: `“${it.text}” names no interface; planned as ${it.count > 1 ? it.count + ' GPIOs' : 'one GPIO'}.` });
     else if (it.extra.length) r.notes.push({ sev: 'info', code: 'extra', text: `Read past: ${it.extra.join(' ')}.` });
     if (r.users.length > 1) r.notes.push({ sev: 'info', code: 'shared', text: `One bus for ${r.users.length} blocks.` });
+    if (T.special && !part.pads.some(T.special)) { r.problems.push({ code: 'no-type', text: `This part has no ${T.name}.` }); r.dead = true; return; }
     if (!T.fams) return;
     const have = instsOf(part, T);
     if (!have.length) { r.problems.push({ code: 'no-type', text: `This part has no ${T.name || r.type}.` }); r.dead = true; return; }
@@ -219,13 +229,13 @@
       const fn = l.fn ? pad.fns.find(f => f.full === l.fn && (!l.gpio || f.gpio === l.gpio)) || null : null;
       if (r && !r.dead && !used[num]) {
         take(pad, r, l.sig || (fn ? fn.sig : 'GPIO'), fn, !l.auto);     // an Auto-assign entry is unlocked
-        if (fn && TYPES[r.type].bus) { r.inst = fn.inst; claimed[fn.inst] = r; }
+        if (fn && TYPES[r.type].bus) { r.inst = fn.inst; if (!TYPES[r.type].single) claimed[fn.inst] = r; }
       } else if (!used[num]) used[num] = { req: null, sig: l.fn || l.sig || 'GPIO', fn, lock: true, stray: true };
     });
     const order = reqs.filter(r => !r.dead)
-      .map(r => ({ r, n: r.type === 'PINS' ? -1 : r.slots.length ? 0 : options(part, r) }))
+      .map(r => ({ r, n: TYPES[r.type].special ? 1e9 : TYPES[r.type].fixed ? -1 : r.slots.length ? 0 : options(part, r) }))   // BOOT0 and NRST last: they share
       .sort((a, b) => a.n - b.n).map(x => x.r);
-    order.forEach(r => { if (auto || r.type === 'PINS') place(part, r, used, claimed, take); else open(r); });
+    order.forEach(r => { if (auto || TYPES[r.type].fixed) place(part, r, used, claimed, take); else open(r); });
 
     const io = part.pads.filter(p => p.gpio);
     const stray = Object.keys(used).filter(n => used[n].stray).map(n => ({ pad: n, fn: used[n].sig }));
@@ -253,6 +263,18 @@
       });
       return;
     }
+    if (T.special) {
+      if (r.slots.length) return;
+      const pad = part.pads.find(T.special), u = pad && used[pad.num];
+      if (!pad) return;
+      if (!u) { take(pad, r, r.type, null); return; }
+      // Taken by another signal (PA14 is BOOT0 and SWD's SWCLK on an STM32G0): shared, with a note, not a problem.
+      if (u.req !== r) {
+        r.slots.push({ pad: pad.num, sig: r.type, fn: null, gpio: pad.names[0], lock: false, shared: true });
+        r.notes.push({ sev: 'warn', code: 'shared-pin', text: `${pad.names[0]} is also used by ${who(u)}${u.fn ? ' (' + u.fn.full + ')' : ''}: it reads as ${r.type} ${r.type === 'BOOT0' ? 'at reset' : 'too'}, so the two have to agree.` });
+      }
+      return;
+    }
     if (r.type === 'GPIO') {
       const need = Math.max(0, it.count - r.slots.length);   // never negative: slice(0, -1) would take every free pin
       over(r);
@@ -262,7 +284,8 @@
       return;
     }
     if (T.bus) {
-      const insts = instsOf(part, T).filter(i => (!r.want || i === r.want) && (!r.inst || i === r.inst) && (!claimed[i] || claimed[i] === r));
+      // The clock types (HSE, LSE) share the RCC block: no instance to claim.
+      const insts = instsOf(part, T).filter(i => (!r.want || i === r.want) && (!r.inst || i === r.inst) && (T.single || !claimed[i] || claimed[i] === r));
       for (const inst of insts) {
         const have = new Set(r.slots.map(s => s.sig));
         const sigs = T.sigs.filter(s => !have.has(s));
@@ -282,7 +305,7 @@
         };
         if (go(0)) {
           sigs.forEach((s, k) => take(pick[k], r, s, fnOf(pick[k], s)));
-          r.inst = inst; claimed[inst] = r; return;
+          r.inst = inst; if (!T.single) claimed[inst] = r; return;
         }
       }
       const all = instsOf(part, T).filter(i => !r.want || i === r.want);
@@ -308,7 +331,7 @@
   }
 
   // How many pins a requirement takes, and whether the stored assignments leave it open (todo: not assigned yet).
-  function needOf(r) { const T = TYPES[r.type]; return r.type === 'PINS' ? r.item.pins.length : T.bus ? T.sigs.length : r.item.count; }
+  function needOf(r) { const T = TYPES[r.type]; return r.type === 'PINS' ? r.item.pins.length : T.special ? 1 : T.bus ? T.sigs.length : r.item.count; }
   function open(r) {
     const need = needOf(r), have = r.slots.length;
     if (have >= need) return;
@@ -331,6 +354,7 @@
     part.pads.forEach(p => {
       const taken = !!(used[p.num] && used[p.num].req !== r);
       if (r.type === 'PINS') { if (r.item.pins.some(n => p.names.includes(n))) out[p.num] = { f: null, taken }; return; }
+      if (TYPES[r.type].special) { if (TYPES[r.type].special(p)) out[p.num] = { f: null, taken }; return; }
       if (r.type === 'GPIO') { if (p.gpio && p.role === 'io' && !taken) out[p.num] = { f: null, taken }; return; }
       const f = p.fns.find(x => serves(r, x));
       if (f) out[p.num] = { f, taken };
@@ -371,13 +395,14 @@
   // The Type list: GPIO, then each kind of peripheral the part has, with its instances.
   function typeOptions(part) {
     // SWD's block is SYS, and USB's instance is USB itself: those list the type alone.
-    return Object.keys(TYPES).filter(k => TYPES[k].fams).map(k => ({ type: k, all: instsOf(part, TYPES[k]) })).filter(g => g.all.length)
-      .map(g => ({ type: g.type, insts: g.type === 'SWD' ? [] : g.all.filter(i => i !== g.type) }));
+    return Object.keys(TYPES).filter(k => TYPES[k].fams || TYPES[k].special)
+      .map(k => ({ type: k, all: TYPES[k].special ? (part.pads.some(TYPES[k].special) ? [k] : []) : instsOf(part, TYPES[k]) })).filter(g => g.all.length)
+      .map(g => ({ type: g.type, insts: g.type === 'SWD' || TYPES[g.type].single ? [] : g.all.filter(i => i !== g.type) }));
   }
   // Auto-assign: store every pin a full plan (plan(..., { auto: true })) placed that isn't stored yet, unlocked.
   function assignAll(map, result, part) {
     const out = Object.assign({}, map);
-    result.reqs.forEach(r => r.type !== 'PINS' && r.slots.forEach(sl => {   // explicit pins are placed anyway
+    result.reqs.forEach(r => !TYPES[r.type].fixed && r.slots.forEach(sl => {   // fixed pins (PB8, BOOT0, HSE) are placed anyway
       if (out[sl.pad]) return;
       const e = { req: r.id, sig: sl.sig, auto: true };
       if (sl.fn) { e.fn = sl.fn.full; if (part && part.byNum[sl.pad] && sl.fn.gpio !== part.byNum[sl.pad].names[0]) e.gpio = sl.fn.gpio; }

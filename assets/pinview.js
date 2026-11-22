@@ -65,7 +65,7 @@
       return new Set(S.sel ? [S.sel] : []);
     };
     const isMine = num => { if (S.selPad) return String(num) === String(S.selPad); const u = S.result.used[num]; return !!(u && u.req && S.mineIds && S.mineIds.has(u.req.id)); };
-    const what = r => r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : '');
+    const what = r => r.type === 'PINS' ? 'Pins' : TYPES[r.type].single ? r.type : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : '');
 
     function render() {
       renderSide();
@@ -82,7 +82,7 @@
         (!c.problems && !c.warnings && !c.unassigned ? '<span class="pv-tag ok">✓ All placed</span>' : '');
       // The lock button for one or more requirements: on when every stored pin of theirs is locked.
       const lockBtn = (rs, label) => {
-        rs = rs.filter(r => r.type !== 'PINS' && r.slots.length);
+        rs = rs.filter(r => !TYPES[r.type].fixed && r.slots.length);
         if (!rs.length || !can() || !opts.onLock) return '';
         const on = rs.every(r => r.slots.every(sl => sl.lock));
         return '<button class="pv-lock' + (on ? ' on' : '') + '" data-lock="' + esc(rs.map(r => r.id).join(' ')) + '" data-on="' + (on ? '0' : '1') + '" aria-pressed="' + on + '" title="' + (on ? 'Locked: Auto-assign and Unassign leave ' + esc(label) + '. Click to unlock.' : 'Lock ' + esc(label) + '’s pins, so Auto-assign and Unassign leave them') + '">' + LOCK_SVG(on) + '</button>';
@@ -95,7 +95,7 @@
         const cur = (u.item && u.item.set) || '';
         const o = (v, t) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>';
         return '<label class="pv-type-l">Type <select class="pv-type" data-req="' + esc(r.id) + '" data-keys="' + esc(u.key) + '" title="What the planner takes this signal to be; the label stays as written">' +
-          o('', cur ? 'From the label' : 'From the label (' + (r.inst || r.want || r.type) + ')') + o('GPIO', 'GPIO') +
+          o('', cur ? 'From the label' : 'From the label (' + (TYPES[r.type].single ? r.type : r.inst || r.want || r.type) + ')') + o('GPIO', 'GPIO') +
           groups.map(g => g.insts.length ? '<optgroup label="' + esc(TYPES[g.type].name || g.type) + '">' + o(g.type, g.type + ', any') + g.insts.map(i => o(i, i)).join('') + '</optgroup>' : o(g.type, g.type)).join('') +
           '</select></label>';
       };
@@ -111,7 +111,7 @@
       const pinRow = (r, u, sl, i, n) => {
         const T = TYPES[r.type], name = r.type === 'PINS' ? sl.gpio : T.bus ? sl.sig : (netName(u) || r.type) + (n > 1 ? ' ' + (i + 1) : '');
         const fn = sl.fn && !T.bus ? sl.fn.full : '';
-        const lk = r.type !== 'PINS' && can() && opts.onLockPads ? '<button class="pv-lock' + (sl.lock ? ' on' : '') + '" data-lockpad="' + esc(sl.pad) + '" data-on="' + (sl.lock ? '0' : '1') + '" aria-pressed="' + !!sl.lock + '" title="' + (sl.lock ? 'Locked. Click to unlock ' : 'Lock ') + esc(name) + ' on ' + esc(sl.gpio) + '">' + LOCK_SVG(!!sl.lock) + '</button>' : '';
+        const lk = !T.fixed && can() && opts.onLockPads ? '<button class="pv-lock' + (sl.lock ? ' on' : '') + '" data-lockpad="' + esc(sl.pad) + '" data-on="' + (sl.lock ? '0' : '1') + '" aria-pressed="' + !!sl.lock + '" title="' + (sl.lock ? 'Locked. Click to unlock ' : 'Lock ') + esc(name) + ' on ' + esc(sl.gpio) + '">' + LOCK_SVG(!!sl.lock) + '</button>' : '';
         return '<div class="pv-pinrow' + (S.selPad === sl.pad ? ' sel' : '') + '" data-selpad="' + esc(sl.pad) + '" tabindex="0"><span class="pv-pr-name">' + esc(name) + '</span>' +
           '<span class="pv-pin' + (sl.lock ? ' lock' : '') + '">' + esc(sl.gpio) + '</span>' + (fn ? '<span class="pv-pr-fn">' + esc(fn) + '</span>' : '') + lk + '</div>';
       };

@@ -5710,7 +5710,7 @@
     return c.res;
   }
   var PIN_MARK = { issue: '✕', warn: '▲', todo: '○', ok: '✓' };
-  function pinWhat(r) { return r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : ''); }
+  function pinWhat(r) { return r.type === 'PINS' ? 'Pins' : PIN.TYPES[r.type].single ? r.type : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : ''); }
   function specPinsField(a, x) {
     var s = x.sec, copy = s.pins && s.pins.part, fte = isFte() || !!DEMO;
     if (fte) pinLibLoad();
