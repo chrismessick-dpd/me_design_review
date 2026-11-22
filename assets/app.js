@@ -740,9 +740,10 @@
   // ── Pages ────────────────────────────────────────────────
   // Side by side (Chris, 2026-11-21): the section being edited glows and pulses in the diagrams, with its own blocks
   // and its lines, and everything else dims.
+  var specEditSeen = null;   // the section the pane last scrolled to, so a redraw mid-edit doesn't pull it back
   function specEditMark(page) {
     var map = page.querySelector('.spec-side-map'), id = specEditing;
-    if (!map || !id || id === 'all' || id === 'new') return;
+    if (!map || !id || id === 'all' || id === 'new') { specEditSeen = null; return; }
     var mine = function (el) { return el.dataset.id === id || (el.dataset.anc || '').split(' ').indexOf(id) >= 0; };
     var ids = {}, parts = '.spec-node[data-id], .spec-group-g[data-id]';
     ids[id] = 1;   // the power tree's blocks carry no ancestors, so gather the section's blocks from every diagram first
@@ -764,6 +765,16 @@
         l.classList.add(ids[ab[0]] || ids[ab[1]] || ids[l.dataset.from] || ids[l.dataset.id] ? 'spec-edit-in' : 'spec-edit-out');
       });
     });
+    // Bring it into the pane when the edit opens, unless it's already in full view (Chris, 2026-11-21).
+    var me = map.querySelector('.spec-edit-me');
+    if (me && specEditSeen !== id) {
+      specEditSeen = id;
+      var r = me.getBoundingClientRect(), v = map.getBoundingClientRect();
+      if (r.top < v.top || r.bottom > v.bottom) {
+        var top = map.scrollTop + r.top - v.top - Math.max(16, (v.height - r.height) / 2);
+        map.scrollTo({ top: Math.max(0, top), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      }
+    }
   }
   function renderPage() { var f = focusNow(); drawPage(); restoreFocus(f); }   // keeps the field being typed in (focusNow)
   function drawPage() {
@@ -847,7 +858,9 @@
       '<div class="page-head"><div class="page-head-text">' + headBlock(p, 'Design review') +
       (p.meta.description ? '<p style="color:var(--text-2);margin:14px 0 0;max-width:62ch">' + esc(p.meta.description) + '</p>' : '') +
       '<div class="chips" style="margin-top:14px">' + (profile || '<span class="chip">' + esc(W.general) + '</span>') +
-      (isFte() ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="edit-project">Edit profile</button>' : '') + '</div>' +
+      (isFte() ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="edit-project">Edit profile</button>' : '') +
+      // The Scribe diagram, one click from the overview (Chris, 2026-11-21).
+      (specOn(p) && M.liveSpec(p).length ? '<button class="btn btn-plain" style="padding:2px 8px;font-size:12px" data-act="open-diagram" title="Open ' + esc(SPEC_LABEL) + '’s diagram">' + (SPEC_FLOW ? 'Block diagram' : 'Diagram') + '</button>' : '') + '</div>' +
       (!DEMO && isFte() ? '<p class="note" style="margin-top:10px">' + (M.sharedRepo(roster, p.id) ? 'Shared through ' + esc(M.sharedRepo(roster, p.id)) + (assignedContractors(p.id).length ? ' with ' + assignedContractors(p.id).map(function (u) { return esc(u.name || u.login); }).join(', ') : '') : 'Internal \u2014 FTEs only') + '</p>' : '') + '</div>' +
       '<div class="head-visual"><div class="head-pic" data-pic="' + esc(p.id) + '">' + picHtml(p) + '</div>' +
       '<div class="head-ring">' + (rq ? ring(rqPct, 132, 11, rqPct + '%', 'requirements verified') : ring(st.pct, 132, 11, st.pct + '%', 'reviewed')) + revisionLine(p) + '</div></div></div>' +
@@ -7879,6 +7892,12 @@
         // (on a narrow screen the panel is a sheet over the depth buttons, which took the first click).
         if (ui.specView !== el.dataset.view && /^spec(block|edge)?\|/.test(selected || '')) { selected = null; closeInspector(); }
         ui.specView = el.dataset.view; specEditing = null; saveUi(); renderPage(); break;
+      case 'open-diagram': {
+        ui.view = 'spec'; ui.specView = 'map'; specEditing = null; selected = null; closeInspector(); saveUi(); renderPage();
+        var mc = document.querySelector('.spec-map-card');
+        if (mc) { var mn = $('#main'); mn.scrollTop = Math.max(0, mn.scrollTop + mc.getBoundingClientRect().top - mn.getBoundingClientRect().top - 72); }
+        break;
+      }
       case 'spec-depth': ui.specDepth = parseInt(el.dataset.depth, 10) === 2 ? 2 : 3; ui.specShow = ''; saveUi(); renderPage(); break;
       case 'spec-show': ui.specShow = el.dataset.show || ''; saveUi(); renderPage(); break;
       case 'spec-inbox': ui.specInbox = !ui.specInbox; saveUi(); renderPage(); break;
