@@ -69,7 +69,7 @@
     UART: { fams: ['USART', 'UART', 'LPUART'], sigs: ['TX', 'RX'], bus: true, words: ['uart', 'usart', 'lpuart', 'serial'] },
     USB: { fams: ['USB'], sigs: ['DM', 'DP'], bus: true, words: ['usb'] },
     CAN: { fams: ['FDCAN', 'CAN'], sigs: ['RX', 'TX'], bus: true, words: ['can', 'fdcan'] },
-    SWD: { fams: ['SYS'], sigs: ['SWDIO', 'SWCLK'], bus: true, words: ['swd'] },
+    SWD: { fams: ['SYS'], sigs: ['SWDIO', 'SWCLK'], bus: true, single: true, words: ['swd'] },   // single: it reads SWD, not its block SYS
     I2S: { fams: ['I2S'], sigs: ['CK', 'SD', 'WS'], bus: true, words: ['i2s'] },
     ADC: { fams: ['ADC'], pat: /^IN\d+$/, words: ['adc', 'analog'], one: 'channel' },
     DAC: { fams: ['DAC'], pat: /^OUT\d+$/, words: ['dac'], one: 'output' },
@@ -268,10 +268,11 @@
       const pad = part.pads.find(T.special), u = pad && used[pad.num];
       if (!pad) return;
       if (!u) { take(pad, r, r.type, null); return; }
-      // Taken by another signal (PA14 is BOOT0 and SWD's SWCLK on an STM32G0): shared, with a note, not a problem.
+      // Taken by another signal (PA14 is BOOT0 and SWD's SWCLK on an STM32G0): shared, with a ▲ note that leaves the row
+      // ✓ (sev 'shared': shown like a warning, counted as none; Chris, 2026-11-21: both rows set on one pin read as set).
       if (u.req !== r) {
         r.slots.push({ pad: pad.num, sig: r.type, fn: null, gpio: pad.names[0], lock: false, shared: true });
-        r.notes.push({ sev: 'warn', code: 'shared-pin', text: `${pad.names[0]} is also used by ${who(u)}${u.fn ? ' (' + u.fn.full + ')' : ''}: it reads as ${r.type} ${r.type === 'BOOT0' ? 'at reset' : 'too'}, so the two have to agree.` });
+        r.notes.push({ sev: 'shared', code: 'shared-pin', text: `${pad.names[0]} is also used by ${who(u)}${u.fn ? ' (' + u.fn.full + ')' : ''}: it reads as ${r.type} ${r.type === 'BOOT0' ? 'at reset' : 'too'}, so the two have to agree.` });
       }
       return;
     }

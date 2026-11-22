@@ -5750,7 +5750,7 @@
     };
     var sigRow = function (r, u, kid, cn, noChips) {
       var sev = PIN.sevOf(r), pins = noChips ? '' : pinsOf(r), what = pinWhat(r), name = String(u.item.text || '');
-      var lines = r.problems.map(function (q) { return '<li class="issue">' + esc(q.text) + '</li>'; }).concat(r.notes.filter(function (n) { return n.sev === 'warn'; }).map(function (n) { return '<li class="warn">' + esc(n.text) + '</li>'; })).join('');
+      var lines = r.problems.map(function (q) { return '<li class="issue">' + esc(q.text) + '</li>'; }).concat(r.notes.filter(function (n) { return n.sev === 'warn' || n.sev === 'shared'; }).map(function (n) { return '<li class="warn">' + esc(n.text) + '</li>'; })).join('');
       return '<div class="spec-pins-row ' + sev + (kid ? ' kid' : '') + '"><div class="spec-pins-top"><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(kid ? what : cn.block) + '</b><span class="spec-pins-blocks">' + esc(kid ? (name.toLowerCase() === what.toLowerCase() ? '' : name) : what) + '</span></div>' +
         (pins ? '<div class="spec-pins-pins">' + pins + '</div>' : '') + (lines ? '<ul class="spec-pins-why">' + lines + '</ul>' : '') +
         (r.fix ? '<button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-fix" data-req="' + esc(r.id) + '">Write it as ' + esc(r.fix.to) + '</button>' : '') + '</div>';

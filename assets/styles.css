@@ -1727,6 +1727,7 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .pv-notes li { margin: 2px 0; padding-left: 16px; text-indent: -16px; }
 .pv-notes li.issue { color: var(--issue); } .pv-notes li.issue::before { content: "✕  "; }
 .pv-notes li.warn { color: var(--text); } .pv-notes li.warn::before { content: "▲  "; color: var(--warn); }
+.pv-notes li.shared { color: var(--text); } .pv-notes li.shared::before { content: "▲  "; color: var(--warn); }
 .pv-notes li.info { color: var(--text-2); } .pv-notes li.info::before { content: "·  "; }
 .pv-hint { color: var(--text-3); font-size: 12px; margin: 8px 0; }
 .pv-dim { color: var(--text-3); font-weight: 400; }
