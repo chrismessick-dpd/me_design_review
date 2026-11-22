@@ -5735,7 +5735,7 @@
       notes.push('The plan is for ' + esc(copy.mpn) + '; the Part line says ' + esc(x.part) + '.' + (lib && pinIsMcu(lib) ? ' <button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-start">Plan from ' + esc(lib.mpn) + '</button>' : ''));
     else if (lib && lib.local && lib.local.sha && copy.from && copy.from.sha && lib.local.sha !== copy.from.sha)
       notes.push('The part library has a newer ' + esc(copy.mpn) + '. <button class="btn btn-plain btn-sm spec-pins-act" data-act="spec-pins-start">Update the plan’s copy</button>');
-    html += '<div class="spec-pins-sum"><span><b>' + c.used + '</b> of ' + c.io + ' I/O pins planned</span>' +
+    html += '<div class="spec-pins-sum"><span><b>' + c.used + '</b> of ' + c.io + ' I/O pins assigned</span>' +
       (c.problems ? '<span class="spec-pins-tag issue">✕ ' + plural(c.problems, 'problem') + '</span>' : '') +
       (c.warnings ? '<span class="spec-pins-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
       (!c.problems && !c.warnings ? '<span class="spec-pins-tag ok">✓ All placed</span>' : '') + '</div>' +
@@ -5771,7 +5771,7 @@
       var sev = cn.items.map(function (it) { return PIN.sevOf(it.r); }).sort(function (s1, s2) { return ['issue', 'warn', 'ok'].indexOf(s1) - ['issue', 'warn', 'ok'].indexOf(s2); })[0];
       var open = !!openSet[cn.id];
       return '<div class="spec-pins-grp' + (open ? ' open' : '') + '"><button class="spec-pins-row spec-pins-head ' + sev + '" data-act="spec-pins-fold" data-id="' + esc(cn.id) + '" aria-expanded="' + open + '">' +
-        '<div class="spec-pins-top"><span class="spec-pins-caret">' + (open ? '▾' : '▸') + '</span><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(cn.block) + '</b><span class="spec-pins-blocks">' + cn.items.length + ' signals</span></div>' +
+        '<div class="spec-pins-top"><span class="spec-pins-caret' + (open ? ' open' : '') + '"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="spec-pins-mark ' + sev + '" aria-label="' + sev + '">' + PIN_MARK[sev] + '</span><b>' + esc(cn.block) + '</b><span class="spec-pins-blocks">' + cn.items.length + ' signals</span></div>' +
         '<div class="spec-pins-label">“' + esc(cn.label) + '”</div>' +
         (open ? '' : '<div class="spec-pins-pins">' + cn.items.map(function (it) { return pinsOf(it.r); }).join('') + '</div>') + '</button>' +
         (open ? '<div class="spec-pins-kids">' + cn.items.map(function (it) { return sigRow(it.r, it.u, true, cn); }).join('') + '</div>' : '') + '</div>';

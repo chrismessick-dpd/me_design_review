@@ -22,14 +22,14 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
   const VIEWS = [['package', 'Package'], ['block', 'Block'], ['ports', 'Ports'], ['matrix', 'Matrix'], ['table', 'Table']];
-  const LEGEND = [['used', 'Planned'], ['lock', 'Your pick'], ['cand', 'Could use'], ['taken', 'Could use, taken'], ['issue', 'Problem'], ['warn', 'To check'], ['special', 'Clock or boot'], ['fixed', 'Power and reset'], ['free', 'Free']];
+  const LEGEND = [['used', 'Assigned'], ['cand', 'Could use'], ['taken', 'Could use, taken'], ['issue', 'Problem'], ['warn', 'To check'], ['special', 'Clock or boot'], ['fixed', 'Power and reset'], ['free', 'Free']];
   const MARK = { issue: '✕', warn: '▲', ok: '✓' };
   let uid = 0;
 
   function mount(root, opts) {
     const P = window.SignoffPinmap, FIXED = P.FIXED, TYPES = P.TYPES, nat = P.nat, sevOf = P.sevOf;
     const id = 'pv' + (++uid);                    // SVG pattern ids, unique per mounted view
-    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, cand: {}, open: new Set() };
+    const S = { part: opts.part, result: opts.result, map: opts.map || {}, view: VIEWS.some(v => v[0] === opts.view) ? opts.view : 'package', sel: opts.sel || null, selConn: null, mineIds: new Set(), cand: {}, open: new Set() };
     const can = () => opts.canEdit !== false;
     root.innerHTML = '<div class="pv"><aside class="pv-side"><div class="pv-sum"></div><div class="pv-conns"></div></aside>' +
       '<section class="pv-stage"><div class="pv-tabs"><div class="seg pv-views" role="tablist">' + VIEWS.map(v => '<button data-view="' + v[0] + '">' + v[1] + '</button>').join('') + '</div><div class="pv-legend"></div></div><div class="pv-view"></div></section>' +
@@ -54,7 +54,13 @@
     }
     const padFor = num => { const u = S.result.used[num]; return u && u.req ? u.req.users.map(x => x.block).join(', ') : u && u.stray ? 'no connection' : ''; };
     const isCand = num => Object.prototype.hasOwnProperty.call(S.cand, num);
-    const isMine = num => { const u = S.result.used[num]; return !!(u && u.req && u.req.id === S.sel); };
+    // What's selected: one signal (S.sel, a requirement id), or a whole connection (S.selConn, Chris 2026-11-21: a row
+    // with several signals selects them all on the drawing).
+    const selIds = () => {
+      if (S.selConn) return new Set(S.result.reqs.filter(r => r.users.some(u => u.conn.id === S.selConn)).map(r => r.id));
+      return new Set(S.sel ? [S.sel] : []);
+    };
+    const isMine = num => { const u = S.result.used[num]; return !!(u && u.req && S.mineIds && S.mineIds.has(u.req.id)); };
     const what = r => r.type === 'PINS' ? 'Pins' : (r.inst || r.want || r.item.inst || r.type) + (r.item.count > 1 ? ' × ' + r.item.count : '');
 
     function render() {
@@ -65,7 +71,7 @@
 
     function renderSide() {
       const c = S.result.counts;
-      $('.pv-sum').innerHTML = '<span><b>' + c.used + '</b> of ' + c.io + ' I/O pins planned</span>' +
+      $('.pv-sum').innerHTML = '<span><b>' + c.used + '</b> of ' + c.io + ' I/O pins assigned</span>' +
         (c.problems ? '<span class="pv-tag issue">✕ ' + c.problems + (c.problems === 1 ? ' problem' : ' problems') + '</span>' : '') +
         (c.warnings ? '<span class="pv-tag warn">▲ ' + c.warnings + ' to check</span>' : '') +
         (!c.problems && !c.warnings ? '<span class="pv-tag ok">✓ All placed</span>' : '');
@@ -109,9 +115,10 @@
         c.items.sort((a, b) => a.ii - b.ii);
         if (c.items.length === 1) return sigRow(c.items[0].r, c.items[0].u, false, c);
         const sev = worst(c.items), open = S.open.has(c.id) || c.items.some(x => x.r.id === S.sel);
+        // The caret opens and closes the fold; a click elsewhere on the row selects all its signals on the drawing.
         return '<div class="pv-cgrp ' + sev + (open ? ' open' : '') + '">' +
-          '<div class="pv-conn pv-chead ' + sev + '" data-fold="' + esc(c.id) + '" tabindex="0" aria-expanded="' + open + '">' +
-          '<div class="pv-conn-top"><span class="pv-caret">' + (open ? '▾' : '▸') + '</span><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + c.items.length + ' signals</span></div>' +
+          '<div class="pv-conn pv-chead ' + sev + (S.selConn === c.id ? ' sel' : '') + '" data-conn="' + esc(c.id) + '" tabindex="0">' +
+          '<div class="pv-conn-top"><button class="pv-caret" data-fold="' + esc(c.id) + '" aria-expanded="' + open + '" aria-label="' + (open ? 'Close' : 'Open') + ' ' + esc(c.block) + '’s signals" title="' + (open ? 'Close' : 'Show its signals') + '"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><span class="pv-mark ' + sev + '">' + MARK[sev] + '</span><span class="pv-what">' + esc(c.block) + '</span><span class="pv-blocks">' + c.items.length + ' signals</span></div>' +
           '<div class="pv-conn-label">“' + esc(c.label) + '”' + (c.dir && c.dir !== 'out' ? ' · ' + esc(c.dir) : '') + '</div>' +
           (open ? '' : '<div class="pv-pins">' + c.items.map(x => pinsOf(x.r)).join('') + '</div>') + '</div>' +
           (open ? '<div class="pv-kids">' + c.items.map(x => sigRow(x.r, x.u, true, c)).join('') + '</div>' : '') + '</div>';
@@ -123,7 +130,8 @@
 
     function renderView() {
       $('.pv-legend').innerHTML = LEGEND.map(l => '<span class="pv-lg"><i class="pv-sw ' + l[0] + '"></i>' + l[1] + '</span>').join('');
-      S.cand = P.candidates(S.part, selReq(), S.result.used);
+      S.mineIds = selIds();
+      S.cand = S.selConn ? {} : P.candidates(S.part, selReq(), S.result.used);   // a whole connection lights its own pins only
       const v = $('.pv-view');
       v.className = 'pv-view v-' + S.view;
       v.innerHTML = ({ package: viewPackage, block: viewBlock, ports: viewPorts, matrix: viewMatrix, table: viewTable }[S.view] || viewPackage)();
@@ -286,7 +294,7 @@
           return '<td class="pv-m ' + (on ? 'on ' + padState(p.num) : u ? 'gone' : 'can') + (isCand(p.num) && S.cand[p.num].f && S.cand[p.num].f.inst === i ? ' cand' : '') + '" data-pad="' + esc(p.num) + '" title="' + esc(p.names[0] + ': ' + fs.map(f => f.full).join(', ')) + '">' + (on ? '■' : u ? '·' : '•') + '</td>';
         }).join('') + '</tr>';
       }).join('');
-      return '<div class="pv-scroll"><table class="pv-matrix">' + head + body + '</table></div><p class="pv-hint">• the peripheral can use the pin · ■ planned there · · the pin is taken by something else. ● a peripheral a connection holds.</p>';
+      return '<div class="pv-scroll"><table class="pv-matrix">' + head + body + '</table></div><p class="pv-hint">• the peripheral can use the pin · ■ assigned there · · the pin is taken by something else. ● a peripheral a connection holds.</p>';
     }
 
     function viewTable() {
@@ -296,7 +304,7 @@
           '<td><span class="pv-chip ' + st + '">' + (st === 'issue' ? '✕ ' : st === 'warn' || st === 'stray' ? '▲ ' : '') + esc(padLabel(p.num) || (st === 'fixed' || st === 'special' ? p.role : '')) + '</span>' + (u && u.lock ? ' ⚿' : '') + '</td>' +
           '<td>' + esc(padFor(p.num)) + '</td><td class="pv-fns">' + esc(p.fns.map(f => f.full).join(', ')) + '</td></tr>';
       }).join('');
-      return '<div class="pv-scroll"><table class="pv-table"><thead><tr><th>Pin</th><th>Name</th><th>Planned</th><th>For</th><th>Other functions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      return '<div class="pv-scroll"><table class="pv-table"><thead><tr><th>Pin</th><th>Name</th><th>Assigned</th><th>For</th><th>Other functions</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
     // A pin's functions, each with the requirement it would serve; a click is a pick.
@@ -351,9 +359,11 @@
       if (padEl) { openPop(padEl.dataset.pad, e); return; }
       closePop();
       const fold = t.closest('[data-fold]');
-      if (fold) { const id = fold.dataset.fold; if (S.open.has(id) || fold.getAttribute('aria-expanded') === 'true') { S.open.delete(id); if (selReq() && selReq().users.some(u => u.conn.id === id)) S.sel = null; } else S.open.add(id); renderSide(); return; }
+      if (fold) { const id = fold.dataset.fold; if (fold.getAttribute('aria-expanded') === 'true') { S.open.delete(id); if (selReq() && selReq().users.some(u => u.conn.id === id)) { S.sel = null; S.selConn = id; } } else S.open.add(id); render(); return; }
+      const head = t.closest('[data-conn]');
+      if (head) { S.selConn = S.selConn === head.dataset.conn ? null : head.dataset.conn; S.sel = null; render(); return; }
       const row = t.closest('.pv-conn[data-req], .pv-grp[data-req]');
-      if (row) { S.sel = S.sel === row.dataset.req ? null : row.dataset.req; render(); }
+      if (row) { S.sel = S.sel === row.dataset.req ? null : row.dataset.req; S.selConn = null; render(); }
     }
     function onKey(e) {
       if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('pv-conn')) e.target.click();   // a row, or a connection's fold
@@ -378,6 +388,7 @@
         if (o.result) S.result = o.result;
         if (o.map) S.map = o.map;
         if (S.sel && !S.result.reqs.some(r => r.id === S.sel)) S.sel = null;
+        if (S.selConn && !S.result.reqs.some(r => r.users.some(u => u.conn.id === S.selConn))) S.selConn = null;
         closePop(); render();
       },
       state() { return { view: S.view, sel: S.sel }; },
