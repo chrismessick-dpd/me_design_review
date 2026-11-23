@@ -234,7 +234,7 @@
     ] },
     { title: 'The block diagram', steps: [
       { title: 'The block diagram',
-        text: 'Every heading is a block, and a heading with headings under it is a section, a box around its blocks: Power, Control, and Outputs here. Inside a section, blocks run left to right in signal order. Lines carry their signal names, a block wears a bar for each rail it uses and a circle for each it makes, and dotted blocks have unlinked or flagged sentences. Drag blocks and sections to arrange them; {Auto layout} puts them back, and {Sections} hides the boxes.',
+        text: 'Every heading is a block, and a heading with headings under it is a section, a box around its blocks: Power, Control, and Outputs here. Inside a section, blocks run left to right in signal order. Lines carry their signal names, a block wears a bar for each rail it uses and a circle for each it makes, and dotted blocks have unlinked or flagged sentences. Drag blocks and sections to arrange them (a box on empty space picks several); {Auto layout} puts them back, and {Sections} hides the boxes.',
         do: 'Click a 3V3 bar: it opens the buck that makes it.',
         setup: function () { A().open('map'); },
         spot: function () { return ['.spec-map-card']; } },
@@ -292,7 +292,7 @@
     ] },
     { title: 'Done', steps: [
       { title: 'You’re set',
-        text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} adds links, the bar under the text writes every mark, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box around blocks to make a section, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
+        text: 'In the editors: {k:Ctrl+Enter} saves, {k:Esc} cancels, {Add to Connects…} adds links, the bar under the text writes every mark, and {Writing guide} lists every mark. In the diagram: {+ Add block}, drag to arrange, draw a box on empty space (or {k:Shift}-click) to pick several and drag them together or make a section from the Diagram panel, drag a dot to connect, and click a line or a block. In the hierarchy: drag blocks into sections, and {+ Section}.',
         do: 'Open this guide again from the menu (☰) in the tab, or from the {Writing guide}. {Reset demo}, in the banner, puts the demo back.',
         setup: function () { A().open('doc', 3); },
         last: true }
