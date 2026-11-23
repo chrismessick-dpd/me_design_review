@@ -622,13 +622,28 @@
   function specPowerItems(text) {
     return specLinkItems(text).map(function (it) {
       var words = String(it.label || '').split(',').map(function (w) { return w.trim().toLowerCase().replace(/\s+/g, ' '); });
-      return { rail: it.name.trim(), role: words.indexOf('source') >= 0 ? 'source' : 'sink', tree: words.indexOf('no tree') < 0 };
+      return { rail: it.name.trim(), role: words.indexOf('source') >= 0 ? 'source' : 'sink', tree: words.indexOf('no tree') < 0, label: String(it.label || '') };
     }).filter(function (x) { return x.rail; });
+  }
+  // Writing a Power line keeps every word in a rail's brackets as written (the power budget's numbers, "3.0–3.6 V,
+  // 80 mA", read by assets/power.js; Chris, 2026-11-23): only the role and "no tree" are set from the item, in place.
+  function specPowerWords(x) {
+    var role = x.role === 'source' ? 'source' : 'sink', out = [], put = false, treeAt = -1;
+    String(x.label || '').split(',').map(function (w) { return w.trim(); }).filter(Boolean).forEach(function (w) {
+      var l = w.toLowerCase().replace(/\s+/g, ' ');
+      if (l === 'source' || l === 'sink') { if (!put) { out.push(role); put = true; } return; }
+      if (l === 'no tree') { if (treeAt < 0) treeAt = out.length; return; }
+      if (l === 'tree') return;   // the old opt-in: every rail is in the tree now
+      out.push(w);
+    });
+    if (!put) { out.unshift(role); if (treeAt >= 0) treeAt++; }
+    if (x.tree === false) { if (treeAt < 0) out.push('no tree'); else out.splice(treeAt, 0, 'no tree'); }
+    return out;
   }
   function specPowerText(items) {
     var seen = {};
     return items.filter(function (x) { var k = x.rail.toLowerCase() + '|' + x.role; if (!x.rail || seen[k]) return false; seen[k] = 1; return true; })
-      .map(function (x) { return (/[,()"]/.test(x.rail) ? '"' + x.rail.replace(/"/g, '') + '"' : x.rail) + ' (' + (x.role === 'source' ? 'source' : 'sink') + (x.tree === false ? ', no tree' : '') + ')'; }).join(', ');
+      .map(function (x) { return (/[,()"]/.test(x.rail) ? '"' + x.rail.replace(/"/g, '') + '"' : x.rail) + ' (' + specPowerWords(x).join(', ') + ')'; }).join(', ');
   }
   // The diagram's rails (Chris, 2026-11-22: the diagram's own panel lists them): every rail on a Power line,
   // with the blocks that make and use it, and how many connections carry it (a link labeled with it).

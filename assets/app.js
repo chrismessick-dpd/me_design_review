@@ -3285,7 +3285,7 @@
   function specPage(p) {
     // Side by side (Chris, 2026-11-20): the document and the diagram together; on a narrow screen it shows
     // the document (its tab is hidden there), and a resize across the line draws the page again.
-    var narrow = specNarrow(), view = ui.specView === 'map' ? 'map' : ui.specView === 'side' && !narrow ? 'side' : 'doc';
+    var narrow = specNarrow(), view = ui.specView === 'map' ? 'map' : ui.specView === 'power' && specPowerTab() ? 'power' : ui.specView === 'side' && !narrow ? 'side' : 'doc';
     var a = M.specAnalysis(p), t = a.totals, depth = ui.specDepth === 2 ? 2 : 3;
     specDrawnNarrow = narrow;
     specHistOf(p); specHistNote(p);
@@ -3301,7 +3301,7 @@
       (a.undescribed.length ? '<span class="sep">·</span><span>' + plural(a.undescribed.length, 'requirement') + ' not described</span>' : '') +
       (a.tags.length ? '<span class="sep">·</span><span>' + a.tags.length + ' flagged</span>' : '') +
       // Ticket 3 (2026-11-13): moving sections wasn't obvious. Pointers only: touch doesn't drag them.
-      (t.sections > 1 && specEditing !== 'all' && ui.specView !== 'map' ? '<span class="spec-drag-hint"><span class="sep">·</span><span>Drag a heading to move its section</span></span>' : '') + '</div></div>' +
+      (t.sections > 1 && specEditing !== 'all' && (view === 'doc' || view === 'side') ? '<span class="spec-drag-hint"><span class="sep">·</span><span>Drag a heading to move its section</span></span>' : '') + '</div></div>' +
       // One row: back and forward, Edit all, Add section, and a menu for the rest (Chris, 2026-11-09).
       '<div class="spec-tools">' + (specEditing === 'all' ? '' : specHistHtml(p) +
       (t.sections ? '<button class="btn" data-act="spec-edit-all" title="Edit the whole description as one text">Edit all</button>' : '') +
@@ -3319,16 +3319,18 @@
         ' <button class="btn" data-act="spec-paste">Paste text</button> <button class="btn" data-act="spec-view" data-view="map">Build it in the diagram</button></div></div>';
     }
     html += '<div class="filters"><div class="seg"><button class="' + (view === 'doc' ? 'on' : '') + '" data-act="spec-view" data-view="doc">Document</button><button class="' + (view === 'map' ? 'on' : '') + '" data-act="spec-view" data-view="map">Diagram</button>' +
-      '<button class="spec-side-tab' + (view === 'side' ? ' on' : '') + '" data-act="spec-view" data-view="side" title="The document and the diagram together">Side by side</button></div>' +
-      (view !== 'map' ? '<div class="seg" title="How much to show">' + [[2, 'Gists'], [3, 'Full text']].map(function (d) {
+      '<button class="spec-side-tab' + (view === 'side' ? ' on' : '') + '" data-act="spec-view" data-view="side" title="The document and the diagram together">Side by side</button>' +
+      (specPowerTab() ? '<button class="' + (view === 'power' ? 'on' : '') + '" data-act="spec-view" data-view="power" title="The power budget, worked out from the blocks’ Power rows">Power</button>' : '') + '</div>' +
+      (view !== 'map' && view !== 'power' ? '<div class="seg" title="How much to show">' + [[2, 'Gists'], [3, 'Full text']].map(function (d) {
         return '<button class="' + (depth === d[0] && !show ? 'on' : '') + '" data-act="spec-depth" data-depth="' + d[0] + '">' + d[1] + '</button>';
       }).join('') + '</div>' : '') +
-      (view !== 'map' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
+      (view !== 'map' && view !== 'power' && (t.untraced + t.tag || t.note || show) ? '<div class="seg" title="Show only the sections with gaps or with review notes">' + [['', 'Everything', 0], ['gaps', 'Gaps', t.untraced + t.tag], ['notes', 'Notes', t.note]].map(function (f) {
         return '<button class="' + (show === f[0] ? 'on' : '') + '" data-act="spec-show" data-show="' + f[0] + '">' + f[1] + (f[0] ? ' <span class="count">' + f[2] + '</span>' : '') + '</button>';
       }).join('') + '</div>' : '') + '</div>';
     // The Requirements inbox stays out of the diagram (Chris, 2026-11-20); the document views keep it.
-    html += specNeedsHtml(p, a, view === 'map');
+    html += specNeedsHtml(p, a, view === 'map' || view === 'power');
     if (view === 'map') return html + specMapHtml(p, a) + '</div>';
+    if (view === 'power') return html + specPowerPage(p, a) + '</div>';
     var outline = '<nav class="spec-outline" aria-label="Outline">' + specOlToggle() + a.sections.filter(shown).map(function (x) {
       return '<button class="lv-' + x.sec.level + '" data-act="spec-goto" data-id="' + esc(x.sec.id) + '"><span>' + esc(x.sec.title || 'Untitled') + '</span>' + gapMark(x.gaps, specGapTitle(x)) + noteMark(x) + '</button>';
     }).join('') + '</nav>';
@@ -3902,7 +3904,7 @@
         // The marker drawn for this rail and role (sources are drawn right of sinks, so not in line order).
         var f = flags.filter(function (g2) { return (g2.getAttribute('data-rail') || '').toLowerCase() === q.rail.toLowerCase() && g2.getAttribute('data-role') === q.role; })[0] || flags[i], d = f && f.querySelector('path'), m = d && /M\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/.exec(d.getAttribute('d'));
         var fx = m ? +m[1] - 8 : n(r, 'x') + n(r, 'width') - 46 * (i + 1), fy = m ? +m[2] - 15 : n(r, 'y') - 15;
-        return { rail: q.rail, role: q.role, tree: q.tree !== false, x: fx, y: fy, w: Math.min(110, 22 + q.rail.length * 6.2) };
+        return { rail: q.rail, role: q.role, tree: q.tree !== false, label: q.label || '', x: fx, y: fy, w: Math.min(110, 22 + q.rail.length * 6.2) };
       });
       snap.blocks.push({ id: x.sec.id, title: x.sec.title || '', gist: x.gist || '', parent: g.dataset.parent || '', kept: !!x.sec.pos,
         x: n(r, 'x'), y: n(r, 'y'), w: n(r, 'width'), h: n(r, 'height'), parts: x.parts || [], power: power,
@@ -6255,19 +6257,70 @@
         return '<option value="' + esc(y.sec.id) + '"' + (cur === y.sec.id ? ' selected' : '') + '>' + '   '.repeat(depth) + esc(y.sec.title || 'Untitled') + '</option>';
       }).join('') + '</select></div>';
   }
-  // The block panel's Power (EE, config.spec.power; Chris, 2026-11-19): the rails the block uses or makes.
+  // The block panel's Power (EE, config.spec.power; Chris, 2026-11-19): the rails the block uses or makes. With the
+  // power budget (assets/power.js; Chris, 2026-11-23) a chevron on each row opens its numbers (voltage, current,
+  // power, a source's capacity and converter), and the Power tree box moves in there.
   function specPowerField(a, x) {
     if (!M.specPowerOn()) return '';
     var rails = [];
     a.sections.forEach(function (y) { (y.power || []).forEach(function (r) { if (rails.map(function (t) { return t.toLowerCase(); }).indexOf(r.rail.toLowerCase()) < 0) rails.push(r.rail); }); });
-    return '<div class="field"><span class="field-label">Power</span>' + ((x.power || []).length ? '<div class="spec-power-rows">' + x.power.map(function (r, i) {
-      return '<div class="spec-power-row"><span class="spec-power-rail">' + esc(r.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['', 'N/A']].map(function (o) {
-        return '<button class="' + (r.role === o[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + i + '" data-role="' + o[0] + '" title="' + esc(o[0] === 'source' ? 'It makes ' + r.rail : o[0] === 'sink' ? 'It uses ' + r.rail : 'Take ' + r.rail + ' off') + '">' + o[1] + '</button>';
-      }).join('') + '</div>' +
-        '<label class="spec-power-tree" title="Show ' + esc(x.sec.title) + ' in the power tree for ' + esc(r.rail) + '"><input type="checkbox" data-act="spec-power-tree" data-i="' + i + '"' + (r.tree !== false ? ' checked' : '') + '> Power tree</label></div>';
-    }).join('') + '</div>' : '<p class="note" style="margin:0 0 6px">No power rails. A rail it uses gets a bar over the block; one it makes, a circle.</p>') +
+    var rows = !(x.power || []).length ? '<p class="note" style="margin:0 0 6px">No power rails. A rail it uses gets a bar over the block; one it makes, a circle.</p>' :
+      PW ? PW.rowsHtml(specPowerBudget(a), x.sec.id, specPowerOpen[x.sec.id]) :
+      '<div class="spec-power-rows">' + x.power.map(function (r, i) {
+        return '<div class="spec-power-row"><span class="spec-power-rail">' + esc(r.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['', 'N/A']].map(function (o) {
+          return '<button class="' + (r.role === o[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + i + '" data-role="' + o[0] + '" title="' + esc(o[0] === 'source' ? 'It makes ' + r.rail : o[0] === 'sink' ? 'It uses ' + r.rail : 'Take ' + r.rail + ' off') + '">' + o[1] + '</button>';
+        }).join('') + '</div>' +
+          '<label class="spec-power-tree" title="Show ' + esc(x.sec.title) + ' in the power tree for ' + esc(r.rail) + '"><input type="checkbox" data-act="spec-power-tree" data-i="' + i + '"' + (r.tree !== false ? ' checked' : '') + '> Power tree</label></div>';
+      }).join('') + '</div>';
+    return '<div class="field"><span class="field-label">Power</span>' + rows +
       '<input class="input" id="spec-power-add" list="spec-power-rails" placeholder="Add a rail it uses, e.g. 3V3 (Enter)" autocomplete="off" style="margin-top:6px">' +
       '<datalist id="spec-power-rails">' + rails.map(function (r) { return '<option value="' + esc(r) + '">'; }).join('') + '</datalist></div>';
+  }
+  // ── Power budget (Chris, 2026-11-23; lab/power-budget.html): Scribe's Power tab, worked out by assets/power.js
+  // from every block's Power line, and the block panel's chevron rows that write the numbers into it. ──
+  var PW = window.SignoffPower || null;
+  var specPowerOpen = {};   // the block panel's open rows: { '<section id>': { '<row>': true } }
+  function specPowerTab() { return !!(PW && M.specPowerOn()); }
+  // The tab's display, scenario, and margin, kept in this browser.
+  function specPowerUi() {
+    var u = load('powerUi', {}) || {}, m = u.margin == null || u.margin === '' ? NaN : +u.margin;
+    return { scn: u.scn === 'max' ? 'max' : 'typ', margin: isFinite(m) ? Math.max(0, Math.min(90, m)) : 20,
+      view: PW && PW.VIEWS.some(function (v) { return v[0] === u.view; }) ? u.view : 'tree' };
+  }
+  function specPowerUiSet(k, v) { var u = specPowerUi(); u[k] = v; save('powerUi', u); }
+  function specPowerLine(body) {
+    var m = String(body || '').split('\n').filter(function (l) { return /^\s*power\s*:/i.test(l); })[0];
+    return m ? m.replace(/^\s*power\s*:\s*/i, '').trim() : '';
+  }
+  function specPowerBudget(a) {
+    var u = specPowerUi();
+    return PW.budget(a.sections.map(function (x) { return { id: x.sec.id, title: x.sec.title || 'Untitled', power: specPowerLine(x.sec.body) }; }), u.scn, u.margin);
+  }
+  function specPowerPage(p, a) {
+    var u = specPowerUi(), A = specPowerBudget(a);
+    if (!PW.any(A)) {
+      return '<div class="card empty"><div class="empty-art">' + ICON.doc + '</div><h2>No power rails yet</h2><p>Give blocks Power rows in the diagram (a block’s panel, Power), and the budget is worked out here: each rail’s load, each converter’s input and loss, and what the board draws.</p>' +
+        '<button class="btn btn-primary" data-act="spec-view" data-view="map">Open the diagram</button></div>';
+    }
+    return '<div class="pw-page"><div class="pw-bar"><div class="seg" role="group" aria-label="Display">' + PW.VIEWS.map(function (v) {
+        return '<button class="' + (u.view === v[0] ? 'on' : '') + '" data-act="spec-power-view" data-view="' + v[0] + '">' + v[1] + '</button>';
+      }).join('') + '</div><span class="spacer"></span>' +
+      '<div class="seg" role="group" aria-label="Scenario">' + [['typ', 'Typical'], ['max', 'Worst case']].map(function (o) {
+        return '<button class="' + (u.scn === o[0] ? 'on' : '') + '" data-act="spec-power-scn" data-scn="' + o[0] + '" title="' + (o[0] === 'max' ? 'Each load’s maximum, at its source’s highest voltage; a converter’s input at its lowest' : 'Each load’s typical current, at the middle of its source’s range') + '">' + o[1] + '</button>';
+      }).join('') + '</div>' +
+      '<label class="pw-margin" title="Flag a source or the input within this much of its limit">Margin <input class="input" id="spec-power-margin" type="number" min="0" max="90" step="5" value="' + u.margin + '"> %</label></div>' +
+      '<div class="pw-summary">' + PW.summaryHtml(A) + '</div>' +
+      '<div class="card pw-card"><p class="note pw-help">' + esc(PW.HELP[u.view]) + ' Click a block for its panel and its Power rows.</p><div class="pw-out">' + PW.viewHtml(A, u.view, specBlockSel()) + '</div></div>' +
+      '<div class="card pw-card"><h3 class="pw-h">Checks</h3><ul class="pw-issues">' + PW.issuesHtml(A) + '</ul></div></div>';
+  }
+  // A number, the converter, or Count in budget on one of a block's Power rows: the Power line rewritten with
+  // every other word as written.
+  function specPowerNum(id, ii, k, v) {
+    var p = current(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
+    var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
+    it[k] = v;
+    if (k === 'conv') { if (v !== 'switch') it.eff = null; if (v !== 'linear') it.iq = null; it.convWord = ''; }
+    specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: M.specSetLine(cur.body, 'power', PW.write(items)) }), me())]);
   }
   function specPowerSet(fn) {
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur) return;
@@ -6708,7 +6761,7 @@
     var slug = specGuideSlug(); if (!slug) return false;
     ui.slug = slug; ui.home = false; ui.page = '';
     ui.view = view === 'reqs' ? 'reqs' : 'spec';
-    if (view === 'doc' || view === 'map' || view === 'side') ui.specView = view;
+    if (view === 'doc' || view === 'map' || view === 'side' || view === 'power') ui.specView = view;
     if (depth) ui.specDepth = depth;
     ui.specShow = '';
     specEditing = null; specDraft = ''; selected = null; closeInspector(); saveUi(); render();
@@ -8220,6 +8273,10 @@
       case 'spec-sig-del': { var sdi = +el.dataset.i; specSigEdit(el.dataset.side, function (sg) { sg.splice(sdi, 1); return sg; }); break; }
       case 'spec-edge-reset': specEdgeReset(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
+      case 'spec-power-open': { var poid = specBlockSel(), poi = el.dataset.i; if (!poid) break; var po = specPowerOpen[poid] = specPowerOpen[poid] || {}; po[poi] = !po[poi]; renderInspector(); break; }
+      case 'spec-power-num': specPowerNum(el.dataset.b, +el.dataset.i, el.dataset.k, el.type === 'checkbox' ? !!el.checked : el.dataset.v); break;
+      case 'spec-power-view': specPowerUiSet('view', el.dataset.view); renderPage(); break;
+      case 'spec-power-scn': specPowerUiSet('scn', el.dataset.scn === 'max' ? 'max' : 'typ'); renderPage(); renderInspector(); break;
       case 'spec-power-tree': { var ti = +el.dataset.i, ton = !!el.checked; specPowerSet(function (it) { if (it[ti]) it[ti] = Object.assign({}, it[ti], { tree: ton }); return it; }); break; }
       case 'spec-auto-layout': specAutoLayout(el.dataset.view); break;
       case 'spec-expand': specSetExpanded(specExpanded ? false : (el.dataset.card || 'map')); break;
@@ -8562,7 +8619,17 @@
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
     if (e.target.id === 'spec-block-part') specBlockField('part', e.target.value);
-    if (e.target.id === 'spec-power-add' && e.target.value.trim()) { var prail = e.target.value.trim(); specPowerSet(function (it) { return it.concat([{ rail: prail, role: 'sink' }]); }); }
+    if (e.target.id === 'spec-power-add' && e.target.value.trim()) {
+      var prail = e.target.value.trim(), pid = specBlockSel(), pn = -1;
+      specPowerSet(function (it) { pn = it.length; return it.concat([{ rail: prail, role: 'sink' }]); });
+      if (pid && pn >= 0) { (specPowerOpen[pid] = specPowerOpen[pid] || {})[pn] = true; renderInspector(); }
+    }
+    if (e.target.classList && e.target.classList.contains('pw-num')) {
+      var pv = e.target.value === '' ? null : PW && PW.num(e.target.value);
+      if (pv != null && e.target.dataset.scale) pv = pv / +e.target.dataset.scale;
+      specPowerNum(e.target.dataset.b, +e.target.dataset.i, e.target.dataset.k, pv);
+    }
+    if (e.target.id === 'spec-power-margin') { var pm = PW && PW.num(e.target.value); specPowerUiSet('margin', pm == null ? 20 : Math.max(0, Math.min(90, pm))); renderPage(); renderInspector(); }
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
     if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);
     if (e.target.classList && e.target.classList.contains('spec-sig-name')) { var sni = +e.target.dataset.i, snv = e.target.value; specSigEdit(e.target.dataset.side, function (sg) { sg[sni] = snv; return sg; }); }

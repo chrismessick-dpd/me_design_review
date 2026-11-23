@@ -342,8 +342,13 @@
       var norm = function (a) { return a.map(function (r) { return r.rail.toLowerCase() + '|' + (r.role || 'sink') + '|' + (r.tree === false ? 0 : 1); }).sort().join(','); };
       if (norm(list) === norm(was)) return;
       // Keep the block's own order for rails it already had, then the new ones.
-      var ordered = was.map(function (r) { return list.filter(function (q) { return q.rail.toLowerCase() === r.rail.toLowerCase(); })[0]; }).filter(Boolean);
-      list.forEach(function (q) { if (ordered.indexOf(q) < 0) ordered.push(q); });
+      // A rail it had keeps its other words (the power budget's numbers) as written.
+      var used = [], ordered = was.map(function (r) {
+        var q = list.filter(function (q2) { return q2.rail.toLowerCase() === r.rail.toLowerCase(); })[0];
+        if (!q) return null;
+        used.push(q); return r.label ? Object.assign({}, q, { label: r.label }) : q;
+      }).filter(Boolean);
+      list.forEach(function (q) { if (used.indexOf(q) < 0) ordered.push(q); });
       out.push({ op: 'power', id: idOf[c.id] || k, items: ordered, text: 'Power of ' + (idOf[c.id] ? title(idOf[c.id]) : newTitles[c.id]) + ': ' + (ordered.length ? powerText(ordered) : 'none') });
     });
     // Section boxes: the fit around the blocks (as drawn now, with moved blocks where they went) plus grow.
