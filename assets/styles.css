@@ -1411,6 +1411,9 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-flow.moving, .spec-flow.moving * { cursor: grabbing !important; user-select: none; }
 .spec-flow.moving .spec-edge, .spec-flow.moving .spec-edge-label, .spec-flow.moving .spec-flag { opacity: 0.25; }
 .spec-draw { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; pointer-events: none; }
+/* The power tree's multiple selection: a thick ring and a tint, not hue alone. */
+.spec-node.msel rect:first-of-type { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
+.spec-draw.pick { stroke-dasharray: 3 3; }
 .spec-flow-hint { font-size: 11.5px; color: var(--text-3); font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 6px; }
 /* The hierarchy under the block diagram (after Signoff PL's Map): the board as trunk, sections as
    branches joined by elbow lines, blocks as tiles; drag and drop moves headings in the outline. */

@@ -4208,6 +4208,15 @@
   // drag as Loom's wires do, and its shape is kept on its from-block (routes['<to id>|<word>'], Loom's
   // record { v, a, b, mode }). Nothing derived is written: auto ports and routes stay in memory.
   var SPEC_GRID = 10, SPEC_LSTUB = 20, SPEC_RAD = 10, specFlowLast = null, specPtLast = null;
+  // The power tree's multiple selection (Chris, 2026-11-22): block ids picked by a box drawn on empty space or by
+  // Shift- or Ctrl-click; dragging any one of them moves them all. Kept only in this page, never stored.
+  var specPtPick = {};
+  function specPtPickIds() { return Object.keys(specPtPick); }
+  // Marks the picked blocks in a drawn power tree without redrawing it.
+  function specPtPickShow(svg) {
+    svg = svg || document.querySelector('svg.spec-ptree'); if (!svg) return;
+    Array.prototype.forEach.call(svg.querySelectorAll('.spec-node'), function (g) { g.classList.toggle('msel', !!specPtPick[g.dataset.id]); });
+  }
   // Two diagrams share the drag code (Chris, 2026-11-19): the block diagram ('flow'), whose arrangement sits on
   // each section record (pos, ports, routes, labels), and the power tree ('ptree'), whose sits under its ptree.
   function svgView(svg) { return svg && svg.getAttribute && svg.getAttribute('data-view') === 'ptree' ? 'ptree' : 'flow'; }
@@ -4950,7 +4959,7 @@
     });
     blocks.forEach(function (x) {
       var id = x.sec.id, b = R[id], pn = pins[id], both = pn.ins.length && pn.outs.length, pc = both ? 9 : 18;
-      svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + '" data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
+      svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + (specPtPick[id] ? ' msel' : '') + '" data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
         '<title>' + esc(x.sec.title + (pn.ins.length ? '\nUses ' + pn.ins.join(', ') : '') + (pn.outs.length ? '\nMakes ' + pn.outs.join(', ') : '')) + '</title>' +
         '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 20) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 16) / 7.2))) + '</text>' +
@@ -4967,7 +4976,7 @@
     });
     svg += '</svg>';
     return '<div class="spec-pt">' + head + specCard(svg, tools, 'ptree') +
-      '<p class="note">Drag blocks to arrange the power tree, a line’s straight runs to shape it (a double-click adds a bend), and the dot at either end to move where it meets its block. Its arrangement is its own: the block diagram above keeps its own. Click a line for its panel.</p></div>';
+      '<p class="note">Drag blocks to arrange the power tree (draw a box on empty space, or Shift-click, to pick several and drag them together), a line’s straight runs to shape it (a double-click adds a bend), and the dot at either end to move where it meets its block. Its arrangement is its own: the block diagram above keeps its own. Click a line for its panel.</p></div>';
   }
   // ── The diagram's own panel (Chris, 2026-11-22): a click on empty diagram space shows it ──
   // For now it lists the rails: every rail on a Power line, who makes and uses it, and its connections. A row
@@ -5226,11 +5235,25 @@
         edge: grip.dataset.edge, el: box, box0: box.dataset.box.split(' ').map(Number) };
       return;
     }
-    // The power tree has no sections: only its blocks drag, and empty space draws nothing.
-    if (view === 'ptree' && !node) return;
+    // The power tree has no sections: its blocks drag, and a box drawn on empty space picks the blocks in it.
+    // Shift- or Ctrl-click adds a block to the pick or takes it out; dragging a picked block moves them all.
+    var ids = null;
+    if (view === 'ptree' && node) {
+      var nid = node.dataset.id;
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (specPtPick[nid]) delete specPtPick[nid]; else specPtPick[nid] = 1;
+        specPtPickShow(svg);
+        specDragJustEnded = true; setTimeout(function () { specDragJustEnded = false; }, 400);
+        return;
+      }
+      if (specPtPick[nid] && specPtPickIds().length > 1) ids = specPtPickIds();
+      else specPtPick = {};
+    }
     flowDrag = { svg: svg, view: view, local: local, start: local(e), cx: e.clientX, cy: e.clientY, on: false,
-      type: node ? 'block' : box ? 'section' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '' };
-    if (flowDrag.type === 'draw') e.preventDefault();
+      type: node ? 'block' : box ? 'section' : view === 'ptree' ? 'pick' : 'draw', id: node ? node.dataset.id : box ? box.dataset.id : '', ids: ids,
+      add: e.shiftKey || e.ctrlKey || e.metaKey };
+    if (flowDrag.type === 'draw' || flowDrag.type === 'pick') e.preventDefault();
   }
   // The deepest section box under a point, leaving out `skip` and everything inside it.
   function flowBoxAt(svg, q, skip) {
@@ -5329,10 +5352,10 @@
     if (!d.on) {
       if (Math.abs(e.clientX - d.cx) + Math.abs(e.clientY - d.cy) < 6) return;
       d.on = true; d.svg.classList.add('moving');
-      if (d.type === 'draw') { d.rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.rect.setAttribute('class', 'spec-draw'); d.svg.appendChild(d.rect); }
-      else d.els = d.type === 'block' ? [d.svg.querySelector('.spec-node[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(d.id) + '"]')))
+      if (d.type === 'draw' || d.type === 'pick') { d.rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect'); d.rect.setAttribute('class', 'spec-draw' + (d.type === 'pick' ? ' pick' : '')); d.svg.appendChild(d.rect); }
+      else d.els = d.type === 'block' ? (d.ids || [d.id]).reduce(function (a, id) { return a.concat([d.svg.querySelector('.spec-node[data-id="' + CSS.escape(id) + '"]')], Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(id) + '"]'))); }, [])
         : [d.svg.querySelector('.spec-group-g[data-id="' + CSS.escape(d.id) + '"]')].concat(Array.prototype.slice.call(d.svg.querySelectorAll('[data-anc~="' + CSS.escape(d.id) + '"]')));
-      if (d.type !== 'draw') d.moving = flowMoving(d);
+      if (d.type !== 'draw' && d.type !== 'pick') d.moving = flowMoving(d);
       // A section's blocks take their power flags along too.
       if (d.type === 'section') Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) {
         d.els = d.els.concat(Array.prototype.slice.call(d.svg.querySelectorAll('.spec-flag[data-for="' + CSS.escape(g.dataset.id) + '"]')));
@@ -5340,7 +5363,7 @@
     }
     e.preventDefault();
     var q = d.local(e), dx = q.x - d.start.x, dy = q.y - d.start.y;
-    if (d.type === 'draw') {
+    if (d.type === 'draw' || d.type === 'pick') {
       d.rect.setAttribute('x', Math.min(q.x, d.start.x)); d.rect.setAttribute('y', Math.min(q.y, d.start.y));
       d.rect.setAttribute('width', Math.abs(dx)); d.rect.setAttribute('height', Math.abs(dy));
       return;
@@ -5368,7 +5391,7 @@
   // The blocks a block or section drag moves.
   function flowMoving(d) {
     var moving = {};
-    if (d.type === 'block') moving[d.id] = 1;
+    if (d.type === 'block') (d.ids || [d.id]).forEach(function (id) { moving[id] = 1; });
     else Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
     return moving;
   }
@@ -5470,6 +5493,20 @@
       specPutAll(p, rrecs);
       return;
     }
+    if (d.type === 'pick') {
+      var px0 = Math.min(q.x, d.start.x), py0 = Math.min(q.y, d.start.y), px1 = Math.max(q.x, d.start.x), py1 = Math.max(q.y, d.start.y);
+      d.rect.remove();
+      if (!d.add) specPtPick = {};
+      // A block is picked when the box touches it.
+      Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
+        var gr = g.querySelector('rect'), bx = +g.dataset.x, by = +g.dataset.y, bw = gr ? +gr.getAttribute('width') : SPEC_BW, bh = gr ? +gr.getAttribute('height') : SPEC_BH;
+        if (bx < px1 && bx + bw > px0 && by < py1 && by + bh > py0) specPtPick[g.dataset.id] = 1;
+      });
+      specPtPickShow(d.svg);
+      var pn = specPtPickIds().length;
+      if (pn) toast(plural(pn, 'block') + ' picked. Drag one to move them all; Esc lets go.');
+      return;
+    }
     if (d.type === 'draw') {
       var x0 = Math.min(q.x, d.start.x), y0 = Math.min(q.y, d.start.y), x1 = Math.max(q.x, d.start.x), y1 = Math.max(q.y, d.start.y);
       d.rect.remove();
@@ -5491,9 +5528,7 @@
     var dx = snap(q.x - d.start.x), dy = snap(q.y - d.start.y);
     // Every block's place is kept from now on (the arrangement freezes), and the dragged ones move.
     var stored = {}; M.liveSpec(p).forEach(function (s) { stored[s.id] = specLay(s, d.view).pos; });
-    var moving = {};
-    if (d.type === 'block') moving[d.id] = 1;
-    else Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node[data-anc~="' + CSS.escape(d.id) + '"]'), function (g) { moving[g.dataset.id] = 1; });
+    var moving = flowMoving(d);
     var view = Object.assign({}, p, { spec: Object.assign({}, p.spec) }), upd = {};
     Array.prototype.forEach.call(d.svg.querySelectorAll('.spec-node'), function (g) {
       var id = g.dataset.id, x = +g.dataset.x + (moving[id] ? dx : 0), y = +g.dataset.y + (moving[id] ? dy : 0), was = stored[id];
@@ -7978,7 +8013,7 @@
     var el = e.target.closest('[data-act]');
     if (!el) {
       // Empty space in a Scribe EE diagram lets go of what was picked and shows the diagram's own panel.
-      if (M.specPowerOn() && e.target.closest && e.target.closest('svg.spec-flow') && !e.target.closest('.spec-handle') && !specDragJustEnded) { specOpenDiagram(); return; }
+      if (M.specPowerOn() && e.target.closest && e.target.closest('svg.spec-flow') && !e.target.closest('.spec-handle') && !specDragJustEnded) { specPtPick = {}; specPtPickShow(); specOpenDiagram(); return; }
       if (blankClick(e) || specBlankClick(e)) closePanel();
       return;
     }
@@ -8356,6 +8391,7 @@
       if ($('#sheet')) { closeSheet(); applyTheme(settings.theme); return; }
       if (!$('#report').hidden) { $('#report').hidden = true; rwPrint = null; return; }
       if (inField) { document.activeElement.blur(); return; }
+      if (specPtPickIds().length) { specPtPick = {}; specPtPickShow(); return; }
       if ($('#inspector').classList.contains('open')) { closePanel(); return; }
       if (specExpanded) { specSetExpanded(false); return; }
     }
