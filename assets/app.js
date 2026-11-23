@@ -4574,6 +4574,15 @@
         else conn.push(o);
       });
     });
+    // A block is as wide as its rail markers need, on the grid (Chris, 2026-11-22: rails ran off a block's left
+    // edge). The markers sit 6 apart from 6 in from its right edge, each as wide as its name (to 110).
+    var bw = {};
+    blocks.forEach(function (x) {
+      var names = sup.filter(function (e) { return e.b === x.sec.id; }).map(function (e) { return e.label || T.byId[e.a].sec.title; })
+        .concat((x.power || []).map(function (r) { return r.rail; }));
+      var need = 6 + names.reduce(function (n, t) { return n + Math.min(110, 22 + t.length * 6.2) + 6; }, 0);
+      bw[x.sec.id] = Math.max(SPEC_BW, Math.ceil(need / SPEC_GRID) * SPEC_GRID);
+    });
     function under(x) { return T.isSec(x) ? T.ch[x.sec.id].reduce(function (acc, c) { return acc.concat(under(c)); }, []) : [x.sec.id]; }
     // Siblings in signal order: one goes right of another when a link runs from it into it.
     function orderRow(list) {
@@ -4588,7 +4597,7 @@
     }
     var size = {}, ord = {}, auto = {};
     function measure(x) {
-      if (!T.isSec(x)) return (size[x.sec.id] = { w: SPEC_BW, h: SPEC_BH });
+      if (!T.isSec(x)) return (size[x.sec.id] = { w: bw[x.sec.id], h: SPEC_BH });
       var c = ord[x.sec.id] = orderRow(T.ch[x.sec.id]), w = 0, h = 0;
       c.forEach(function (k, i) { var sz = measure(k); w += sz.w + (i ? SPEC_GAP : 0); h = Math.max(h, sz.h); });
       return (size[x.sec.id] = { w: w + 2 * pad, h: h + 2 * pad + head });
@@ -4608,12 +4617,12 @@
     });
     var R = {};
     // A kept place is drawn on the grid (places kept before 2026-11-19 may sit off it); a drag then keeps it there.
-    blocks.forEach(function (x) { if (x.sec.pos) R[x.sec.id] = { x: specSnap(x.sec.pos.x), y: specSnap(x.sec.pos.y), w: SPEC_BW, h: SPEC_BH }; });
+    blocks.forEach(function (x) { if (x.sec.pos) R[x.sec.id] = { x: specSnap(x.sec.pos.x), y: specSnap(x.sec.pos.y), w: bw[x.sec.id], h: SPEC_BH }; });
     // Once the diagram is arranged, a block added later has no place of its own, and the automatic one
     // can sit on a block that was moved (ticket 5, 2026-11-13). It goes right of the last block in its
     // section instead, then further right or down until it covers nothing.
-    function free(q) {
-      return !Object.keys(R).some(function (k) { var r = R[k]; return q.x < r.x + r.w + SPEC_GAP && q.x + SPEC_BW + SPEC_GAP > r.x && q.y < r.y + r.h + SPEC_GAP && q.y + SPEC_BH + SPEC_GAP > r.y; });
+    function free(q, w) {
+      return !Object.keys(R).some(function (k) { var r = R[k]; return q.x < r.x + r.w + SPEC_GAP && q.x + w + SPEC_GAP > r.x && q.y < r.y + r.h + SPEC_GAP && q.y + SPEC_BH + SPEC_GAP > r.y; });
     }
     blocks.forEach(function (x) {
       if (x.sec.pos) return;
@@ -4624,8 +4633,8 @@
         start = start ? { x: start.x + start.w + SPEC_GAP, y: start.y } : q;
         var found = null;
         for (var row = 0; row < 8 && !found; row++) for (var col = 0; col < 8 && !found; col++) {
-          var c = { x: start.x + col * (SPEC_BW + SPEC_GAP), y: start.y + row * (SPEC_BH + SPEC_GAP) };
-          if (free(c)) found = c;
+          var c = { x: start.x + col * (bw[x.sec.id] + SPEC_GAP), y: start.y + row * (SPEC_BH + SPEC_GAP) };
+          if (free(c, bw[x.sec.id])) found = c;
         }
         if (!found) {
           var maxY0 = Math.max.apply(null, Object.keys(R).map(function (k) { return R[k].y + R[k].h; }).concat([0]));
@@ -4633,7 +4642,7 @@
         }
         q = found;
       }
-      R[x.sec.id] = { x: q.x, y: q.y, w: SPEC_BW, h: SPEC_BH };
+      R[x.sec.id] = { x: q.x, y: q.y, w: bw[x.sec.id], h: SPEC_BH };
     });
     // Supplies within one section draw as routed arrows; every supply also gets a power flag.
     // Chris, 2026-11-19: a supply between two blocks in one section is a routed line wherever they sit (it
@@ -5465,7 +5474,7 @@
       var x0 = Math.min(q.x, d.start.x), y0 = Math.min(q.y, d.start.y), x1 = Math.max(q.x, d.start.x), y1 = Math.max(q.y, d.start.y);
       d.rect.remove();
       var ids = Array.prototype.filter.call(d.svg.querySelectorAll('.spec-node'), function (g) {
-        var cx = +g.dataset.x + SPEC_BW / 2, cy = +g.dataset.y + SPEC_BH / 2;
+        var gr = g.querySelector('rect'), cx = +g.dataset.x + (gr ? +gr.getAttribute('width') : SPEC_BW) / 2, cy = +g.dataset.y + SPEC_BH / 2;
         return cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1;
       }).map(function (g) { return g.dataset.id; });
       if (!ids.length) { if (x1 - x0 > 20) toast('Draw the box around one or more blocks'); return; }
