@@ -40,7 +40,10 @@
   function parseFn(s, gpio, remap) {
     const m = /^([A-Z][A-Z0-9]*?)(\d*)_(.+?)(?:\s+AF(\d+))?$/.exec(String(s).trim());
     if (!m) return null;                                        // EXTI0, CEC AF0: properties, not signals
-    return { full: String(s).trim().replace(/\s+AF\d+$/, ''), fam: m[1], inst: m[1] + m[2], sig: m[3], af: m[4] == null ? null : +m[4], gpio, remap: remap || null };
+    // A JTAG pin that is also SWD reads as its SWD signal (2026-11-23: an STM32G4's SYS_JTMS-SWDIO and SYS_JTCK-SWCLK,
+    // which an STM32G0's part file names SYS_SWDIO and SYS_SWCLK).
+    const sig = m[3].replace(/^JT[A-Z]+-(?=SW)/, '');
+    return { full: String(s).trim().replace(/\s+AF\d+$/, ''), fam: m[1], inst: m[1] + m[2], sig, af: m[4] == null ? null : +m[4], gpio, remap: remap || null };
   }
 
   function part(file) {
@@ -95,16 +98,21 @@
     const main = parts.shift() || '';
     const dirWord = parts.find(p => /^(in|out|both ways)$/i.test(p));
     const dir = dirWord ? dirWord.toLowerCase() : 'out';
-    const pins = [];
-    const pinRe = /\bP([A-Z])(\d+)\s*[–—-]\s*P?([A-Z])?(\d+)\b|\bP[A-Z]\d+\b/g;
-    let m;
-    while ((m = pinRe.exec(main))) {
-      if (m[2] != null) { for (let b = +m[2]; b <= +m[4] && b - +m[2] < 64; b++) pins.push('P' + m[1] + b); }
-      else pins.push(m[0]);
-    }
-    if (pins.length) return { dir, items: [{ type: 'PINS', pins, count: pins.length, text: main, extra: [], guessed: false, inst: null, sig: null }] };
+    // Pins named outright (PB0–PB7) are a PINS item; each other part after a + is read on its own (2026-11-23:
+    // "PB0–PB7 + OE" dropped its OE, since a label naming pins was read as nothing but those pins).
+    const pinsIn = text => {
+      const pins = [], pinRe = /\bP([A-Z])(\d+)\s*[–—-]\s*P?([A-Z])?(\d+)\b|\bP[A-Z]\d+\b/g;
+      let m;
+      while ((m = pinRe.exec(text))) {
+        if (m[2] != null) { for (let b = +m[2]; b <= +m[4] && b - +m[2] < 64; b++) pins.push('P' + m[1] + b); }
+        else pins.push(m[0]);
+      }
+      return pins;
+    };
     const items = main.split('+').map(chunk => {
       chunk = chunk.trim();
+      const pins = pinsIn(chunk);
+      if (pins.length) return { type: 'PINS', pins, count: pins.length, text: chunk, extra: [], guessed: false, inst: null, sig: null };
       const cm = /^(\d+)\s*[x×]?\s+(.*)$/.exec(chunk);
       const count = cm ? +cm[1] : 1;
       const body = cm ? cm[2] : chunk;
@@ -236,6 +244,7 @@
       .map(r => ({ r, n: TYPES[r.type].special ? 1e9 : TYPES[r.type].fixed ? -1 : r.slots.length ? 0 : options(part, r) }))   // BOOT0 and NRST last: they share
       .sort((a, b) => a.n - b.n).map(x => x.r);
     order.forEach(r => { if (auto || TYPES[r.type].fixed) place(part, r, used, claimed, take); else open(r); });
+    timerClashes(used);
 
     const io = part.pads.filter(p => p.gpio);
     const stray = Object.keys(used).filter(n => used[n].stray).map(n => ({ pad: n, fn: used[n].sig }));
@@ -243,6 +252,35 @@
       io: io.length, used: io.filter(p => used[p.num]).length,
       problems: reqs.filter(r => sevOf(r) === 'issue').length, warnings: reqs.filter(r => sevOf(r) === 'warn').length + stray.length,
       unassigned: reqs.filter(r => sevOf(r) === 'todo').length } };
+  }
+
+  // A timer's compare channel: CH1 and CH1N share one (the N output is its complement), so one waveform.
+  const chanKey = f => f && (f.fam === 'TIM' || f.fam === 'LPTIM') && /^CH\d+N?$/.test(f.sig) ? f.inst + '_' + f.sig.replace(/N$/, '') : null;
+  // The same timer channel on two pads (Chris, 2026-11-23: the buck trim and the LED both on TIM16_CH1) gives both the
+  // same waveform: an issue on each requirement involved. Two channels of one timer share its frequency: a note.
+  function timerClashes(used) {
+    const by = {}, tims = {};
+    Object.keys(used).forEach(n => {
+      const u = used[n], k = chanKey(u.fn); if (!k || !u.req) return;
+      (by[k] = by[k] || []).push({ n, u });
+      (tims[u.fn.inst] = tims[u.fn.inst] || new Set()).add(u.req);
+    });
+    Object.keys(by).forEach(k => {
+      const list = by[k]; if (list.length < 2) return;
+      list.forEach(x => {
+        const others = list.filter(y => y !== x).map(y => `${y.u.req.users[0].block} (pad ${y.n})`);
+        if (!x.u.req.problems.some(p => p.code === 'timer-channel' && p.chan === k))
+          x.u.req.problems.push({ code: 'timer-channel', chan: k, text: `${k} also drives ${[...new Set(others)].join(', ')}: one timer channel gives both the same waveform. Move one to another channel.` });
+      });
+    });
+    Object.keys(tims).forEach(t => {
+      const rs = [...tims[t]]; if (rs.length < 2) return;
+      rs.forEach(r => {
+        if (r.notes.some(n => n.code === 'timer-shared' && n.tim === t) || r.problems.some(p => p.code === 'timer-channel')) return;
+        const others = rs.filter(q => q !== r).map(q => q.users[0].block);
+        r.notes.push({ sev: 'info', code: 'timer-shared', tim: t, text: `${t} also drives ${others.join(', ')}: they share its frequency.` });
+      });
+    });
   }
 
   function options(part, r) {
@@ -319,9 +357,19 @@
     // Channels (ADC, DAC, timer, touch): any instance unless named, distinct pads.
     const need = Math.max(0, it.count - r.slots.length);
     over(r);
-    const okFn = f => T.fams.includes(f.fam) && T.pat.test(f.sig) && (!r.want || f.inst === r.want) && (!it.sig || f.sig === it.sig);
-    const pads = part.pads.filter(p => !used[p.num] && p.fns.some(okFn)).sort((a, b) => cost(a) - cost(b) || nat(a.num, b.num));
-    pads.slice(0, need).forEach(p => { const f = p.fns.find(okFn); take(p, r, f.sig, f); });
+    // A timer channel already driving another pad is never offered again, and a timer nothing uses yet comes first,
+    // so two PWM signals don't share a frequency when they needn't (2026-11-23).
+    const chans = new Set(), tims = new Set();
+    Object.keys(used).forEach(n => { const k = chanKey(used[n].fn); if (k) { chans.add(k); tims.add(used[n].fn.inst); } });
+    const okFn = f => T.fams.includes(f.fam) && T.pat.test(f.sig) && (!r.want || f.inst === r.want) && (!it.sig || f.sig === it.sig) && !chans.has(chanKey(f));
+    const best = p => { const fs = p.fns.filter(okFn); return fs.find(f => !tims.has(f.inst)) || fs[0]; };
+    const pads = part.pads.filter(p => !used[p.num] && p.fns.some(okFn))
+      .sort((a, b) => (tims.has(best(a).inst) ? 1 : 0) - (tims.has(best(b).inst) ? 1 : 0) || cost(a) - cost(b) || nat(a.num, b.num));
+    pads.slice(0, need).forEach(p => {
+      const f = best(p); if (!f) return;
+      const k = chanKey(f); if (k) { if (chans.has(k)) return; chans.add(k); tims.add(f.inst); }
+      take(p, r, f.sig, f);
+    });
     if (pads.length < need) r.problems.push({ code: 'short', text: `Only ${pads.length} free ${r.type} ${T.one}${pads.length === 1 ? '' : 's'} for ${need}.` });
   }
 
