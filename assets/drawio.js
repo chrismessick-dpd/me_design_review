@@ -184,7 +184,7 @@
   }
   var PW_H = 16;
   function powerText(items) {
-    return items.map(function (r) { return r.rail + ' (' + (r.role || 'sink') + (r.tree ? ', tree' : '') + ')'; }).join(', ');
+    return items.map(function (r) { return r.rail + ' (' + (r.role || 'sink') + (r.tree === false ? ', no tree' : '') + ')'; }).join(', ');
   }
   var cid = function (id) { return 'scribe-' + id; };
   // The page for a snapshot: { id, name, model }.
@@ -209,7 +209,7 @@
       (b.power || []).forEach(function (r, i) {
         cells.push({ id: cid(b.id) + '-pw-' + i, value: r.rail, parent: cid(b.id), vertex: true, connectable: false,
           geo: { x: r.x - b.x, y: r.y - b.y, w: Math.max(30, r.w || 40), h: PW_H },
-          data: { scribeType: 'power', role: r.role === 'source' ? 'source' : 'sink', tree: r.tree ? '1' : '' }, style: powerStyle(r.role) });
+          data: { scribeType: 'power', role: r.role === 'source' ? 'source' : 'sink', tree: r.tree === false ? '0' : '1' }, style: powerStyle(r.role) });
       });
     });
     snap.lines.forEach(function (L, i) {
@@ -333,13 +333,13 @@
       var k = keyOf(owner); rails[k] = rails[k] || [];
       if (railSeen[k + '|' + rail.toLowerCase()]) return;
       railSeen[k + '|' + rail.toLowerCase()] = 1;
-      rails[k].push({ rail: rail, role: c.data.role === 'source' ? 'source' : 'sink', tree: c.data.tree === '1', x: c.abs.x });
+      rails[k].push({ rail: rail, role: c.data.role === 'source' ? 'source' : 'sink', tree: c.data.tree !== '0', x: c.abs.x });
     });
     blockCells.forEach(function (c) {
       var k = keyOf(c), list = (rails[k] || []).sort(function (u, v) { return v.x - u.x; }).map(function (r) { return { rail: r.rail, role: r.role, tree: r.tree }; });
       var was = idOf[c.id] ? byId[idOf[c.id]].power || [] : [];
       // Order on the page doesn't count; the set of rails, roles, and tree flags does.
-      var norm = function (a) { return a.map(function (r) { return r.rail.toLowerCase() + '|' + (r.role || 'sink') + '|' + (r.tree ? 1 : 0); }).sort().join(','); };
+      var norm = function (a) { return a.map(function (r) { return r.rail.toLowerCase() + '|' + (r.role || 'sink') + '|' + (r.tree === false ? 0 : 1); }).sort().join(','); };
       if (norm(list) === norm(was)) return;
       // Keep the block's own order for rails it already had, then the new ones.
       var ordered = was.map(function (r) { return list.filter(function (q) { return q.rail.toLowerCase() === r.rail.toLowerCase(); })[0]; }).filter(Boolean);

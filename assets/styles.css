@@ -1212,6 +1212,9 @@ html.spec-exporting, html.spec-exporting * { transition: none !important; animat
 .spec-row-label { font-size: 11px; font-weight: 600; fill: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
 .spec-row-line { stroke: var(--hair); stroke-width: 1; }
 .spec-edge { fill: none; stroke: var(--text-3); stroke-width: 1.4; }
+/* A bus trunk (Chris, 2026-11-22): where lines with one label run together, one thicker line under them. */
+.spec-bus { fill: none; stroke: var(--text-3); stroke-width: 4.5; stroke-linecap: round; pointer-events: none; }
+.spec-map.moving .spec-bus { display: none; }
 .spec-edge.tree { stroke: var(--hair-2); stroke-dasharray: 2 4; }
 .spec-edge.iface { stroke: var(--accent); stroke-dasharray: 6 4; stroke-width: 1.6; }
 /* Pointing at a block (or selecting it) brings its own lines forward and fades the rest: by weight and
@@ -1421,6 +1424,15 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-power-seg button { flex: 1; justify-content: center; }
 .spec-power-tree { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; cursor: pointer; }
 .spec-power-tree input { margin: 0; }
+/* The diagram's own panel: its power rails, one picked shows ✕ (Chris, 2026-11-22). */
+.spec-rails { display: flex; flex-direction: column; gap: 4px; }
+.spec-rail { display: flex; align-items: center; gap: 6px; border-radius: 8px; }
+.spec-rail.sel { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); }
+.spec-rail-pick { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 8px; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.spec-rail-pick:hover { background: var(--bg-hover, rgba(127, 127, 127, 0.08)); }
+.spec-rail-pick b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.spec-rail-pick span { font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.spec-rail-del { flex: none; margin-right: 4px; }
 /* The power tree under the hierarchy (Chris, 2026-11-19). */
 .spec-pt { margin-top: 20px; }
 .spec-pt-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0 2px 8px; }
