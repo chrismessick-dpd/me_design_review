@@ -6551,8 +6551,10 @@
           '<button class="icon-btn spec-ds-x" data-act="spec-ds-del" data-id="' + esc(d.id) + '" title="Remove from this block" aria-label="Remove ' + esc(d.name || 'datasheet') + '">' + ICON.close + '</button></li>';
       }).join('') + '</ul>' : '') +
       (up ? '<p class="note" style="margin:0 0 6px">Storing ' + plural(up, 'PDF') + '…</p>' : '') +
-      '<label class="rw-drop rw-drop-sm spec-ds-drop" data-ds-drop="1"><input type="file" id="spec-ds-input" accept="application/pdf,.pdf" multiple hidden><span>Drop or <u>pick</u> a PDF</span></label>' +
-      '<div class="spec-ds-addlink"><input class="input" id="spec-ds-url" type="url" placeholder="Or paste a link (Enter)" autocomplete="off"><button class="btn btn-sm" data-act="spec-ds-link">Add</button></div></div>';
+      // One row (Chris, 2026-11-24): a link box that's also the drop target for PDFs, a PDF… picker, and Add.
+      '<div class="spec-ds-addlink" data-ds-drop="1"><input class="input" id="spec-ds-url" type="url" placeholder="Paste a link, or drop a PDF" autocomplete="off">' +
+      '<label class="btn btn-sm spec-ds-pick" title="Pick a PDF to store with the review">PDF…<input type="file" id="spec-ds-input" accept="application/pdf,.pdf" multiple hidden></label>' +
+      '<button class="btn btn-sm" data-act="spec-ds-link" title="Add the pasted link">Add</button></div></div>';
   }
   function dsPut(p, id, list) {
     var nr = Object.assign({}, p.spec[id]);

@@ -2046,6 +2046,8 @@ table.pw-t { width: 100%; border-collapse: collapse; font-size: 13px; font-varia
 .spec-ds-kind { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--hair-2); color: var(--text-3); }
 .spec-ds-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spec-ds-size { flex: none; font-size: 12px; }
-.spec-ds-drop { margin-bottom: 6px; }
-.spec-ds-addlink { display: flex; gap: 6px; }
+.spec-ds-addlink { display: flex; gap: 6px; align-items: center; }
 .spec-ds-addlink .input { flex: 1; min-width: 0; }
+.spec-ds-addlink .btn { flex: none; }
+.spec-ds-pick { cursor: pointer; }
+.spec-ds-addlink.on .input { border-style: dashed; border-color: var(--accent); background: var(--accent-soft, var(--bg-elev)); }
