@@ -5260,6 +5260,20 @@
     for (var i = 0; i < items.length; i++) if (items[i].kind === 'file' && /^image\//.test(items[i].type)) files.push(items[i].getAsFile());
     if (files.length) { e.preventDefault(); var ps = document.activeElement && document.activeElement.closest && document.activeElement.closest('.rw-step'); addReworkPics(files, ps ? ps.dataset.step : ''); }
   });
+  // Datasheets dropped on a block panel's box (specDsField).
+  document.addEventListener('dragover', function (e) {
+    var z = e.target.closest && e.target.closest('[data-ds-drop]');
+    if (z && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); z.classList.add('on'); }
+  });
+  document.addEventListener('dragleave', function (e) {
+    var z = e.target.closest && e.target.closest('[data-ds-drop]');
+    if (z && !z.contains(e.relatedTarget)) z.classList.remove('on');
+  });
+  document.addEventListener('drop', function (e) {
+    var z = e.target.closest && e.target.closest('[data-ds-drop]');
+    if (!z || !e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault(); z.classList.remove('on'); specDsAdd(e.dataTransfer.files);
+  });
   document.addEventListener('dragover', function (e) {
     var z = e.target.closest && e.target.closest('[data-rw-drop]');
     if (z && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); z.classList.add('on'); }
@@ -5989,6 +6003,7 @@
       linkFields + fromFields + (FT ? specWithinField(FT, x) : '') + specPowerField(a, x) +
       (SPEC && SPEC.parts ? '<div class="field"><label for="spec-block-parts">Parts</label><input class="input" id="spec-block-parts" value="' + esc(x.parts.join(', ')) + '" placeholder="U7, L1, C1–C3"></div>' : '') +
       (pinsOn() ? specPinsField(a, x) : '') +
+      (dsOn() ? specDsField(p, s) : '') +
       '<div class="field"><span class="field-label">Text</span><p class="note" style="margin:0">' + esc([plural(x.counts.linked + x.counts.std + x.counts.tag + x.counts.untraced + x.counts.note, 'sentence'), x.links.length ? plural(x.links.length, 'requirement') + ' linked' : '', x.gaps ? specGapTitle(x) : '', x.notes.length ? plural(x.notes.length, 'review note') : ''].filter(Boolean).join(' · ')) + '</p></div>' +
       specGapList(x) + specNoteList(x) +
       '<div class="spec-acts"><button class="btn btn-primary" data-act="spec-edit" data-id="' + esc(id) + '">Edit its text</button><button class="btn" data-act="spec-goto" data-id="' + esc(id) + '">Show in document</button>' +
@@ -6508,6 +6523,136 @@
     }).join('') +
       '<label class="spec-color-sw spec-color-custom" title="Any color…"><input type="color" id="spec-block-color" value="' + (c || '#3a6fd8') + '" aria-label="Any color"></label>' +
       '<button class="btn btn-sm" data-act="spec-block-color" data-color=""' + (c ? '' : ' disabled') + '>Default</button></div>';
+  }
+  // ── A block's datasheets (Chris, 2026-11-24): links, and PDFs stored next to the review in its home repo
+  // (datasheets/<review>/<id>.pdf, in 4 MB parts when bigger, moved with it when it's shared; model.specDatasheets).
+  // The same PDF on several blocks of a review is stored once (matched by SHA-256). Removing one from a block keeps
+  // the file, so Back brings it back. EE only (config.spec.datasheets). ──
+  var DS_MAX_BYTES = 60 * 1048576;
+  var dsFiles = {};          // '<review>/<file>' -> { state: 'loading' | 'ok', url }
+  var dsUploading = {};      // section id -> PDFs going up
+  function dsOn() { return !!(SPEC && SPEC.datasheets); }
+  function dsDir(p) { return checkerDir(p, 'datasheets/'); }
+  function dsSize(n) { return !n ? '' : n >= 1048576 ? (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function dsLinkName(u) {
+    try {
+      var x = new URL(u), host = x.hostname.replace(/^www\./, ''), last = decodeURIComponent(x.pathname.split('/').filter(Boolean).pop() || '');
+      return last ? host + ' · ' + last : host;
+    } catch (e) { return u; }
+  }
+  function specDsField(p, s) {
+    var list = s.datasheets || [], up = dsUploading[s.id] || 0;
+    return '<div class="field spec-ds"><span class="field-label">Datasheets</span>' +
+      (list.length ? '<ul class="spec-ds-list">' + list.map(function (d) {
+        var tip = d.url ? d.url : [d.name, dsSize(d.bytes), d.by ? 'added by ' + d.by : '', d.at ? fmtDate(d.at) : ''].filter(Boolean).join(' · ');
+        return '<li><button class="spec-ds-open" data-act="spec-ds-open" data-id="' + esc(d.id) + '" title="' + esc(tip) + '"><span class="spec-ds-kind">' + (d.url ? 'Link' : 'PDF') + '</span>' +
+          '<span class="spec-ds-name">' + esc(d.name || (d.url ? dsLinkName(d.url) : 'Datasheet')) + '</span>' +
+          (d.file ? '<span class="muted spec-ds-size">' + esc(dsSize(d.bytes)) + '</span>' : '') + '</button>' +
+          '<button class="icon-btn spec-ds-x" data-act="spec-ds-del" data-id="' + esc(d.id) + '" title="Remove from this block" aria-label="Remove ' + esc(d.name || 'datasheet') + '">' + ICON.close + '</button></li>';
+      }).join('') + '</ul>' : '') +
+      (up ? '<p class="note" style="margin:0 0 6px">Storing ' + plural(up, 'PDF') + '…</p>' : '') +
+      '<label class="rw-drop rw-drop-sm spec-ds-drop" data-ds-drop="1"><input type="file" id="spec-ds-input" accept="application/pdf,.pdf" multiple hidden><span>Drop or <u>pick</u> a PDF</span></label>' +
+      '<div class="spec-ds-addlink"><input class="input" id="spec-ds-url" type="url" placeholder="Or paste a link (Enter)" autocomplete="off"><button class="btn btn-sm" data-act="spec-ds-link">Add</button></div></div>';
+  }
+  function dsPut(p, id, list) {
+    var nr = Object.assign({}, p.spec[id]);
+    if (list.length) nr.datasheets = list; else delete nr.datasheets;
+    specPutAll(p, [M.specStamp(nr, me())]);
+  }
+  function specDsAddLink() {
+    var inp = $('#spec-ds-url'), u = inp ? inp.value.trim() : '', p = current(), id = specBlockSel(), rec = p && id && p.spec[id];
+    if (!rec || !u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    if (!/^https?:\/\/[^\s]+$/i.test(u) || u.length > 2000) { toast('That isn’t a web link'); return; }
+    var list = (rec.datasheets || []).slice();
+    if (list.some(function (d) { return d.url === u; })) { toast('That link is already on this block'); return; }
+    if (list.length >= 30) { toast('Up to 30 datasheets a block'); return; }
+    list.push({ id: rwRandomId(), name: dsLinkName(u), url: u, by: me(), at: M.now() });
+    dsPut(p, id, list);
+  }
+  function specDsRemove(did) {
+    var p = current(), id = specBlockSel(), rec = p && id && p.spec[id]; if (!rec) return;
+    var d = (rec.datasheets || []).filter(function (x) { return x.id === did; })[0]; if (!d) return;
+    dsPut(p, id, rec.datasheets.filter(function (x) { return x.id !== did; }));
+    toast('Removed ' + (d.name || 'the datasheet'), { label: 'Undo', run: function () { specHistStep(true); } });
+  }
+  function specDsAdd(files) {
+    var p = current(), id = specBlockSel(), rec = p && id && p.spec[id];
+    files = Array.prototype.filter.call(files || [], function (f) { return f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')); });
+    if (!rec) return;
+    if (!files.length) { toast('Only PDFs are stored; paste a link for anything else'); return; }
+    if (HIST.compare.isCopy(p)) { touch(p); return; }
+    if (!DEMO && !getToken()) { toast('Sign in to GitHub to store PDFs'); return; }
+    var big = files.filter(function (f) { return f.size > DS_MAX_BYTES; });
+    if (big.length) {
+      toast(big[0].name + ' is over ' + dsSize(DS_MAX_BYTES) + '; paste a link to it instead');
+      files = files.filter(function (f) { return f.size <= DS_MAX_BYTES; });
+      if (!files.length) return;
+    }
+    var pid = p.id, dir = dsDir(p), n = files.length;
+    // Every PDF already stored on this review, by checksum, so one isn't stored twice.
+    var have = {};
+    M.liveSpec(p).forEach(function (s) { (s.datasheets || []).forEach(function (d) { if (d.file) have[d.sha256] = d; }); });
+    dsUploading[id] = (dsUploading[id] || 0) + n; renderInspector();
+    Promise.all(files.map(function (f) {
+      return f.arrayBuffer().then(function (buf) {
+        var bytes = new Uint8Array(buf);
+        if (String.fromCharCode.apply(null, bytes.subarray(0, 5)) !== '%PDF-') throw new Error(f.name + ' isn’t a PDF');
+        return rwSha256(bytes).then(function (sha) { return { f: f, bytes: bytes, sha: sha }; });
+      }).catch(function (e) { toast(e.message); return null; });
+    })).then(function (list) {
+      var seen = {}, recs = [], puts = [];
+      list.filter(Boolean).forEach(function (x) {
+        if (seen[x.sha]) return;
+        seen[x.sha] = 1;
+        var old = have[x.sha], did = rwRandomId();
+        var r = old ? { id: did, name: x.f.name, file: old.file, sha256: x.sha, bytes: old.bytes, parts: old.parts }
+          : { id: did, name: x.f.name, file: did + '.pdf', sha256: x.sha, bytes: x.bytes.length };
+        if (!old) {
+          var parts = S.GitHubStore.splitParts(dir + r.file, x.bytes);
+          if (parts) r.parts = parts.length;
+          puts = puts.concat(parts || [{ path: dir + r.file, bytes: x.bytes }]);
+        }
+        if (!r.parts) delete r.parts;
+        r.by = me(); r.at = M.now();
+        if (!dsFiles[pid + '/' + r.file]) dsFiles[pid + '/' + r.file] = { state: 'ok', url: URL.createObjectURL(new Blob([x.bytes], { type: 'application/pdf' })) };
+        recs.push(r);
+      });
+      if (DEMO || !puts.length) return recs;
+      return workspace().store(homeOf(p)).putFiles(puts, { message: 'Signoff: datasheets for ' + pid }).then(function () { return recs; });
+    }).then(function (recs) {
+      if (!recs.length) return;
+      var cur = current(), rec2 = cur && cur.id === pid && cur.spec && cur.spec[id];
+      if (!rec2 || rec2.deleted) { toast('Stored, but the block is gone'); return; }
+      var list2 = (rec2.datasheets || []).slice();
+      recs = recs.filter(function (r) { return !list2.some(function (d) { return d.sha256 === r.sha256; }); });
+      if (!recs.length) { toast('That PDF is already on this block'); return; }
+      dsPut(cur, id, list2.concat(recs).slice(0, 30));
+      toast(DEMO ? 'In the demo, added PDFs last until the page reloads' : 'Stored ' + plural(recs.length, 'PDF') + '. Sync saves it on the block.');
+    }).catch(function (err) { toast('Couldn’t store the PDF: ' + (err && err.message || err), null, 6000); })
+      .then(function () { dsUploading[id] = Math.max(0, (dsUploading[id] || 0) - n); renderInspector(); });
+  }
+  // Opens a datasheet in a new tab: a link as it is; a stored PDF read from the repo and checked first.
+  function specDsOpen(did) {
+    var p = current(), id = specBlockSel(), rec = p && id && p.spec[id];
+    var d = rec && (rec.datasheets || []).filter(function (x) { return x.id === did; })[0]; if (!d) return;
+    if (d.url) { window.open(d.url, '_blank', 'noopener'); return; }
+    var k = p.id + '/' + d.file, have = dsFiles[k];
+    if (have && have.state === 'ok') { window.open(have.url, '_blank'); return; }
+    if (have && have.state === 'loading') return;
+    if (DEMO) { toast('In the demo, added PDFs last until the page reloads'); return; }
+    if (!getToken()) { toast('Sign in to GitHub to open it'); return; }
+    var w = window.open('', '_blank');          // opened now, while the click counts, then pointed at the PDF
+    dsFiles[k] = { state: 'loading' };
+    toast('Opening ' + (d.name || 'the datasheet') + '…');
+    workspace().store(homeOf(p)).readVerified(M.specDatasheetPaths(dsDir(p), d), d.sha256).then(function (b) {
+      dsFiles[k] = { state: 'ok', url: URL.createObjectURL(new Blob([b], { type: 'application/pdf' })) };
+      if (w && !w.closed) w.location.href = dsFiles[k].url; else window.open(dsFiles[k].url, '_blank');
+    }).catch(function (err) {
+      delete dsFiles[k];
+      if (w && !w.closed) w.close();
+      toast(err && err.code === 'missing' ? (d.name || 'The PDF') + ' isn’t in the repository' : 'Couldn’t open it: ' + (err && err.message || err), null, 6000);
+    });
   }
   function specBlockColor(v) {
     var p = current(), id = specBlockSel(), rec = p && id && p.spec[id]; if (!rec) return;
@@ -8343,6 +8488,9 @@
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
       case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
       case 'spec-edge-show': specEdgeShow(el.checked); break;
+      case 'spec-ds-open': specDsOpen(el.dataset.id); break;
+      case 'spec-ds-del': specDsRemove(el.dataset.id); break;
+      case 'spec-ds-link': specDsAddLink(); break;
       case 'spec-color-open': specColorOpen = !specColorOpen; renderInspector(); break;
       case 'spec-block-color': specBlockColor(el.dataset.color); break;
       case 'spec-rail-pick': specRailSel = specRailSel === el.dataset.rail ? '' : el.dataset.rail; renderInspector(); break;
@@ -8681,6 +8829,7 @@
     if (e.target.id === 'import-file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
     if (e.target.id === 'spec-block-title') specBlockField('title', e.target.value);
     if (e.target.id === 'spec-block-color') specBlockColor(e.target.value);
+    if (e.target.id === 'spec-ds-input' && e.target.files.length) { specDsAdd(e.target.files); e.target.value = ''; }
     if (e.target.id === 'spec-block-gist') specBlockField('gist', e.target.value);
     if (e.target.classList && e.target.classList.contains('spec-block-use') && e.target.value) {
       var up = current(), uc = up && (up.spec || {})[specBlockSel()], uw = e.target.dataset.word;
@@ -8702,6 +8851,7 @@
     }
     if (e.target.id === 'spec-block-parts') specBlockField('parts', e.target.value);
     if (e.target.id === 'spec-block-part') specBlockField('part', e.target.value);
+    if (e.target.id === 'spec-ds-url' && e.target.value.trim()) specDsAddLink();
     if (e.target.id === 'spec-power-add' && e.target.value.trim()) {
       var prail = e.target.value.trim(), pid = specBlockSel(), pn = -1;
       specPowerSet(function (it) { pn = it.length; return it.concat([{ rail: prail, role: 'sink' }]); });
