@@ -4925,11 +4925,15 @@
     return side === 'l' ? { x: q.x + 8, y: q.y + 4, anchor: 'start' } : side === 'r' ? { x: q.x - 8, y: q.y + 4, anchor: 'end' }
       : side === 't' ? { x: q.x, y: q.y + 37, anchor: 'middle' } : { x: q.x, y: q.y - 7, anchor: 'middle' };
   }
-  function specPtreeHtml(p, T) {
+  // opts.budget (the Power tab, Chris, 2026-11-23: "mirror layouts"): one scenario of the power budget
+  // (assets/power.js), drawn over this same tree, so the tab's Annotated tree is this drawing with its numbers and a
+  // drag in either moves both (the layout is each section's ptree). opts.margin is the budget's margin in percent.
+  function specPtreeHtml(p, T, opts) {
     var M0 = specPtModel(T), blocks = M0.blocks, pins = M0.pins, sel = specBlockSel(), ps = specPtSel();
+    var BG = opts && opts.budget, margin = opts && opts.margin != null ? opts.margin : 20;
     var arranged = blocks.some(function (x) { return x.sec.ptree; });
     var tools = arranged ? '<button class="chip" data-act="spec-auto-layout" data-view="ptree" title="Forget the power tree’s arrangement and lay it out again">Auto layout</button>' : '';
-    var head = '<div class="spec-pt-head"><b>Power tree</b><span>From each block’s Power rows ticked Power tree: a block that makes a rail feeds every block that uses it.</span><span class="spacer"></span>' + tools + '</div>';
+    var head = '<div class="spec-pt-head"><b>Power tree</b><span>' + (BG ? 'The Diagram view’s power tree with the budget’s numbers: each line’s current and power, each source’s load against what it can supply, and each block’s draw or loss. Arranging it here arranges it there too.' : 'From each block’s Power rows ticked Power tree: a block that makes a rail feeds every block that uses it.') + '</span><span class="spacer"></span>' + tools + '</div>';
     if (!blocks.length) {
       specPtLast = null;
       return '<div class="spec-pt">' + head + '<div class="card empty"><h2>No power tree yet</h2><p>Open a block, and under Power tick <b>Power tree</b> on the rails it makes or uses. Ticked blocks appear here, joined by their rails.</p></div></div>';
@@ -4981,15 +4985,54 @@
     specPtLast = { model: model, routed: routed };
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     function grow(q, mx, my) { x0 = Math.min(x0, q.x - mx); y0 = Math.min(y0, q.y - my); x1 = Math.max(x1, q.x + mx); y1 = Math.max(y1, q.y + my); }
-    Object.keys(R).forEach(function (id) { var r = R[id]; grow({ x: r.x, y: r.y }, 24, 30); grow({ x: r.x + r.w, y: r.y + r.h }, 24, 30); });
+    Object.keys(R).forEach(function (id) { var r = R[id]; grow({ x: r.x, y: r.y }, 24, 30); grow({ x: r.x + r.w, y: r.y + r.h }, 24, BG ? 30 + 13 * (pins[id].outs.length + 1) : 30); });
     Object.keys(routed).forEach(function (k) { routed[k].pts.forEach(function (q) { grow(q, 24, 30); }); });
     var VW = Math.max(980, x1 - x0); if (x1 - x0 < VW) x0 -= (VW - (x1 - x0)) / 2;
     var fit = x0 + ' ' + y0 + ' ' + VW + ' ' + (y1 - y0);
     var focus = isPt[sel] || ps;
     var svg = '<svg class="spec-map spec-flow spec-ptree' + (focus ? ' focus' : '') + '" data-view="ptree" ' + specVBAttr(fit, 'ptree') + ' role="img" aria-label="Power tree of the ' + esc(W.thing) + '">' +
-      '<defs><marker id="spec-pt-arrow" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="9" markerHeight="7.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0.6L10 4L0 7.4L2.6 4z" class="spec-arrow"/></marker></defs>' +
+      '<defs>' + (BG ? '<pattern id="spec-pt-hb" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="1.4" height="5" fill="rgba(255,255,255,0.6)"/></pattern><pattern id="spec-pt-hw" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.8" fill="rgba(0,0,0,0.5)"/></pattern>' : '') + '<marker id="spec-pt-arrow" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="9" markerHeight="7.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0.6L10 4L0 7.4L2.6 4z" class="spec-arrow"/></marker></defs>' +
       '<rect class="spec-flow-bg" x="' + x0 + '" y="' + y0 + '" width="' + VW + '" height="' + (y1 - y0) + '"/>';
     var named = {}, trunks = specBusTrunks(model.lines, routed);
+    // The budget's items for a block and rail, by role.
+    function bItem(id, rail, role) {
+      var b = BG && BG.byId[id], w = String(rail).toLowerCase();
+      return b ? b.items.filter(function (it) { return it.role === role && it.rail.toLowerCase() === w; })[0] : null;
+    }
+    // A load's current and power, by the end of its line.
+    function specPtLoadSvg(L, rr, rt) {
+      var k = bItem(L.b, L.rail, 'sink'), s = bItem(L.a, L.rail, 'source'); if (!k) return '';
+      var l = k.load || {}, off = !k.budget || (s && !s.budget);
+      var t = off ? 'not counted' : l.missing ? 'no current' : PW.fmtI(l.i) + ' · ' + PW.fmtP(l.p);
+      var at = rr ? specPtRailAt(rr, 'b') : { q: rt.at(0.92), side: 'l' }, q = at.q;
+      var pos = at.side === 'l' ? { x: q.x - 7, y: q.y - 5, a: 'end' } : at.side === 'r' ? { x: q.x + 7, y: q.y - 5, a: 'start' }
+        : at.side === 't' ? { x: q.x + 6, y: q.y - 8, a: 'start' } : { x: q.x + 6, y: q.y + 15, a: 'start' };
+      return '<text class="spec-pt-num' + (l.missing && !off ? ' warn' : '') + '" data-line="' + esc(L.key) + '" data-end="b" x="' + pos.x + '" y="' + pos.y + '" text-anchor="' + pos.a + '">' + esc(t) + '</text>';
+    }
+    // A source's row under its block: its load against what it can supply, a short bar hatched under the margin or over.
+    function specPtSrcSvg(id, rail, x, y) {
+      var s = bItem(id, rail, 'source'); if (!s || !s.budget) return '';
+      var h = '<text class="spec-pt-num" x="' + x + '" y="' + (y + 6) + '">' + esc(cutText(rail, 8)) + '</text>';
+      x += 44;
+      if (s.cap != null && s.util != null) {
+        var cls = s.util > 1 ? 'bad' : s.util > 1 - margin / 100 ? 'warn' : '', fw = Math.max(1, Math.min(1, s.util) * 30);
+        h += '<rect class="spec-pt-barbg" x="' + x + '" y="' + y + '" width="30" height="6" rx="1.5"/><rect class="spec-pt-bar ' + cls + '" x="' + x + '" y="' + y + '" width="' + fw + '" height="6" rx="1.5"/>' +
+          (cls ? '<rect x="' + x + '" y="' + y + '" width="' + fw + '" height="6" fill="url(#spec-pt-' + (cls === 'bad' ? 'hb' : 'hw') + ')"/>' : '') +
+          '<text class="spec-pt-num' + (cls ? ' ' + cls : '') + '" x="' + (x + 34) + '" y="' + (y + 6) + '">' + esc(PW.fmtI(s.iout) + ' · ' + Math.round(s.util * 100) + '% of ' + PW.fmtI(s.cap)) + '</text>';
+      } else h += '<text class="spec-pt-num" x="' + x + '" y="' + (y + 6) + '">' + esc(PW.fmtI(s.iout) + (s.b.root ? '' : ', no capacity given')) + '</text>';
+      return '<g class="spec-pt-src">' + h + '</g>';
+    }
+    // Under a block: a converter's efficiency and loss, an input's delivery against its limit, or a load's draw.
+    function specPtFootSvg(id, b) {
+      var bb = BG && BG.byId[id]; if (!bb) return '';
+      var foot = '';
+      if (bb.conv) foot = bb.outs.map(function (s) { return s.conv === 'linear' ? 'linear' : s.conv === 'pass' ? 'pass-through' : 'η ' + (s.eff != null ? s.eff : '85?') + '%'; }).join(', ') + ' · loss ' + PW.fmtP(bb.res.loss);
+      else if (bb.root) foot = 'delivers ' + PW.fmtP(bb.res.pout) + (bb.outs.some(function (s) { return s.limit != null; }) ? ' of ' + PW.fmtP(BG.t.limit) : '');
+      else { var pw = 0, miss = false; bb.items.forEach(function (it) { if (it.role === 'sink' && it.budget) { if (it.load.missing) miss = true; else pw += it.load.p || 0; } }); foot = (miss ? 'some current missing · ' : '') + 'draws ' + PW.fmtP(pw); }
+      var rows = bb.outs.filter(function (s) { return s.tree; }).map(function (s, j) { return specPtSrcSvg(id, s.rail, b.x, b.y + b.h + 19 + j * 13); }).join('');
+      return '<text class="spec-pt-foot" data-for="' + esc(id) + '" x="' + b.x + '" y="' + (b.y + b.h + 13) + '">' + esc(foot) + '</text>' + rows +
+        (bb.flags ? '<text class="spec-pt-flag" x="' + (b.x + b.w - 8) + '" y="' + (b.y + 16) + '" text-anchor="end"><title>' + esc(BG.issues.filter(function (x) { return x.id === id && x.sev !== 'na'; }).map(function (x) { return x.text; }).join('\n')) + '</title>△</text>' : '');
+    }
     svg += specBusSvg(trunks);
     model.lines.forEach(function (L) {
       var rr = routed[L.key], rt = rr ? specRt(rr) : specRoute(R[L.a], R[L.b]), dl = ' data-line="' + esc(L.key) + '"';
@@ -4998,6 +5041,7 @@
       svg += '<path class="spec-edge supply' + on + '"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" d="' + rt.d + '" marker-end="url(#spec-pt-arrow)"/>' + specPulse(rt.d, L.key) +
         '<path class="spec-edge-hit" data-act="spec-pt-edge"' + dl + ' data-a="' + esc(L.a) + '" data-b="' + esc(L.b) + '" data-rail="' + esc(L.rail) + '" d="' + rt.d + '"><title>' + esc(a + ' makes ' + L.rail + ' for ' + b + ', click for its panel') + '</title></path>';
       // A rail fanning out to several loads is named once, on its first line, unless a label was dragged.
+      if (BG) { svg += specPtLoadSvg(L, rr, rt); return; }
       var k = (specLay(T.byId[L.a].sec, 'ptree').labels || {})[L.rkey], fan = L.a + '|' + L.word;
       if (!k && (named[fan] || trunks.joined[L.key])) return;
       named[fan] = 1;
@@ -5024,7 +5068,7 @@
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 20) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 16) / 7.2))) + '</text>' +
         pn.ins.map(function (r, i) { return specPtRailSvg(id, r, 'l', { x: b.x, y: b.y + specPtPinY(i) }, pc, false); }).join('') +
         pn.outs.map(function (r, i) { return specPtRailSvg(id, r, 'r', { x: b.x + b.w, y: b.y + specPtPinY(i) }, pc, true); }).join('') +
-        '</g>';
+        (BG ? specPtFootSvg(id, b) : '') + '</g>';
     });
     model.lines.forEach(function (L) {
       var rr = routed[L.key]; if (!rr) return;
@@ -5034,6 +5078,8 @@
       });
     });
     svg += '</svg>';
+    if (BG) return '<div class="spec-pt spec-pt-budget">' + head + specCard(svg, tools, 'ptree') +
+      '<div class="pw-legend"><span><span class="pw-sw ok"></span>Load against what the source can supply</span><span><span class="pw-sw warn"></span>Under the margin</span><span><span class="pw-sw bad"></span>Over</span><span>△ a problem on that block (hover it)</span></div></div>';
     return '<div class="spec-pt">' + head + specCard(svg, tools, 'ptree') +
       '<p class="note">Drag blocks to arrange the power tree (draw a box on empty space, or Shift-click, to pick several and drag them together), a line’s straight runs to shape it (a double-click adds a bend), and the dot at either end to move where it meets its block. Its arrangement is its own: the block diagram above keeps its own. Click a line for its panel.</p></div>';
   }
@@ -6315,7 +6361,8 @@
       }).join('') + '</div>' +
       '<label class="pw-margin" title="Flag a source or the input within this much of its limit">Margin <input class="input" id="spec-power-margin" type="number" min="0" max="90" step="5" value="' + u.margin + '"> %</label></div>' +
       '<div class="pw-summary">' + PW.summaryHtml(A) + '</div>' +
-      '<div class="card pw-card"><p class="note pw-help">' + esc(PW.HELP[u.view]) + ' Click a block for its panel and its Power rows.</p><div class="pw-out">' + PW.viewHtml(A, u.view, specBlockSel()) + '</div></div>' +
+      (u.view === 'tree' ? specPtreeHtml(p, specFlowTree(a), { budget: A[A.scn], margin: A.margin }) :
+      '<div class="card pw-card"><p class="note pw-help">' + esc(PW.HELP[u.view]) + ' Click a block for its panel and its Power rows.</p><div class="pw-out">' + PW.viewHtml(A, u.view, specBlockSel()) + '</div></div>') +
       '<div class="card pw-card"><h3 class="pw-h">Checks</h3><ul class="pw-issues">' + PW.issuesHtml(A) + '</ul></div></div>';
   }
   // A number, the converter, or Count in budget on one of a block's Power rows: the Power line rewritten with

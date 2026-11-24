@@ -1446,6 +1446,18 @@ svg.spec-flow.moving .spec-grip { pointer-events: none; }
 .spec-pt-head > span:not(.spacer) { font-size: 12.5px; color: var(--text-3); }
 .spec-pt-head .spacer { flex: 1; }
 .spec-pt-rail { font-size: 10.5px; font-weight: 600; fill: var(--text-2); font-variant-numeric: tabular-nums; pointer-events: none; }
+/* The Power tab draws the same tree with the budget on it (power.js; 2026-11-23). */
+.spec-pt-num { font-size: 10px; fill: var(--text-2); font-variant-numeric: tabular-nums; pointer-events: none; }
+.spec-pt-num.warn { fill: var(--text); font-weight: 600; }
+.spec-pt-num.bad { fill: var(--issue); font-weight: 700; }
+.spec-pt-foot { font-size: 10px; fill: var(--text-3); font-variant-numeric: tabular-nums; pointer-events: none; }
+.spec-pt-flag { fill: var(--issue); font-weight: 700; font-size: 12px; }
+.spec-pt-barbg { fill: var(--bg-sunk); stroke: var(--hair-2); stroke-width: 0.5; }
+.spec-pt-bar { fill: var(--accent); }
+.spec-pt-bar.warn { fill: var(--warn); }
+.spec-pt-bar.bad { fill: var(--issue); }
+.spec-pt-src { pointer-events: none; }
+.spec-pt-budget .pw-legend { margin-top: 8px; }
 .spec-pt-pin { fill: var(--bg-elev); stroke: var(--text-2); stroke-width: 1.2; pointer-events: none; }
 .spec-pt-pin.source { fill: var(--text-2); }
 .st-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 13px; }
