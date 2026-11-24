@@ -3907,7 +3907,7 @@
         return { rail: q.rail, role: q.role, tree: q.tree !== false, label: q.label || '', x: fx, y: fy, w: Math.min(110, 22 + q.rail.length * 6.2) };
       });
       snap.blocks.push({ id: x.sec.id, title: x.sec.title || '', gist: x.gist || '', parent: g.dataset.parent || '', kept: !!x.sec.pos,
-        x: n(r, 'x'), y: n(r, 'y'), w: n(r, 'width'), h: n(r, 'height'), parts: x.parts || [], power: power,
+        x: n(r, 'x'), y: n(r, 'y'), w: n(r, 'width'), h: n(r, 'height'), parts: x.parts || [], power: power, color: x.sec.color || '',
         reqs: (x.links || []).map(function (id) { return a.ctx.reqs[id] ? a.ctx.reqs[id].ref : ''; }).filter(Boolean) });
     });
     var lines = {}; ((specFlowLast && specFlowLast.model.lines) || []).forEach(function (L) { lines[L.key] = L; });
@@ -4619,7 +4619,8 @@
       });
     });
     // A block is as wide as its rail markers need, on the grid (Chris, 2026-11-22: rails ran off a block's left
-    // edge). The markers sit 6 apart from 6 in from its right edge, each as wide as its name (to 110).
+    // edge). The markers sit 6 apart, sinks from 6 in from its left edge, sources from its right, each as wide as
+    // its name (to 110).
     var bw = {};
     blocks.forEach(function (x) {
       var names = sup.filter(function (e) { return e.b === x.sec.id; }).map(function (e) { return e.label || T.byId[e.a].sec.title; })
@@ -4828,7 +4829,7 @@
     blocks.forEach(function (x) {
       var b = R[x.sec.id], chars = Math.floor((b.w - 16) / 7.2);
       var sub = x.gaps ? '△ ' + plural(x.gaps, 'gap') : x.parts.length ? x.parts.slice(0, 4).join(' · ') + (x.parts.length > 4 ? ' …' : '') : '';
-      svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (sel === x.sec.id ? ' sel' : '') + (specPick.flow[x.sec.id] ? ' msel' : '') + '" data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
+      svg += '<g class="spec-node' + (x.gaps ? ' gap' : '') + (sel === x.sec.id ? ' sel' : '') + (specPick.flow[x.sec.id] ? ' msel' : '') + '"' + specTint(x) + ' data-act="spec-block" data-id="' + esc(x.sec.id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="' + esc(T.anc(x).join(' ')) + '" data-parent="' + esc(T.dparent(x)) + '">' +
         '<title>' + esc(x.sec.title + (x.gist ? '\n' + x.gist : '') + (x.gaps ? '\n' + specGapTitle(x) : '')) + '</title>' +
         '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
         (x.gaps ? '<rect class="spec-node-dots" x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' : '') +
@@ -4836,17 +4837,21 @@
         (sub ? '<text class="spec-node-sub" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 40) + '" text-anchor="middle">' + esc(cutText(sub, chars + 4)) + '</text>' : '') +
                 // At the top-right corner, clear of the ports (Chris, 2026-11-18).
         '<circle class="spec-handle" data-src="' + esc(x.sec.id) + '" cx="' + (b.x + b.w) + '" cy="' + b.y + '" r="7"><title>Drag to a block this one connects to</title></circle></g>';
-      // Rail markers over the block, every source right of every sink (Chris, 2026-11-22). Left to right: old
-      // Supplies flags, the rails it uses (a bar), then the rails it makes (a circle); placed from the right edge.
+      // Rail markers over the block (ticket 11, Chris, 2026-11-23): sinks from the left edge inward (old Supplies
+      // flags first, then the rails it uses, a bar), sources from the right edge inward (the rails it makes, a
+      // circle), each side in line order. The block is already wide enough for all of them (specGrow's need).
       // A sink fed by a power connection opens that line's panel (where Show line is), else its block's.
-      var marks = flagged.filter(function (e) { return e.b === x.sec.id; }).map(function (e) { return { sup: e }; })
-        .concat((x.power || []).filter(function (r) { return r.role !== 'source'; }).map(function (r) { return { r: r }; }))
-        .concat((x.power || []).filter(function (r) { return r.role === 'source'; }).map(function (r) { return { r: r }; }));
-      var right = b.x + b.w - 6;
-      marks.reverse().forEach(function (m) {
-        var e = m.sup, r = m.r, src = !!r && r.role === 'source', name = e ? e.label || T.byId[e.a].sec.title : r.rail;
-        var fw = Math.min(110, 22 + name.length * 6.2), fx = right - fw, fy = b.y - 15;
-        right = fx - 6;
+      var sinkMarks = flagged.filter(function (e) { return e.b === x.sec.id; }).map(function (e) { return { sup: e }; })
+        .concat((x.power || []).filter(function (r) { return r.role !== 'source'; }).map(function (r) { return { r: r }; }));
+      var srcMarks = (x.power || []).filter(function (r) { return r.role === 'source'; }).map(function (r) { return { r: r }; });
+      var left = b.x + 6, right = b.x + b.w - 6;
+      function markName(m) { return m.sup ? m.sup.label || T.byId[m.sup.a].sec.title : m.r.rail; }
+      function markW(m) { return Math.min(110, 22 + markName(m).length * 6.2); }
+      sinkMarks.forEach(function (m) { m.fx = left; left += markW(m) + 6; });
+      srcMarks.slice().reverse().forEach(function (m) { m.fx = right - markW(m); right = m.fx - 6; });
+      sinkMarks.concat(srcMarks).forEach(function (m) {
+        var e = m.sup, r = m.r, src = !!r && r.role === 'source', name = markName(m);
+        var fw = markW(m), fx = m.fx, fy = b.y - 15;
         var from = e || (src ? null : pw.filter(function (f) { return f.b === x.sec.id && (f.label || '').toLowerCase() === name.toLowerCase(); })[0]);
         var act = from ? 'data-act="spec-edge" data-a="' + esc(from.a) + '" data-b="' + esc(from.b) + '" data-word="' + esc(from.word) + '"' : 'data-act="spec-block" data-id="' + esc(x.sec.id) + '"';
         var tip = e ? 'Supplied by ' + T.byId[e.a].sec.title + (e.label ? ' (' + e.label + ')' : '') : (src ? 'Makes ' : 'Uses ') + name + (from ? ', from ' + T.byId[from.a].sec.title : '');
@@ -5013,7 +5018,7 @@
     }
     blocks.forEach(function (x) {
       var id = x.sec.id, b = R[id], pn = pins[id], both = pn.ins.length && pn.outs.length, pc = both ? 9 : 18;
-      svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + (specPick.ptree[id] ? ' msel' : '') + '" data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
+      svg += '<g class="spec-node spec-pt-node' + (sel === id ? ' sel' : '') + (specPick.ptree[id] ? ' msel' : '') + '"' + specTint(x) + ' data-act="spec-block" data-id="' + esc(id) + '" data-x="' + b.x + '" data-y="' + b.y + '" data-anc="" data-parent="">' +
         '<title>' + esc(x.sec.title + (pn.ins.length ? '\nUses ' + pn.ins.join(', ') : '') + (pn.outs.length ? '\nMakes ' + pn.outs.join(', ') : '')) + '</title>' +
         '<rect x="' + b.x + '" y="' + b.y + '" width="' + b.w + '" height="' + b.h + '" rx="8"/>' +
         '<text class="spec-node-title" x="' + (b.x + b.w / 2) + '" y="' + (b.y + 20) + '" text-anchor="middle">' + esc(cutText(x.sec.title || 'Untitled', Math.floor((b.w - 16) / 7.2))) + '</text>' +
@@ -5930,7 +5935,7 @@
     }).join('');
     el.innerHTML = '<div class="insp-head"><div class="insp-crumb">Diagram › ' + esc(s.title || 'Untitled') + '</div><button class="icon-btn" data-act="close-insp" aria-label="Close">' + ICON.close + '</button></div>' +
       '<div class="insp-body">' +
-      '<div class="field"><label for="spec-block-title">Name</label><input class="input" id="spec-block-title" value="' + esc(s.title) + '"></div>' +
+      '<div class="field"><label for="spec-block-title">Name</label><div class="spec-name-row"><input class="input" id="spec-block-title" value="' + esc(s.title) + '">' + specColorBtn(s) + '</div>' + specColorPop(s) + '</div>' +
       (kinds.length > 1 ? '<div class="field"><span class="field-label">Kind</span><div class="seg full spec-kind-seg">' + kinds.map(function (k) {
         return '<button class="' + (s.kind === k ? 'on' : '') + '" data-act="spec-block-kind" data-kind="' + k + '">' + (k ? kindLabel(k) : 'None') + '</button>';
       }).join('') + '</div></div>' : '') +
@@ -6435,6 +6440,34 @@
     var p = current(), s = specEdgeSel(), rec = p && s && p.spec[s.a]; if (!rec) return;
     var sh = Object.assign({}, rec.shown || {}); sh[s.b + '|' + String(s.word || '').toLowerCase()] = !!on;
     specPutAll(p, [M.specStamp(Object.assign({}, rec, { shown: sh }), me())]);
+  }
+  // ── A block's outline color (ticket 12, Chris, 2026-11-23): a little color wheel beside its Name in the panel,
+  // drawn on the block in the block diagram and the power tree (sec.color). ──
+  var SPEC_COLORS = [['#d64545', 'Red'], ['#e08a2c', 'Orange'], ['#d4b100', 'Yellow'], ['#3f9a4a', 'Green'], ['#1f9e9a', 'Teal'], ['#3a6fd8', 'Blue'], ['#8a55c8', 'Purple'], ['#7a7f87', 'Gray']];
+  var specColorOpen = false;
+  function specTint(x) {
+    var c = x && x.sec && /^#[0-9a-f]{6}$/i.test(x.sec.color || '') ? x.sec.color : '';
+    return c ? ' style="--blk:' + c + '" data-tint="1"' : '';
+  }
+  function specColorBtn(s) {
+    var c = /^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '';
+    return '<button class="spec-color-btn' + (c ? ' set' : '') + '" data-act="spec-color-open" aria-expanded="' + specColorOpen + '" title="' + (c ? 'Outline color: ' + c + '. Click to change' : 'Set the block’s outline color') + '" aria-label="Outline color"' + (c ? ' style="--blk:' + c + '"' : '') + '><span></span></button>';
+  }
+  function specColorPop(s) {
+    if (!specColorOpen) return '';
+    var c = (s.color || '').toLowerCase();
+    return '<div class="spec-color-pop" role="group" aria-label="Outline color">' + SPEC_COLORS.map(function (o) {
+      return '<button class="spec-color-sw' + (c === o[0] ? ' on' : '') + '" data-act="spec-block-color" data-color="' + o[0] + '" style="--blk:' + o[0] + '" title="' + o[1] + '" aria-label="' + o[1] + '" aria-pressed="' + (c === o[0]) + '"></button>';
+    }).join('') +
+      '<label class="spec-color-sw spec-color-custom" title="Any color…"><input type="color" id="spec-block-color" value="' + (c || '#3a6fd8') + '" aria-label="Any color"></label>' +
+      '<button class="btn btn-sm" data-act="spec-block-color" data-color=""' + (c ? '' : ' disabled') + '>Default</button></div>';
+  }
+  function specBlockColor(v) {
+    var p = current(), id = specBlockSel(), rec = p && id && p.spec[id]; if (!rec) return;
+    v = /^#[0-9a-f]{6}$/i.test(v || '') ? v.toLowerCase() : '';
+    if ((rec.color || '') === v) return;
+    var nr = Object.assign({}, rec); if (v) nr.color = v; else delete nr.color;
+    specPutAll(p, [M.specStamp(nr, me())]);
   }
   // Whether a line was shaped or had a port moved, and Reset route, which forgets both.
   function specEdgeShaped(p, s) {
@@ -8263,6 +8296,8 @@
       case 'spec-block': if (!specDragJustEnded) specOpenBlock(id); break;
       case 'spec-edge': if (!specDragJustEnded) specOpenEdge(el.dataset.a, el.dataset.b, el.dataset.word); break;
       case 'spec-edge-show': specEdgeShow(el.checked); break;
+      case 'spec-color-open': specColorOpen = !specColorOpen; renderInspector(); break;
+      case 'spec-block-color': specBlockColor(el.dataset.color); break;
       case 'spec-rail-pick': specRailSel = specRailSel === el.dataset.rail ? '' : el.dataset.rail; renderInspector(); break;
       case 'spec-rail-delete': specRailDeleteAct(el.dataset.rail); break;
       case 'spec-pt-edge': if (!specDragJustEnded) specOpenPt(el.dataset.a, el.dataset.b, el.dataset.rail); break;
@@ -8598,6 +8633,7 @@
     }
     if (e.target.id === 'import-file' && e.target.files[0]) { importFile(e.target.files[0]); e.target.value = ''; }
     if (e.target.id === 'spec-block-title') specBlockField('title', e.target.value);
+    if (e.target.id === 'spec-block-color') specBlockColor(e.target.value);
     if (e.target.id === 'spec-block-gist') specBlockField('gist', e.target.value);
     if (e.target.classList && e.target.classList.contains('spec-block-use') && e.target.value) {
       var up = current(), uc = up && (up.spec || {})[specBlockSel()], uw = e.target.dataset.word;

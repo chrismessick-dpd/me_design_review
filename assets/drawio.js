@@ -204,7 +204,7 @@
       cells.push({ id: cid(b.id), value: '<b>' + esc(b.title || 'Untitled') + '</b>' + (sub ? '<br><font style="font-size:10px" color="' + MUTED + '">' + esc(sub) + '</font>' : ''),
         parent: par(b), vertex: true, geo: rel(b),
         data: { scribeId: b.id, scribeType: 'block', title: b.title || '', gist: b.gist || '', parts: parts.join(', '), power: powerText(b.power || []), requirements: (b.reqs || []).join(', ') },
-        style: { rounded: 1, arcSize: 8, absoluteArcSize: 1, whiteSpace: 'wrap', html: 1, fillColor: '#ffffff', strokeColor: INK, fontSize: 12, container: 0 } });
+        style: { rounded: 1, arcSize: 8, absoluteArcSize: 1, whiteSpace: 'wrap', html: 1, fillColor: '#ffffff', strokeColor: /^#[0-9a-f]{6}$/i.test(b.color || '') ? b.color : INK, fontSize: 12, container: 0 } });
       // Each rail as a picture over the block, a child of it, so it moves with the block in draw.io.
       (b.power || []).forEach(function (r, i) {
         cells.push({ id: cid(b.id) + '-pw-' + i, value: r.rail, parent: cid(b.id), vertex: true, connectable: false,
