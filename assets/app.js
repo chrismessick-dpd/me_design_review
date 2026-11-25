@@ -2451,8 +2451,30 @@
       '<p class="note">' + esc([where, pic.name, pic.w && pic.h ? pic.w + ' \u00d7 ' + pic.h + ' px' : '', pic.by ? 'added by ' + pic.by : '', pic.at ? fmtDate(pic.at) : ''].filter(Boolean).join(' \u00b7 ')) + '</p>', { wide: true });
   }
 
+  // A redraw of the same panel keeps its scroll (Chris, 2026-11-24: switching a Power row's role jumped to the
+  // top). inspAnchor, set by a click, names an element to hold still on screen: the content below it grows or
+  // shrinks downward, with room added at the bottom when the panel gets shorter than the scroll it needs. A Power
+  // row is display: contents (no box), so its Source | Sink | Battery | N/A bar is the anchor.
+  var inspDrawn = null, inspAnchor = null;
   function renderInspector() { var f = focusNow(); drawInspector(); restoreFocus(f); }
   function drawInspector() {
+    var body = $('#inspector').querySelector('.insp-body'), same = body && inspDrawn === selected;
+    if (!same) inspAnchor = null;   // the anchor lasts while the same panel redraws (a sync, a second redraw)
+    var keep = same ? { top: body.scrollTop } : null, q = inspAnchor;
+    var an = keep && q && body.querySelector(q);
+    if (an) keep.y = an.getBoundingClientRect().top - body.getBoundingClientRect().top;
+    drawInspectorNow();
+    inspDrawn =$('#inspector').classList.contains('open') ? selected : null;
+    var b2 = keep && $('#inspector').querySelector('.insp-body'); if (!b2) return;
+    var an2 = keep.y != null && b2.querySelector(q), want = keep.top;
+    if (an2) want = b2.scrollTop + an2.getBoundingClientRect().top - b2.getBoundingClientRect().top - keep.y;
+    b2.scrollTop = want;
+    if (b2.scrollTop < want - 1) {   // too short to scroll that far: pad the bottom
+      var pad = document.createElement('div'); pad.style.height = Math.ceil(want - b2.scrollTop) + 'px'; pad.setAttribute('aria-hidden', 'true');
+      b2.appendChild(pad); b2.scrollTop = want;
+    }
+  }
+  function drawInspectorNow() {
     var el = $('#inspector'), p = current();
     if (!p || !selected || !el.classList.contains('open')) return;
     el.classList.remove('is-rework');
@@ -8516,7 +8538,7 @@
       case 'spec-sig-del': { var sdi = +el.dataset.i; specSigEdit(el.dataset.side, function (sg) { sg.splice(sdi, 1); return sg; }); break; }
       case 'spec-edge-reset': specEdgeReset(); break;
       case 'spec-boxes': ui.specBoxes = !!el.checked; saveUi(); renderPage(); break;
-      case 'spec-power-open': { var poid = specBlockSel(), poi = el.dataset.i; if (!poid) break; var po = specPowerOpen[poid] = specPowerOpen[poid] || {}; po[poi] = !po[poi]; renderInspector(); break; }
+      case 'spec-power-open': { var poid = specBlockSel(), poi = el.dataset.i; if (!poid) break; inspAnchor = '.pw-power > .pw-row:nth-child(' + (+poi + 1) + ') .spec-power-seg'; var po = specPowerOpen[poid] = specPowerOpen[poid] || {}; po[poi] = !po[poi]; renderInspector(); break; }
       case 'spec-power-num': specPowerNum(el.dataset.b, +el.dataset.i, el.dataset.k, el.type === 'checkbox' ? !!el.checked : el.dataset.v); break;
       case 'spec-power-view': specPowerUiSet('view', el.dataset.view); renderPage(); break;
       case 'spec-power-scn': specPowerUiSet('scn', el.dataset.scn === 'max' ? 'max' : 'typ'); renderPage(); renderInspector(); break;
@@ -8573,7 +8595,7 @@
       case 'spec-block-kind': specBlockField('kind', el.dataset.kind); break;
       case 'spec-block-unuse': specUnlinkName(specBlockSel(), el.dataset.word, el.dataset.name); break;
       case 'spec-block-unfrom': specUnlinkName(el.dataset.from, el.dataset.word, el.dataset.name); break;
-      case 'spec-power-role': { var pi = +el.dataset.i, prole = el.dataset.role; if (prole && PW) { specPowerRole(pi, prole); break; } specPowerSet(function (it) { if (!it[pi]) return it; if (prole) it[pi].role = prole; else it.splice(pi, 1); return it; }); break; }
+      case 'spec-power-role': { var pi = +el.dataset.i, prole = el.dataset.role; inspAnchor = '.pw-power > .pw-row:nth-child(' + (pi + 1) + ') .spec-power-seg'; if (prole && PW) { specPowerRole(pi, prole); break; } specPowerSet(function (it) { if (!it[pi]) return it; if (prole) it[pi].role = prole; else it.splice(pi, 1); return it; }); break; }
       case 'spec-editor-line': specEditorLine(parseInt(el.dataset.line, 10) || 1); break;
       case 'spec-block-delete': {
         var dp = current(), dc = dp && (dp.spec || {})[id];
