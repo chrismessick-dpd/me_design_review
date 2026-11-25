@@ -49,6 +49,24 @@
     'lifepo4': 'lifepo4', 'lfp': 'lifepo4', 'li-mno2': 'li-mno2', 'limno2': 'li-mno2', 'coin cell': 'li-mno2', 'li-socl2': 'li-socl2', 'lisocl2': 'li-socl2',
     'nimh': 'nimh', 'ni-mh': 'nimh', 'alkaline': 'alkaline', 'lead-acid': 'lead-acid', 'lead acid': 'lead-acid', 'sla': 'lead-acid' };
   function chemOf(key) { return CHEMS.filter(function (c) { return c[0] === key; })[0] || null; }
+  // A new chemistry on a battery row: its voltages become the new chemistry's, for as many cells in series as
+  // the row had. The count is read from the old chemistry when the voltages are a whole number of its cells,
+  // else from the nominal (or the middle of the range) against the new cell's; blank voltages mean one cell.
+  function setChem(it, key) {
+    var old = chemOf(it.chem), ch = chemOf(key), n = 1;
+    it.chem = ch ? ch[0] : '';
+    if (!ch) return it;
+    var vs = [it.vmin, it.vnom, it.vmax], have = vs.filter(function (x) { return x != null; });
+    if (have.length) {
+      var k = old ? Math.round((it.vnom != null ? it.vnom / old[3] : it.vmax != null ? it.vmax / old[4] : it.vmin / old[2])) : 0;
+      var fits = old && k >= 1 && vs.every(function (x, j) { return x == null || Math.abs(x - k * old[2 + j]) < 0.01 * k * old[2 + j] + 1e-9; });
+      var mid = it.vnom != null ? it.vnom : it.vmin != null && it.vmax != null ? (it.vmin + it.vmax) / 2 : have[0];
+      n = fits ? k : Math.max(1, Math.round(mid / ch[3]));
+    }
+    function r(x) { return Math.round(x * 1000) / 1000; }
+    it.vmin = r(n * ch[2]); it.vnom = r(n * ch[3]); it.vmax = r(n * ch[4]);
+    return it;
+  }
   var GROUPS = ['role', 'v', 'ityp', 'imax', 'ptyp', 'pmax', 'cap', 'conv', 'iq', 'limit', 'bat', 'nom', 'mah', 'usable', 'budget', 'tree'];
   function groupVals(o) {
     return { role: o.role, v: [o.vmin, o.vmax], ityp: o.ityp, imax: o.imax, ptyp: o.ptyp, pmax: o.pmax, cap: o.cap, conv: [o.conv, o.eff, o.convWord], iq: o.iq, limit: o.limit,
@@ -683,6 +701,6 @@
   window.SignoffPower = {
     parse: parse, write: write, parseWords: parseWords, newItem: newItem, budget: budget, analyse: analyse, any: any,
     rowsHtml: rowsHtml, viewHtml: viewHtml, summaryHtml: summaryHtml, issuesHtml: issuesHtml, VIEWS: VIEWS, HELP: HELP,
-    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, fmtH: fmtH, num: num, CHEMS: CHEMS, chemOf: chemOf
+    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, fmtH: fmtH, num: num, CHEMS: CHEMS, chemOf: chemOf, setChem: setChem
   };
 })();

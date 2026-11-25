@@ -6385,10 +6385,10 @@
   function specPowerNum(id, ii, k, v) {
     var p = current(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
     var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
-    it[k] = v;
+    if (k !== 'chem') it[k] = v;
     if (k === 'conv') { if (v !== 'switch') it.eff = null; if (v !== 'linear') it.iq = null; it.convWord = ''; }
-    // A chemistry picked for a battery with no voltages yet fills in one cell's min, nominal, and max.
-    if (k === 'chem') { var ch = PW.chemOf(v); it.chem = ch ? ch[0] : ''; if (ch && it.vmin == null && it.vmax == null && it.vnom == null) { it.vmin = ch[2]; it.vnom = ch[3]; it.vmax = ch[4]; } }
+    // A chemistry picked for a battery sets its min, nominal, and max to that chemistry's, keeping the cell count.
+    if (k === 'chem') PW.setChem(it, v);
     specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: M.specSetLine(cur.body, 'power', PW.write(items)) }), me())]);
   }
   // Source, Sink, or Battery for a row (N/A takes it off, through specPowerSet). A battery is a source marked
