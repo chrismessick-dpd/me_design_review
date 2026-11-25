@@ -26,6 +26,10 @@
   }
   function fmtV(a, b) { return a == null && b == null ? '' : a === b || b == null ? tidy(a) + ' V' : a == null ? tidy(b) + ' V' : tidy(a) + '–' + tidy(b) + ' V'; }
   function pct(x) { return Math.round(x * 100) + '%'; }
+  function fmtH(h) {
+    if (h == null || !isFinite(h)) return '—';
+    return h < 1 ? Math.round(h * 60) + ' min' : h < 72 ? tidy(h, 3) + ' h' : h < 24 * 365 ? tidy(h / 24, 2) + ' days' : tidy(h / 24 / 365, 2) + ' years';
+  }
 
   // ── Read and write a Power line ──
   // Words in a rail's brackets: source | sink, a voltage or range ("3.0–3.6 V", "3.3 V", "3.3 V ±3%"), a current
@@ -33,25 +37,63 @@
   // ("buck 88%", "88%", "switching", "linear", "LDO", "Iq 50 µA", "pass-through"), "limit 1.5 W" (an input's
   // budget), "no budget", and "no tree". Anything else is kept as written (extra).
   var CONV = /^(buck|boost|buck-boost|sepic|flyback|switching|switcher|converter|dc-dc)$/i;
-  var GROUPS = ['role', 'v', 'ityp', 'imax', 'ptyp', 'pmax', 'cap', 'conv', 'iq', 'limit', 'budget', 'tree'];
-  function groupVals(o) {
-    return { role: o.role, v: [o.vmin, o.vmax], ityp: o.ityp, imax: o.imax, ptyp: o.ptyp, pmax: o.pmax, cap: o.cap, conv: [o.conv, o.eff, o.convWord], iq: o.iq, limit: o.limit, budget: o.budget, tree: o.tree };
+  // A battery (2026-11-24): a source rail marked "battery", with a chemistry, a nominal
+  // voltage, a capacity, and the share of it that's usable: "VBAT (source, battery, Li-ion, 3.0–4.2 V, nominal 3.6 V,
+  // 2000 mAh, usable 80%)". Its min and max are the rail's range. Chemistries: [key, word, one cell's min, nominal, max].
+  var CHEMS = [
+    ['li-ion', 'Li-ion', 3.0, 3.6, 4.2], ['lipo', 'LiPo', 3.0, 3.7, 4.2], ['lifepo4', 'LiFePO4', 2.5, 3.2, 3.65],
+    ['li-mno2', 'Li-MnO2', 2.0, 3.0, 3.3], ['li-socl2', 'Li-SOCl2', 3.0, 3.6, 3.67], ['nimh', 'NiMH', 1.0, 1.2, 1.45],
+    ['alkaline', 'Alkaline', 0.9, 1.5, 1.6], ['lead-acid', 'Lead-acid', 1.75, 2.0, 2.15]
+  ];
+  var CHEM_ALIAS = { 'li-ion': 'li-ion', 'liion': 'li-ion', 'lithium-ion': 'li-ion', 'lipo': 'lipo', 'li-po': 'lipo', 'li-polymer': 'lipo',
+    'lifepo4': 'lifepo4', 'lfp': 'lifepo4', 'li-mno2': 'li-mno2', 'limno2': 'li-mno2', 'coin cell': 'li-mno2', 'li-socl2': 'li-socl2', 'lisocl2': 'li-socl2',
+    'nimh': 'nimh', 'ni-mh': 'nimh', 'alkaline': 'alkaline', 'lead-acid': 'lead-acid', 'lead acid': 'lead-acid', 'sla': 'lead-acid' };
+  function chemOf(key) { return CHEMS.filter(function (c) { return c[0] === key; })[0] || null; }
+  // A new chemistry on a battery row: its voltages become the new chemistry's, for as many cells in series as
+  // the row had. The count is read from the old chemistry when the voltages are a whole number of its cells,
+  // else from the nominal (or the middle of the range) against the new cell's; blank voltages mean one cell.
+  function setChem(it, key) {
+    var old = chemOf(it.chem), ch = chemOf(key), n = 1;
+    it.chem = ch ? ch[0] : '';
+    if (!ch) return it;
+    var vs = [it.vmin, it.vnom, it.vmax], have = vs.filter(function (x) { return x != null; });
+    if (have.length) {
+      var k = old ? Math.round((it.vnom != null ? it.vnom / old[3] : it.vmax != null ? it.vmax / old[4] : it.vmin / old[2])) : 0;
+      var fits = old && k >= 1 && vs.every(function (x, j) { return x == null || Math.abs(x - k * old[2 + j]) < 0.01 * k * old[2 + j] + 1e-9; });
+      var mid = it.vnom != null ? it.vnom : it.vmin != null && it.vmax != null ? (it.vmin + it.vmax) / 2 : have[0];
+      n = fits ? k : Math.max(1, Math.round(mid / ch[3]));
+    }
+    function r(x) { return Math.round(x * 1000) / 1000; }
+    it.vmin = r(n * ch[2]); it.vnom = r(n * ch[3]); it.vmax = r(n * ch[4]);
+    return it;
   }
-  function wordGroup(w) { var l = w.toLowerCase(); return l === 'source' || l === 'sink' ? 'role' : l === 'tree' || l === 'no tree' ? 'tree' : 'extra'; }
+  var GROUPS = ['role', 'v', 'ityp', 'imax', 'ptyp', 'pmax', 'cap', 'conv', 'iq', 'limit', 'bat', 'nom', 'mah', 'usable', 'budget', 'tree'];
+  function groupVals(o) {
+    return { role: o.role, v: [o.vmin, o.vmax], ityp: o.ityp, imax: o.imax, ptyp: o.ptyp, pmax: o.pmax, cap: o.cap, conv: [o.conv, o.eff, o.convWord], iq: o.iq, limit: o.limit,
+      bat: [o.battery, o.chem], nom: o.vnom, mah: o.mah, usable: o.usable, budget: o.budget, tree: o.tree };
+  }
+  function wordGroup(w) { var l = w.toLowerCase(); return l === 'source' || l === 'sink' ? 'role' : l === 'tree' || l === 'no tree' ? 'tree' : l === 'battery' || CHEM_ALIAS[l] ? 'bat' : 'extra'; }
   function parseWords(label) {
-    var o = { role: 'sink', tree: true, budget: true, vmin: null, vmax: null, ityp: null, imax: null, ptyp: null, pmax: null, cap: null, conv: '', convWord: '', eff: null, iq: null, limit: null, extra: [], toks: [] };
+    var o = { role: 'sink', tree: true, budget: true, vmin: null, vmax: null, ityp: null, imax: null, ptyp: null, pmax: null, cap: null, conv: '', convWord: '', eff: null, iq: null, limit: null,
+      battery: false, chem: '', vnom: null, mah: null, usable: null, extra: [], toks: [] };
     String(label || '').split(',').map(function (w) { return w.trim(); }).filter(Boolean).forEach(function (w) {
       var b0 = JSON.parse(JSON.stringify(groupVals(o))), nx = o.extra.length;
       word(w);
       var after = groupVals(o), g = GROUPS.filter(function (k) { return JSON.stringify(after[k]) !== JSON.stringify(b0[k]); });
-      // "Iq …" also sets the converter to linear; it belongs to iq. A word that changes nothing is still its group's.
-      o.toks.push({ w: w, g: o.extra.length > nx ? 'extra' : g.indexOf('iq') >= 0 ? 'iq' : g[0] || wordGroup(w) });
+      // "Iq …" also sets the converter to linear; it belongs to iq. "battery" also makes it a source; it belongs to
+      // bat. A word that changes nothing is still its group's.
+      o.toks.push({ w: w, g: o.extra.length > nx ? 'extra' : g.indexOf('iq') >= 0 ? 'iq' : g.indexOf('bat') >= 0 ? 'bat' : g[0] || wordGroup(w) });
     });
     o.toks.forEach(function (t) { t.snap = t.g === 'extra' ? null : JSON.stringify(groupVals(o)[t.g]); });
     return o;
     function word(w) {
       var l = w.toLowerCase().replace(/\s+/g, ' '), m;
       if (l === 'source' || l === 'sink') o.role = l;
+      else if (l === 'battery') { o.battery = true; o.role = 'source'; }
+      else if (CHEM_ALIAS[l]) o.chem = CHEM_ALIAS[l];
+      else if ((m = /^nom(?:inal)?\.? ([\d.]+)\s*v$/.exec(l))) o.vnom = num(m[1]);
+      else if ((m = /^([\d.]+)\s*(mah|ah)$/.exec(l))) o.mah = m[2] === 'ah' ? num(m[1]) * 1000 : num(m[1]);
+      else if ((m = /^usable ([\d.]+)\s*%$/.exec(l))) o.usable = num(m[1]);
       else if (l === 'no tree') o.tree = false;
       else if (l === 'tree') o.tree = true;
       else if (l === 'no budget') o.budget = false;
@@ -82,12 +124,21 @@
   function canonWords(o) {
     var w = [], add = function (g, x) { w.push({ g: g, w: x }); };
     add('role', o.role);
+    if (!o.battery && chemOf(o.chem)) add('bat', chemOf(o.chem)[1]);   // a chemistry typed on a rail that isn't a battery is kept
     var v = fmtV(o.vmin, o.vmax); if (v) add('v', v);
     if (o.role === 'sink') {
       if (o.ityp != null) add('ityp', fmtI(o.ityp));
       if (o.imax != null) add('imax', 'max ' + fmtI(o.imax));
       if (o.ptyp != null) add('ptyp', fmtP(o.ptyp));
       if (o.pmax != null) add('pmax', 'max ' + fmtP(o.pmax));
+    } else if (o.battery) {
+      add('bat', 'battery');
+      if (chemOf(o.chem)) add('bat', chemOf(o.chem)[1]);
+      if (o.vnom != null) add('nom', 'nominal ' + tidy(o.vnom) + ' V');
+      if (o.mah != null) add('mah', tidy(o.mah) + ' mAh');
+      if (o.usable != null) add('usable', 'usable ' + tidy(o.usable, 3) + '%');
+      if (o.cap != null) add('cap', 'up to ' + fmtI(o.cap));
+      if (o.limit != null) add('limit', 'limit ' + fmtP(o.limit));
     } else {
       if (o.cap != null) add('cap', 'up to ' + fmtI(o.cap));
       if (o.conv === 'switch') add('conv', o.eff != null ? (o.convWord ? o.convWord + ' ' : '') + tidy(o.eff, 3) + '%' : o.convWord || 'switching');
@@ -108,7 +159,8 @@
       if (t.g === 'extra') { if ((o.extra || []).indexOf(t.w) >= 0) out.push(t.w); return; }
       if (done[t.g]) return;
       done[t.g] = 1;
-      if (JSON.stringify(vals[t.g]) === t.snap && (canon[t.g] || []).length) out.push(t.w);
+      // bat has two words (battery and the chemistry): unchanged, both stay as written.
+      if (JSON.stringify(vals[t.g]) === t.snap && (canon[t.g] || []).length) out = out.concat(t.g === 'bat' ? o.toks.filter(function (x) { return x.g === 'bat'; }).map(function (x) { return x.w; }) : [t.w]);
       else out = out.concat(canon[t.g] || []);
     });
     want.forEach(function (x) { if (!done[x.g]) out.push(x.w); });
@@ -145,10 +197,11 @@
       if (b.conv && b.ins.length > 1) issues.push({ sev: 'na', id: b.id, text: b.title + ' uses ' + b.ins.map(function (x) { return x.rail; }).join(' and ') + '; its outputs are charged to ' + b.input.rail + ' only.' });
     });
     function srcs(r) { return r.sources.filter(function (s) { return s.budget; }); }
-    // Typical: the middle of the source's range. Worst case: its top for a load's power (P = V·I) and its
-    // bottom for a converter's input current (low line draws the most).
+    // Typical: a battery's nominal, else the middle of the source's range. Worst case: its top for a load's
+    // power (P = V·I) and its bottom for a converter's input current (low line draws the most).
     function railV(r, end) {
       var s = srcs(r)[0] || r.sources[0];
+      if (s && s.battery && s.vnom != null && scn !== 'max') return s.vnom;
       if (s && s.vmin != null) return scn !== 'max' ? (s.vmin + s.vmax) / 2 : end === 'lo' ? s.vmin : s.vmax;
       return railNameV(r.name);
     }
@@ -186,7 +239,7 @@
         s.iout = o.i / n; s.pout = o.p / n;
         var V = railV(s.r);
         if (s.conv === 'linear') { s.iin = s.iout + (s.iq || 0); s.pin = vinP != null ? vinP * s.iin / 1000 : s.pout; }
-        else if (s.conv === 'pass' || b.root) { s.pin = s.pout; s.iin = vin ? s.pin / vin * 1000 : null; }
+        else if (s.conv === 'pass' || b.root || s.battery) { s.pin = s.pout; s.iin = vin ? s.pin / vin * 1000 : null; }
         else { var e = s.eff != null ? s.eff : 85; if (s.eff == null) { assumed = true; s.effAssumed = true; } s.pin = s.pout / (e / 100); s.iin = vin ? s.pin / vin * 1000 : null; }
         if (s.iin != null) iin += s.iin;
         s.loss = s.pin - s.pout;
@@ -197,6 +250,44 @@
     }
     B.forEach(function (b) { if (b.outs.length) b.res = convIn(b); });
     B.forEach(function (b) { b.items.forEach(function (it) { if (it.role === 'sink') it.load = sinkLoad(it); }); });
+    // What a battery's rail draws, split by how it draws. A load given in current, a linear regulator, and a
+    // pass-through take the same current whatever the cell's voltage, so they use charge (mA); a switching
+    // converter and a load given only in power take the same power, so they use energy (W).
+    function batDraw(s) {
+      var r = s.r, n = srcs(r).length || 1, ma = 0, w = 0;
+      r.sinks.forEach(function (k) {
+        if (!k.budget || r.sources.some(function (x) { return x.b === k.b; })) return;
+        if (k.b.conv && k === k.b.input) {
+          k.b.outs.forEach(function (o) {
+            if (o.conv === 'linear') ma += o.iin || 0;
+            else if (o.conv === 'pass') ma += o.iout || 0;
+            else w += o.pin || 0;
+          });
+          return;
+        }
+        var i = scn === 'max' ? (k.imax != null ? k.imax : k.ityp) : (k.ityp != null ? k.ityp : k.imax);
+        var p = scn === 'max' ? (k.pmax != null ? k.pmax : k.ptyp) : (k.ptyp != null ? k.ptyp : k.pmax);
+        if (i != null) ma += i; else if (p != null) w += p;
+      });
+      return { ma: ma / n, w: w / n };
+    }
+    // A battery's runtime: its usable charge (capacity × usable share) over the current it gives, with the
+    // power-drawing loads turned into current at the nominal voltage (the average over a discharge), in both
+    // scenarios: worst case differs only by the loads' worst-case numbers. The nominal falls back to the
+    // middle of its range, then to the rail's name.
+    B.forEach(function (b) {
+      b.outs.forEach(function (s) {
+        if (!s.battery) return;
+        var vn = s.vnom != null ? s.vnom : s.vmin != null ? (s.vmin + s.vmax) / 2 : railNameV(s.rail);
+        var share = (s.usable != null ? s.usable : 100) / 100, d = batDraw(s);
+        s.vUsed = vn;
+        s.mahUse = s.mah != null ? s.mah * share : null;
+        s.whUse = s.mahUse != null && vn ? s.mahUse / 1000 * vn : null;
+        s.drawMa = d.ma; s.drawW = d.w;
+        s.iEq = vn ? d.ma + d.w / vn * 1000 : d.w > 0 ? null : d.ma;
+        s.runtime = s.mahUse != null && s.iEq > 0 ? s.mahUse / s.iEq : null;
+      });
+    });
 
     // Totals: what the inputs deliver, what the loads take, what the converters lose.
     var t = { input: 0, loads: 0, losses: 0, limit: null };
@@ -217,6 +308,11 @@
           if (s.util > 1) { issues.push({ sev: 'bad', id: b.id, text: b.title + ': ' + s.rail + ' loads ' + fmtI(s.iout) + ', over the ' + fmtI(s.cap) + ' it can supply.' }); b.flags++; }
           else if (s.util > 1 - m) { issues.push({ sev: 'warn', id: b.id, text: b.title + ': ' + s.rail + ' at ' + pct(s.util) + ' of ' + fmtI(s.cap) + ', under the ' + margin + '% margin.' }); b.flags++; }
         } else if (!b.root) issues.push({ sev: 'na', id: b.id, text: b.title + ': no capacity for ' + s.rail + ' ("up to …").' });
+        if (s.battery) {
+          if (s.mah == null) issues.push({ sev: 'na', id: b.id, text: b.title + ': no capacity for the ' + s.rail + ' battery, so no runtime.' });
+          else if (s.usable == null) issues.push({ sev: 'na', id: b.id, text: b.title + ': no usable share for the ' + s.rail + ' battery; 100% assumed.' });
+          if (s.vnom != null && s.vmin != null && (s.vnom < s.vmin - 1e-9 || s.vnom > s.vmax + 1e-9)) { issues.push({ sev: 'warn', id: b.id, text: b.title + ': the ' + s.rail + ' battery’s nominal ' + tidy(s.vnom) + ' V is outside its ' + fmtV(s.vmin, s.vmax) + '.' }); b.flags++; }
+        }
         if (s.effAssumed) issues.push({ sev: 'na', id: b.id, text: b.title + ': no efficiency for ' + s.rail + '; 85% assumed.' });
         if (s.dropout) { issues.push({ sev: 'bad', id: b.id, text: b.title + ': a linear regulator making ' + s.rail + ' from a lower input.' }); b.flags++; }
         if (srcs(s.r).length > 1) issues.push({ sev: 'na', id: b.id, text: s.rail + ' has ' + srcs(s.r).length + ' sources; its load is split evenly.' });
@@ -280,6 +376,16 @@
         else if (it.ptyp != null || it.pmax != null) bits.push(fmtP(it.ptyp) + (it.pmax != null ? ', max ' + fmtP(it.pmax) : ''));
         else if (it.budget) bits.push('<span class="bad">no current yet</span>');
       }
+    } else if (it.battery) {
+      var c = chemOf(it.chem), vb = fmtV(it.vmin, it.vmax);
+      bits.push(c ? esc(c[1]) : 'battery');
+      if (vb) bits.push(esc(vb) + (it.vnom != null ? ', nominal ' + tidy(it.vnom) + ' V' : ''));
+      else if (it.vnom != null) bits.push('nominal ' + tidy(it.vnom) + ' V');
+      if (it.mah != null) bits.push(tidy(it.mah) + ' mAh' + (it.usable != null ? ', ' + tidy(it.usable, 3) + '% usable' : ''));
+      else if (it.budget) bits.push('<span class="bad">no capacity yet</span>');
+      var sb = A[A.scn].byId[b.id].items[it.ii];
+      if (sb.runtime != null) bits.push('about ' + fmtH(sb.runtime) + (A.scn === 'max' ? ' worst case' : ''));
+      if (it.cap != null && sb.util != null) bits.push('<span' + (sb.util > 1 ? ' class="bad"' : '') + '>' + pct(sb.util) + ' of ' + fmtI(it.cap) + '</span>');
     } else {
       var v2 = fmtV(it.vmin, it.vmax); if (v2) bits.push(esc(v2));
       if (it.cap != null) {
@@ -308,6 +414,23 @@
         h += f('Current', inp(id, ii, 'ityp', it.ityp, { ph: 'typical', label: 'Typical current' }) + inp(id, ii, 'imax', it.imax, { ph: 'max', label: 'Maximum current' }) + ' mA', 'typical, max');
         h += f('Or power', inp(id, ii, 'ptyp', it.ptyp, { ph: 'typical', label: 'Typical power' }) + inp(id, ii, 'pmax', it.pmax, { ph: 'max', label: 'Maximum power' }) + ' W', it.ityp != null || it.imax != null ? 'current wins' : '');
       }
+    } else if (it.battery) {
+      var ch = chemOf(it.chem);
+      h += f('Chemistry', '<select class="input pw-sel" data-b="' + esc(id) + '" data-i="' + ii + '" data-k="chem" aria-label="Battery chemistry">' +
+        '<option value=""' + (ch ? '' : ' selected') + '>Choose…</option>' + CHEMS.map(function (c) {
+          return '<option value="' + c[0] + '"' + (ch && ch[0] === c[0] ? ' selected' : '') + '>' + esc(c[1]) + '</option>';
+        }).join('') + '</select>', ch ? 'one cell: ' + tidy(ch[2]) + ', ' + tidy(ch[3]) + ', ' + tidy(ch[4]) + ' V' : '');
+      h += f('Voltage', inp(id, ii, 'vmin', it.vmin, { ph: 'min', label: 'Minimum voltage' }) + inp(id, ii, 'vnom', it.vnom, { ph: 'nominal', label: 'Nominal voltage' }) +
+        inp(id, ii, 'vmax', it.vmax, { ph: 'max', label: 'Maximum voltage' }) + ' V', 'min, nominal, max');
+      h += f('Capacity', inp(id, ii, 'mah', it.mah, { ph: 'mAh', label: 'Capacity' }) + ' mAh');
+      h += f('Usable', inp(id, ii, 'usable', it.usable, { ph: '100', label: 'Usable capacity' }) + ' %', it.usable == null ? '100% assumed' : 'of the capacity');
+      h += f('Can supply', inp(id, ii, 'cap', it.cap, { ph: 'max', label: 'Maximum discharge current' }) + ' mA', 'optional');
+      var bt = A.typ.byId[id].items[ii], bm = A.max.byId[id].items[ii];
+      var use = bt.mahUse != null ? tidy(bt.mahUse, 4) + ' mAh usable' + (bt.whUse != null ? ' (' + tidy(bt.whUse, 3) + ' Wh at ' + tidy(bt.vUsed, 3) + ' V)' : '') : '';
+      h += '<div class="pw-derived">Load now: <b>' + fmtI(bt.iout) + '</b> typical, <b>' + fmtI(bm.iout) + '</b> worst case.' +
+        (bt.mahUse != null && !(bt.iEq > 0) ? ' Nothing draws from ' + esc(it.rail) + ' yet, so no runtime; ' + use + '.' :
+          bt.mahUse != null ? ' Runtime: about <b>' + fmtH(bt.runtime) + '</b> typical, <b>' + fmtH(bm.runtime) + '</b> worst case, from ' + use +
+            ' at ' + fmtI(bt.iEq) + ' typical' + (bt.drawW > 0 ? ' (power loads taken at ' + tidy(bt.vUsed, 3) + ' V)' : '') + '.' : ' Add a capacity for its runtime.') + '</div>';
     } else {
       h += f('Output', inp(id, ii, 'vmin', it.vmin, { ph: 'min', label: 'Minimum output' }) + '–' + inp(id, ii, 'vmax', it.vmax, { ph: 'max', label: 'Maximum output' }) + ' V');
       h += f('Can supply', inp(id, ii, 'cap', it.cap, { ph: 'max', label: 'Capacity' }) + ' mA');
@@ -330,8 +453,9 @@
     var b = A[A.scn].byId[id]; if (!b) return '';
     return '<div class="pw-power">' + b.items.map(function (it, ii) {
       var o = !!(open && open[ii]);
-      return '<div class="pw-row"><span class="spec-power-rail">' + esc(it.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['', 'N/A']].map(function (r) {
-        return '<button class="' + (it.role === r[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + ii + '" data-role="' + r[0] + '" title="' + esc(r[0] === 'source' ? 'It makes ' + it.rail : r[0] === 'sink' ? 'It uses ' + it.rail : 'Take ' + it.rail + ' off') + '">' + r[1] + '</button>';
+      var role = it.battery ? 'battery' : it.role;
+      return '<div class="pw-row"><span class="spec-power-rail">' + esc(it.rail) + '</span><div class="seg spec-power-seg">' + [['source', 'Source'], ['sink', 'Sink'], ['battery', 'Battery'], ['', 'N/A']].map(function (r) {
+        return '<button class="' + (role === r[0] ? 'on' : '') + '" data-act="spec-power-role" data-i="' + ii + '" data-role="' + r[0] + '" title="' + esc(r[0] === 'source' ? 'It makes ' + it.rail : r[0] === 'sink' ? 'It uses ' + it.rail : r[0] === 'battery' ? 'It’s a battery that makes ' + it.rail : 'Take ' + it.rail + ' off') + '">' + r[1] + '</button>';
       }).join('') + '</div><button class="pw-chev' + (o ? ' open' : '') + '" data-act="spec-power-open" data-i="' + ii + '" title="' + (o ? 'Fold' : 'Power numbers for ' + esc(it.rail)) + '" aria-expanded="' + o + '" aria-label="' + (o ? 'Fold ' : 'Open ') + esc(it.rail) + '">' + CHEV + '</button>' +
         '<div class="pw-gist">' + gist(A, it) + '</div>' + (o ? detail(A, it) : '') + '</div>';
     }).join('') + '</div>';
@@ -396,7 +520,8 @@
       });
       var foot = '';
       if (b.conv) foot = b.outs.map(function (s) { return s.conv === 'linear' ? 'linear' : s.conv === 'pass' ? 'pass-through' : 'η ' + (s.eff != null ? tidy(s.eff, 3) : '85?') + '%'; }).join(', ') + ' · loss ' + fmtP(b.res.loss);
-      else if (b.root) foot = 'delivers ' + fmtP(b.res.pout) + (b.outs.some(function (s) { return s.limit != null; }) ? ' of ' + fmtP(a.t.limit) : '');
+      else if (b.root) foot = 'delivers ' + fmtP(b.res.pout) + (b.outs.some(function (s) { return s.limit != null; }) ? ' of ' + fmtP(a.t.limit) : '') +
+        b.outs.filter(function (s) { return s.runtime != null; }).map(function (s) { return ' · ' + fmtH(s.runtime); }).join('');
       else { var p = 0, miss = false; b.items.forEach(function (it) { if (it.role === 'sink' && it.budget) { if (it.load.missing) miss = true; else p += it.load.p || 0; } }); foot = (miss ? 'some current missing · ' : '') + 'draws ' + fmtP(p); }
       h += '<text class="t3" x="' + (b.x + 12) + '" y="' + (b.y + b.h - 9) + '">' + esc(foot) + '</text>';
       if (b.flags) h += '<text class="flag" x="' + (b.x + W - 14) + '" y="' + (b.y + 19) + '">△</text>';
@@ -551,6 +676,7 @@
       '<div class="pw-stat"><b>' + fmtP(t.loads) + '</b><span>To the loads</span></div>' +
       '<div class="pw-stat"><b>' + fmtP(t.losses) + '</b><span>Converter losses</span></div>' +
       '<div class="pw-stat"><b>' + (t.eff != null ? pct(t.eff) : '—') + '</b><span>Overall efficiency</span></div>' +
+      a.B.map(function (b) { return b.outs.filter(function (s) { return s.runtime != null; }).map(function (s) { return '<div class="pw-stat"><b>' + fmtH(s.runtime) + '</b><span>' + esc(s.rail) + ' battery life</span></div>'; }).join(''); }).join('') +
       '<div class="pw-stat' + (bad ? ' bad' : warn ? ' warn' : '') + '"><b>' + bad + ' · ' + warn + '</b><span>Problems · warnings</span></div>';
   }
   function issuesHtml(A) {
@@ -575,6 +701,6 @@
   window.SignoffPower = {
     parse: parse, write: write, parseWords: parseWords, newItem: newItem, budget: budget, analyse: analyse, any: any,
     rowsHtml: rowsHtml, viewHtml: viewHtml, summaryHtml: summaryHtml, issuesHtml: issuesHtml, VIEWS: VIEWS, HELP: HELP,
-    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, num: num
+    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, fmtH: fmtH, num: num, CHEMS: CHEMS, chemOf: chemOf, setChem: setChem
   };
 })();

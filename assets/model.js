@@ -622,7 +622,8 @@
   function specPowerItems(text) {
     return specLinkItems(text).map(function (it) {
       var words = String(it.label || '').split(',').map(function (w) { return w.trim().toLowerCase().replace(/\s+/g, ' '); });
-      return { rail: it.name.trim(), role: words.indexOf('source') >= 0 ? 'source' : 'sink', tree: words.indexOf('no tree') < 0, label: String(it.label || '') };
+      // "battery" is a source too (assets/power.js; 2026-11-24).
+      return { rail: it.name.trim(), role: words.indexOf('source') >= 0 || words.indexOf('battery') >= 0 ? 'source' : 'sink', tree: words.indexOf('no tree') < 0, label: String(it.label || '') };
     }).filter(function (x) { return x.rail; });
   }
   // Writing a Power line keeps every word in a rail's brackets as written (the power budget's numbers, "3.0–3.6 V,
