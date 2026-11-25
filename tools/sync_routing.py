@@ -32,7 +32,9 @@ def main(argv):
         for name in files:
             src, dst = source / name, ROOT / "assets" / "vendor" / name
             data = src.read_bytes()
-            if dst.exists() and dst.read_bytes() == data:
+            # Compare with LF endings: a checkout may hold either (git normalizes them), so a copy
+            # that differs only by CRLF is not stale.
+            if dst.exists() and dst.read_bytes().replace(b"\r\n", b"\n") == data.replace(b"\r\n", b"\n"):
                 continue
             stale.append(name)
             if not check:
