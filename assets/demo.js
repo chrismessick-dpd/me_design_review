@@ -123,6 +123,12 @@
         p.spec[r.id] = r;
       });
     }
+    // A kept diagram arrangement (config.layout: { '<block title>': [x, y] }, 2026-11-25): each named block's
+    // `pos`, as a drag keeps it. Name every block, since one kept place freezes the whole diagram.
+    if (only.layout && p.spec) Object.keys(only.layout).forEach(function (title) {
+      var r = Object.keys(p.spec).map(function (k) { return p.spec[k]; }).filter(function (x) { return x.title === title; })[0];
+      if (r) r.pos = { x: only.layout[title][0], y: only.layout[title][1] };
+    });
     // An MCU block's pin plan (config.pins: { '<section title>': '<global holding a part file>' }; EE's is
     // assets/demo-part.js): the part copied onto the section, as Start a pin plan does, so the pin map shows (2026-11-21).
     if (only.pins && p.spec) Object.keys(only.pins).forEach(function (title) {
@@ -180,14 +186,14 @@
   S.demo = {
     projects: function (templates) {
       return (D.projects || []).map(function (d) {
-        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, pins: d.pins, rework: d.rework, releases: d.releases, load: d.load });
+        var p = build(d.fields, templates, d.seed, d.ratios, d.users, d.requirements, { findings: d.findings, comments: d.comments, fabcheck: d.fabcheck, spec: d.spec, layout: d.layout, pins: d.pins, rework: d.rework, releases: d.releases, load: d.load });
         p.id = demoId(d.seed);
         return p;
       });
     },
     id: demoId,
     // Bump when demo ids or content change, so browsers holding an older demo rebuild it.
-    VERSION: 26
+    VERSION: 28
   };
   // Fixed per sample project, so links into the demo (from Signoff PL's demo) keep working:
   // e.g. pdemo7 in Signoff EE, mdemo5 in Signoff ME.

@@ -6369,10 +6369,11 @@
   var PW = window.SignoffPower || null;
   var specPowerOpen = {};   // the block panel's open rows: { '<section id>': { '<row>': true } }
   function specPowerTab() { return !!(PW && M.specPowerOn()); }
-  // The tab's display, scenario, and margin, kept in this browser.
+  // The tab's display, scenario, margin, and Running from (the input the board runs from: '' for all, else an
+  // input block's id; one unknown to this review reads as all), kept in this browser.
   function specPowerUi() {
     var u = load('powerUi', {}) || {}, m = u.margin == null || u.margin === '' ? NaN : +u.margin;
-    return { scn: u.scn === 'max' ? 'max' : 'typ', margin: isFinite(m) ? Math.max(0, Math.min(90, m)) : 20,
+    return { scn: u.scn === 'max' ? 'max' : 'typ', margin: isFinite(m) ? Math.max(0, Math.min(90, m)) : 20, from: typeof u.from === 'string' ? u.from : '',
       view: PW && PW.VIEWS.some(function (v) { return v[0] === u.view; }) ? u.view : 'tree' };
   }
   function specPowerUiSet(k, v) { var u = specPowerUi(); u[k] = v; save('powerUi', u); }
@@ -6382,7 +6383,7 @@
   }
   function specPowerBudget(a) {
     var u = specPowerUi();
-    return PW.budget(a.sections.map(function (x) { return { id: x.sec.id, title: x.sec.title || 'Untitled', power: specPowerLine(x.sec.body) }; }), u.scn, u.margin);
+    return PW.budget(a.sections.map(function (x) { return { id: x.sec.id, title: x.sec.title || 'Untitled', power: specPowerLine(x.sec.body) }; }), u.scn, u.margin, u.from);
   }
   function specPowerPage(p, a) {
     var u = specPowerUi(), A = specPowerBudget(a);
@@ -6396,6 +6397,12 @@
       '<div class="seg" role="group" aria-label="Scenario">' + [['typ', 'Typical'], ['max', 'Worst case']].map(function (o) {
         return '<button class="' + (u.scn === o[0] ? 'on' : '') + '" data-act="spec-power-scn" data-scn="' + o[0] + '" title="' + (o[0] === 'max' ? 'Each load’s maximum, at its source’s highest voltage; a converter’s input at its lowest' : 'Each load’s typical current, at the middle of its source’s range') + '">' + o[1] + '</button>';
       }).join('') + '</div>' +
+      // Running from (2026-11-25): with two or more inputs, all of them at once (a shared rail's load split
+      // evenly) or one, the others and whatever only they feed off.
+      (A.inputs.length > 1 ? '<label class="pw-margin" title="Which inputs the board runs from: the others, and what only they feed, are off">Running from ' +
+        '<select class="input pw-from" id="spec-power-from"><option value=""' + (A.from ? '' : ' selected') + '>All inputs</option>' + A.inputs.map(function (x) {
+          return '<option value="' + esc(x.id) + '"' + (A.from === x.id ? ' selected' : '') + '>' + esc(x.title) + '</option>';
+        }).join('') + '</select></label>' : '') +
       '<label class="pw-margin" title="Flag a source or the input within this much of its limit">Margin <input class="input" id="spec-power-margin" type="number" min="0" max="90" step="5" value="' + u.margin + '"> %</label></div>' +
       '<div class="pw-summary">' + PW.summaryHtml(A) + '</div>' +
       (u.view === 'tree' ? specPtreeHtml(p, specFlowTree(a), { budget: A[A.scn], margin: A.margin }) :
@@ -6407,7 +6414,10 @@
   function specPowerNum(id, ii, k, v) {
     var p = current(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
     var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
-    if (k !== 'chem') it[k] = v;
+    // Cells in series or parallel: a new series count sets the voltages to that many of the chemistry's cells.
+    if (k === 'cs' || k === 'cp') PW.setCells(it, k, v);
+    else if (k === 'cellMah') PW.setCellMah(it, v);   // one cell's capacity; the line keeps the pack's
+    else if (k !== 'chem') it[k] = v;
     if (k === 'conv') { if (v !== 'switch') it.eff = null; if (v !== 'linear') it.iq = null; it.convWord = ''; }
     // A chemistry picked for a battery sets its min, nominal, and max to that chemistry's, keeping the cell count.
     if (k === 'chem') PW.setChem(it, v);
@@ -6419,7 +6429,7 @@
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
     var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
     if (role === 'battery') { it.role = 'source'; it.battery = true; it.conv = ''; it.eff = null; it.iq = null; it.convWord = ''; }
-    else { it.role = role; if (it.battery) { it.battery = false; it.chem = ''; it.vnom = null; it.mah = null; it.usable = null; } }
+    else { it.role = role; if (it.battery) { it.battery = false; it.chem = ''; it.cs = null; it.cp = null; it.vnom = null; it.mah = null; it.usable = null; } }
     specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: M.specSetLine(cur.body, 'power', PW.write(items)) }), me())]);
   }
   function specPowerSet(fn) {
@@ -8898,6 +8908,7 @@
       specPowerNum(e.target.dataset.b, +e.target.dataset.i, e.target.dataset.k, pv);
     }
     if (e.target.classList && e.target.classList.contains('pw-sel')) specPowerNum(e.target.dataset.b, +e.target.dataset.i, e.target.dataset.k, e.target.value);
+    if (e.target.id === 'spec-power-from') { specPowerUiSet('from', e.target.value); renderPage(); renderInspector(); }
     if (e.target.id === 'spec-power-margin') { var pm = PW && PW.num(e.target.value); specPowerUiSet('margin', pm == null ? 20 : Math.max(0, Math.min(90, pm))); renderPage(); renderInspector(); }
     if (e.target.id === 'spec-edge-label') specEdgeLabel(e.target.value);
     if (e.target.id === 'spec-edge-dir') specEdgeDir(e.target.value);
