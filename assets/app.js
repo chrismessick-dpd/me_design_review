@@ -6407,7 +6407,10 @@
   function specPowerNum(id, ii, k, v) {
     var p = current(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
     var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
-    if (k !== 'chem') it[k] = v;
+    // Cells in series or parallel: a new series count sets the voltages to that many of the chemistry's cells.
+    if (k === 'cs' || k === 'cp') PW.setCells(it, k, v);
+    else if (k === 'cellMah') PW.setCellMah(it, v);   // one cell's capacity; the line keeps the pack's
+    else if (k !== 'chem') it[k] = v;
     if (k === 'conv') { if (v !== 'switch') it.eff = null; if (v !== 'linear') it.iq = null; it.convWord = ''; }
     // A chemistry picked for a battery sets its min, nominal, and max to that chemistry's, keeping the cell count.
     if (k === 'chem') PW.setChem(it, v);
@@ -6419,7 +6422,7 @@
     var p = current(), id = specBlockSel(), cur = p && (p.spec || {})[id]; if (!cur || !PW) return;
     var items = PW.parse(specPowerLine(cur.body)), it = items[ii]; if (!it) return;
     if (role === 'battery') { it.role = 'source'; it.battery = true; it.conv = ''; it.eff = null; it.iq = null; it.convWord = ''; }
-    else { it.role = role; if (it.battery) { it.battery = false; it.chem = ''; it.vnom = null; it.mah = null; it.usable = null; } }
+    else { it.role = role; if (it.battery) { it.battery = false; it.chem = ''; it.cs = null; it.cp = null; it.vnom = null; it.mah = null; it.usable = null; } }
     specPutAll(p, [M.specStamp(Object.assign({}, cur, { body: M.specSetLine(cur.body, 'power', PW.write(items)) }), me())]);
   }
   function specPowerSet(fn) {

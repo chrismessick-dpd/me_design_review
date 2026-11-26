@@ -49,33 +49,66 @@
     'lifepo4': 'lifepo4', 'lfp': 'lifepo4', 'li-mno2': 'li-mno2', 'limno2': 'li-mno2', 'coin cell': 'li-mno2', 'li-socl2': 'li-socl2', 'lisocl2': 'li-socl2',
     'nimh': 'nimh', 'ni-mh': 'nimh', 'alkaline': 'alkaline', 'lead-acid': 'lead-acid', 'lead acid': 'lead-acid', 'sla': 'lead-acid' };
   function chemOf(key) { return CHEMS.filter(function (c) { return c[0] === key; })[0] || null; }
-  // A new chemistry on a battery row: its voltages become the new chemistry's, for as many cells in series as
-  // the row had. The count is read from the old chemistry when the voltages are a whole number of its cells,
-  // else from the nominal (or the middle of the range) against the new cell's; blank voltages mean one cell.
+  // A battery's cell configuration (2026-11-25): "4S2P", cells in series and in parallel, each 1 when not given.
+  // The voltages are the pack's (series times one cell's); the capacity is the pack's as written.
+  function cellCount(x) { var n = Math.round(+x); return isFinite(n) && n >= 1 ? Math.min(n, 999) : 1; }
+  // The series count a row shows: its own, else read from its voltages when they're a whole number of its
+  // chemistry's cells (within 1 %), else 1.
+  function seriesOf(it) { return it.cs != null ? it.cs : fitCount(chemOf(it.chem), it) || 1; }
+  // How many of chemistry c's cells the row's voltages are, or 0 when they aren't a whole number of them.
+  function fitCount(c, it) {
+    var vs = [it.vmin, it.vnom, it.vmax];
+    if (!c || !vs.some(function (x) { return x != null; })) return 0;
+    var k = Math.round(it.vnom != null ? it.vnom / c[3] : it.vmax != null ? it.vmax / c[4] : it.vmin / c[2]);
+    return k >= 1 && vs.every(function (x, j) { return x == null || Math.abs(x - k * c[2 + j]) < 0.01 * k * c[2 + j] + 1e-9; }) ? k : 0;
+  }
+  function cellVolts(it, n) {
+    var ch = chemOf(it.chem); if (!ch) return it;
+    function r(x) { return Math.round(x * 1000) / 1000; }
+    it.vmin = r(n * ch[2]); it.vnom = r(n * ch[3]); it.vmax = r(n * ch[4]);
+    return it;
+  }
+  // A new series or parallel count: kept on the row. A new series count sets the voltages to that many of
+  // the chemistry's cells (none without a chemistry); the voltages stay editable afterward. A new parallel
+  // count keeps one cell's capacity, so the pack's (the line's mAh) becomes the cell's times the new count.
+  function setCells(it, k, v) {
+    var n = cellCount(v == null || v === '' ? 1 : v);
+    if (k === 'cp') {
+      if (it.mah != null) it.mah = Math.round(it.mah / (it.cp || 1) * n * 1000) / 1000;
+      it.cp = n; return it;
+    }
+    it.cs = n;
+    return cellVolts(it, n);
+  }
+  // One cell's capacity: the pack's over the cells in parallel. Setting it sets the pack's.
+  function cellMah(it) { return it.mah == null ? null : Math.round(it.mah / (it.cp || 1) * 1000) / 1000; }
+  function setCellMah(it, v) { it.mah = v == null ? null : Math.round(v * (it.cp || 1) * 1000) / 1000; return it; }
+  // A new chemistry on a battery row: its voltages become the new chemistry's for the row's series count. A
+  // row without one reads it from the old chemistry when the voltages are a whole number of its cells, else
+  // from the nominal (or the middle of the range) against the new cell's; blank voltages mean one cell.
   function setChem(it, key) {
     var old = chemOf(it.chem), ch = chemOf(key), n = 1;
     it.chem = ch ? ch[0] : '';
     if (!ch) return it;
     var vs = [it.vmin, it.vnom, it.vmax], have = vs.filter(function (x) { return x != null; });
-    if (have.length) {
-      var k = old ? Math.round((it.vnom != null ? it.vnom / old[3] : it.vmax != null ? it.vmax / old[4] : it.vmin / old[2])) : 0;
-      var fits = old && k >= 1 && vs.every(function (x, j) { return x == null || Math.abs(x - k * old[2 + j]) < 0.01 * k * old[2 + j] + 1e-9; });
+    if (it.cs != null) n = it.cs;
+    else if (have.length) {
+      var k = fitCount(old, it);
       var mid = it.vnom != null ? it.vnom : it.vmin != null && it.vmax != null ? (it.vmin + it.vmax) / 2 : have[0];
-      n = fits ? k : Math.max(1, Math.round(mid / ch[3]));
+      n = k || Math.max(1, Math.round(mid / ch[3]));
+      if (n > 1) it.cs = n;
     }
-    function r(x) { return Math.round(x * 1000) / 1000; }
-    it.vmin = r(n * ch[2]); it.vnom = r(n * ch[3]); it.vmax = r(n * ch[4]);
-    return it;
+    return cellVolts(it, n);
   }
-  var GROUPS = ['role', 'v', 'ityp', 'imax', 'ptyp', 'pmax', 'cap', 'conv', 'iq', 'limit', 'bat', 'nom', 'mah', 'usable', 'budget', 'tree'];
+  var GROUPS = ['role', 'v', 'ityp', 'imax', 'ptyp', 'pmax', 'cap', 'conv', 'iq', 'limit', 'bat', 'cells', 'nom', 'mah', 'usable', 'budget', 'tree'];
   function groupVals(o) {
     return { role: o.role, v: [o.vmin, o.vmax], ityp: o.ityp, imax: o.imax, ptyp: o.ptyp, pmax: o.pmax, cap: o.cap, conv: [o.conv, o.eff, o.convWord], iq: o.iq, limit: o.limit,
-      bat: [o.battery, o.chem], nom: o.vnom, mah: o.mah, usable: o.usable, budget: o.budget, tree: o.tree };
+      bat: [o.battery, o.chem], cells: [o.cs, o.cp], nom: o.vnom, mah: o.mah, usable: o.usable, budget: o.budget, tree: o.tree };
   }
-  function wordGroup(w) { var l = w.toLowerCase(); return l === 'source' || l === 'sink' ? 'role' : l === 'tree' || l === 'no tree' ? 'tree' : l === 'battery' || CHEM_ALIAS[l] ? 'bat' : 'extra'; }
+  function wordGroup(w) { var l = w.toLowerCase(); return /^\d+s\d+p$/.test(l) ? 'cells' : l === 'source' || l === 'sink' ? 'role' : l === 'tree' || l === 'no tree' ? 'tree' : l === 'battery' || CHEM_ALIAS[l] ? 'bat' : 'extra'; }
   function parseWords(label) {
     var o = { role: 'sink', tree: true, budget: true, vmin: null, vmax: null, ityp: null, imax: null, ptyp: null, pmax: null, cap: null, conv: '', convWord: '', eff: null, iq: null, limit: null,
-      battery: false, chem: '', vnom: null, mah: null, usable: null, extra: [], toks: [] };
+      battery: false, chem: '', cs: null, cp: null, vnom: null, mah: null, usable: null, extra: [], toks: [] };
     String(label || '').split(',').map(function (w) { return w.trim(); }).filter(Boolean).forEach(function (w) {
       var b0 = JSON.parse(JSON.stringify(groupVals(o))), nx = o.extra.length;
       word(w);
@@ -91,6 +124,7 @@
       if (l === 'source' || l === 'sink') o.role = l;
       else if (l === 'battery') { o.battery = true; o.role = 'source'; }
       else if (CHEM_ALIAS[l]) o.chem = CHEM_ALIAS[l];
+      else if ((m = /^(\d+)\s*s\s*(\d+)\s*p$/.exec(l))) { o.cs = cellCount(m[1]); o.cp = cellCount(m[2]); }
       else if ((m = /^nom(?:inal)?\.? ([\d.]+)\s*v$/.exec(l))) o.vnom = num(m[1]);
       else if ((m = /^([\d.]+)\s*(mah|ah)$/.exec(l))) o.mah = m[2] === 'ah' ? num(m[1]) * 1000 : num(m[1]);
       else if ((m = /^usable ([\d.]+)\s*%$/.exec(l))) o.usable = num(m[1]);
@@ -134,6 +168,7 @@
     } else if (o.battery) {
       add('bat', 'battery');
       if (chemOf(o.chem)) add('bat', chemOf(o.chem)[1]);
+      if ((o.cs || 1) > 1 || (o.cp || 1) > 1) add('cells', (o.cs || 1) + 'S' + (o.cp || 1) + 'P');
       if (o.vnom != null) add('nom', 'nominal ' + tidy(o.vnom) + ' V');
       if (o.mah != null) add('mah', tidy(o.mah) + ' mAh');
       if (o.usable != null) add('usable', 'usable ' + tidy(o.usable, 3) + '%');
@@ -162,6 +197,8 @@
       // bat has two words (battery and the chemistry): unchanged, both stay as written.
       if (JSON.stringify(vals[t.g]) === t.snap && (canon[t.g] || []).length) out = out.concat(t.g === 'bat' ? o.toks.filter(function (x) { return x.g === 'bat'; }).map(function (x) { return x.w; }) : [t.w]);
       else out = out.concat(canon[t.g] || []);
+      // A new cell configuration goes right after the chemistry.
+      if (t.g === 'bat' && canon.cells && !o.toks.some(function (x) { return x.g === 'cells'; })) { out = out.concat(canon.cells); done.cells = 1; }
     });
     want.forEach(function (x) { if (!done[x.g]) out.push(x.w); });
     (o.extra || []).forEach(function (w) { if (out.indexOf(w) < 0) out.push(w); });
@@ -378,7 +415,7 @@
       }
     } else if (it.battery) {
       var c = chemOf(it.chem), vb = fmtV(it.vmin, it.vmax);
-      bits.push(c ? esc(c[1]) : 'battery');
+      bits.push((c ? esc(c[1]) : 'battery') + ((it.cs || 1) > 1 || (it.cp || 1) > 1 ? ' ' + (it.cs || 1) + 'S' + (it.cp || 1) + 'P' : ''));
       if (vb) bits.push(esc(vb) + (it.vnom != null ? ', nominal ' + tidy(it.vnom) + ' V' : ''));
       else if (it.vnom != null) bits.push('nominal ' + tidy(it.vnom) + ' V');
       if (it.mah != null) bits.push(tidy(it.mah) + ' mAh' + (it.usable != null ? ', ' + tidy(it.usable, 3) + '% usable' : ''));
@@ -420,9 +457,14 @@
         '<option value=""' + (ch ? '' : ' selected') + '>Choose…</option>' + CHEMS.map(function (c) {
           return '<option value="' + c[0] + '"' + (ch && ch[0] === c[0] ? ' selected' : '') + '>' + esc(c[1]) + '</option>';
         }).join('') + '</select>', ch ? 'one cell: ' + tidy(ch[2]) + ', ' + tidy(ch[3]) + ', ' + tidy(ch[4]) + ' V' : '');
+      var cell = function (k, v, label) {
+        return '<input class="input pw-num pw-cells" type="number" step="1" min="1" data-b="' + esc(id) + '" data-i="' + ii + '" data-k="' + k + '" value="' + v + '" aria-label="' + label + '">';
+      };
+      h += f('Configuration', cell('cs', seriesOf(it), 'Cells in series') + ' S ' + cell('cp', it.cp || 1, 'Cells in parallel') + ' P', 'series, parallel');
       h += f('Voltage', inp(id, ii, 'vmin', it.vmin, { ph: 'min', label: 'Minimum voltage' }) + inp(id, ii, 'vnom', it.vnom, { ph: 'nominal', label: 'Nominal voltage' }) +
         inp(id, ii, 'vmax', it.vmax, { ph: 'max', label: 'Maximum voltage' }) + ' V', 'min, nominal, max');
-      h += f('Capacity', inp(id, ii, 'mah', it.mah, { ph: 'mAh', label: 'Capacity' }) + ' mAh');
+      h += f('Capacity', inp(id, ii, 'cellMah', cellMah(it), { ph: 'mAh', label: 'Capacity of one cell' }) + ' mAh',
+        'per cell' + (it.mah != null && (it.cp || 1) > 1 ? '; pack ' + tidy(it.mah) + ' mAh (' + it.cp + 'P)' : ''));
       h += f('Usable', inp(id, ii, 'usable', it.usable, { ph: '100', label: 'Usable capacity' }) + ' %', it.usable == null ? '100% assumed' : 'of the capacity');
       h += f('Can supply', inp(id, ii, 'cap', it.cap, { ph: 'max', label: 'Maximum discharge current' }) + ' mA', 'optional');
       var bt = A.typ.byId[id].items[ii], bm = A.max.byId[id].items[ii];
@@ -701,6 +743,6 @@
   window.SignoffPower = {
     parse: parse, write: write, parseWords: parseWords, newItem: newItem, budget: budget, analyse: analyse, any: any,
     rowsHtml: rowsHtml, viewHtml: viewHtml, summaryHtml: summaryHtml, issuesHtml: issuesHtml, VIEWS: VIEWS, HELP: HELP,
-    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, fmtH: fmtH, num: num, CHEMS: CHEMS, chemOf: chemOf, setChem: setChem
+    fmtI: fmtI, fmtP: fmtP, fmtV: fmtV, fmtH: fmtH, num: num, CHEMS: CHEMS, chemOf: chemOf, setChem: setChem, setCells: setCells, seriesOf: seriesOf, cellMah: cellMah, setCellMah: setCellMah
   };
 })();
