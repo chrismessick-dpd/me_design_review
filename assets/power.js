@@ -215,7 +215,8 @@
     m = /(\d+(?:\.\d+)?)\s*V\b/i.exec(name); return m ? num(m[1]) : null;
   }
   // blocks: [{ id, title, power }] (power: the Power line's text). scn: 'typ' or 'max'. margin: percent.
-  function analyse(blocks, scn, margin) {
+  // from: '' for all inputs, or the id of the one input block the board runs from (Running from, 2026-11-25).
+  function analyse(blocks, scn, margin, from) {
     var B = blocks.map(function (b, bi) { return { bi: bi, id: b.id, title: b.title, items: parse(b.power || '') }; });
     var rails = {}, order = [], issues = [];
     B.forEach(function (b) {
@@ -233,7 +234,24 @@
       b.input = b.conv ? b.ins[0] : null;
       if (b.conv && b.ins.length > 1) issues.push({ sev: 'na', id: b.id, text: b.title + ' uses ' + b.ins.map(function (x) { return x.rail; }).join(' and ') + '; its outputs are charged to ' + b.input.rail + ' only.' });
     });
-    function srcs(r) { return r.sources.filter(function (s) { return s.budget; }); }
+    // Running from one input: that input is on, the others are off, and a converter is on while any source of
+    // its input rail is. An off block's sources carry nothing, so a rail's load goes to the sources still on.
+    var inputs = B.filter(function (b) { return b.root; });
+    if (!inputs.some(function (b) { return b.id === from; })) from = '';
+    B.forEach(function (b) { b.on = !from || !b.root || b.id === from; });
+    if (from) {
+      B.forEach(function (b) { if (b.conv) b.on = false; });
+      for (var pass = 0; pass < B.length; pass++) {
+        var moved = false;
+        B.forEach(function (b) {
+          if (!b.conv || b.on) return;
+          if (b.input.r.sources.some(function (s) { return s.b !== b && s.budget && s.b.on; })) { b.on = true; moved = true; }
+        });
+        if (!moved) break;
+      }
+    }
+    B.forEach(function (b) { b.items.forEach(function (it) { if (it.role === 'source') it.off = !b.on; }); });
+    function srcs(r) { return r.sources.filter(function (s) { return s.budget && !s.off; }); }
     // Typical: a battery's nominal, else the middle of the source's range. Worst case: its top for a load's
     // power (P = V·I) and its bottom for a converter's input current (low line draws the most).
     function railV(r, end) {
@@ -272,7 +290,7 @@
       busy['b' + b.bi] = 1;
       var vin = b.input ? railV(b.input.r, 'lo') : null, vinP = b.input ? railV(b.input.r, 'hi') : null, pin = 0, pout = 0, iin = 0, assumed = false;
       b.outs.forEach(function (s) {
-        var n = srcs(s.r).length || 1, o = railOut(s.r);
+        var n = srcs(s.r).length || 1, o = s.off ? { i: 0, p: 0 } : railOut(s.r);
         s.iout = o.i / n; s.pout = o.p / n;
         var V = railV(s.r);
         if (s.conv === 'linear') { s.iin = s.iout + (s.iq || 0); s.pin = vinP != null ? vinP * s.iin / 1000 : s.pout; }
@@ -292,6 +310,7 @@
     // converter and a load given only in power take the same power, so they use energy (W).
     function batDraw(s) {
       var r = s.r, n = srcs(r).length || 1, ma = 0, w = 0;
+      if (s.off) return { ma: 0, w: 0 };
       r.sinks.forEach(function (k) {
         if (!k.budget || r.sources.some(function (x) { return x.b === k.b; })) return;
         if (k.b.conv && k === k.b.input) {
@@ -329,7 +348,7 @@
     // Totals: what the inputs deliver, what the loads take, what the converters lose.
     var t = { input: 0, loads: 0, losses: 0, limit: null };
     B.forEach(function (b) {
-      if (b.root) { t.input += b.res.pout; b.outs.forEach(function (s) { if (s.limit != null) t.limit = (t.limit || 0) + s.limit; }); }
+      if (b.root && b.on) { t.input += b.res.pout; b.outs.forEach(function (s) { if (s.limit != null) t.limit = (t.limit || 0) + s.limit; }); }
       else if (b.conv) t.losses += b.res.loss;
       b.items.forEach(function (it) { if (it.role === 'sink' && it.budget && !it.load.derived && !it.load.missing && !b.root && !(b.conv && it === b.input)) t.loads += it.load.p || 0; });
     });
@@ -368,6 +387,14 @@
         if (it.vmin == null && !(b.conv && it === b.input)) issues.push({ sev: 'na', id: b.id, text: b.title + ': no voltage range for ' + it.rail + ', so it isn’t checked.' });
       });
     });
+    // A rail that loads draw from but whose sources are all off.
+    if (from) order.forEach(function (k) {
+      var r = rails[k];
+      if (!r.sources.some(function (s) { return s.budget; }) || srcs(r).length) return;
+      var users = r.sinks.filter(function (x) { return x.budget && x.b.on && !r.sources.some(function (s) { return s.b === x.b; }); });
+      if (users.length) issues.push({ sev: 'warn', id: users[0].b.id, text: 'Running from ' + byIdOf(from).title + ', nothing makes ' + r.name + ' (used by ' + users.map(function (x) { return x.b.title; }).join(', ') + ').' });
+    });
+    function byIdOf(id) { return B.filter(function (b) { return b.id === id; })[0]; }
     if (t.limit != null) {
       if (t.input > t.limit) issues.unshift({ sev: 'bad', text: 'The board draws ' + fmtP(t.input) + ', over its ' + fmtP(t.limit) + ' limit.' });
       else if (t.input > t.limit * (1 - m)) issues.unshift({ sev: 'warn', text: 'The board draws ' + fmtP(t.input) + ', within ' + margin + '% of its ' + fmtP(t.limit) + ' limit.' });
@@ -385,12 +412,14 @@
     var rank = { bad: 0, warn: 1, na: 2 };
     issues.sort(function (a, c) { return rank[a.sev] - rank[c.sev]; });
     var byId = {}; B.forEach(function (b) { byId[b.id] = b; });
-    return { B: B, byId: byId, rails: rails, order: order, t: t, issues: issues, railV: railV, srcs: srcs, scn: scn, margin: margin };
+    return { B: B, byId: byId, rails: rails, order: order, t: t, issues: issues, railV: railV, srcs: srcs, scn: scn, margin: margin,
+      from: from, inputs: inputs.map(function (b) { return { id: b.id, title: b.title }; }) };
   }
-  // Both scenarios at once: { typ, max, scn, margin }.
-  function budget(blocks, scn, margin) {
+  // Both scenarios at once: { typ, max, scn, margin, from, inputs }. from: '' (all inputs) or an input block's id.
+  function budget(blocks, scn, margin, from) {
     margin = isFinite(+margin) ? Math.max(0, Math.min(90, +margin)) : 20;
-    return { typ: analyse(blocks, 'typ', margin), max: analyse(blocks, 'max', margin), scn: scn === 'max' ? 'max' : 'typ', margin: margin };
+    var ty = analyse(blocks, 'typ', margin, from || ''), mx = analyse(blocks, 'max', margin, from || '');
+    return { typ: ty, max: mx, scn: scn === 'max' ? 'max' : 'typ', margin: margin, from: ty.from, inputs: ty.inputs };
   }
   function any(A) { return A.typ.B.some(function (b) { return b.items.length; }); }
 
@@ -401,8 +430,11 @@
     var shown = v == null ? '' : opts.scale ? tidy(v * opts.scale) : tidy(v);
     return '<input class="input pw-num" type="number" step="any" min="0" data-b="' + esc(id) + '" data-i="' + ii + '" data-k="' + k + '"' + (opts.scale ? ' data-scale="' + opts.scale + '"' : '') + ' value="' + esc(shown) + '" placeholder="' + esc(opts.ph || '') + '" aria-label="' + esc(opts.label || k) + '">';
   }
+  // The input the board runs from, by name ('' for all inputs).
+  function fromName(A) { var x = (A.inputs || []).filter(function (i) { return i.id === A.from; })[0]; return x ? x.title : ''; }
   function gist(A, it) {
     var b = it.b, bits = [];
+    if (it.role === 'source' && it.off) bits.push('<span class="pw-off">off while running from ' + esc(fromName(A)) + '</span>');
     if (it.role === 'sink') {
       if (b.conv && it === b.input) {
         var ty = A.typ.byId[b.id].input.load, mx = A.max.byId[b.id].input.load;
@@ -469,7 +501,8 @@
       h += f('Can supply', inp(id, ii, 'cap', it.cap, { ph: 'max', label: 'Maximum discharge current' }) + ' mA', 'optional');
       var bt = A.typ.byId[id].items[ii], bm = A.max.byId[id].items[ii];
       var use = bt.mahUse != null ? tidy(bt.mahUse, 4) + ' mAh usable' + (bt.whUse != null ? ' (' + tidy(bt.whUse, 3) + ' Wh at ' + tidy(bt.vUsed, 3) + ' V)' : '') : '';
-      h += '<div class="pw-derived">Load now: <b>' + fmtI(bt.iout) + '</b> typical, <b>' + fmtI(bm.iout) + '</b> worst case.' +
+      h += bt.off ? '<div class="pw-derived">Off while running from ' + esc(fromName(A)) + ', so nothing draws from it. Pick it or All inputs under Running from for its runtime.</div>' :
+        '<div class="pw-derived">Load now: <b>' + fmtI(bt.iout) + '</b> typical, <b>' + fmtI(bm.iout) + '</b> worst case.' +
         (bt.mahUse != null && !(bt.iEq > 0) ? ' Nothing draws from ' + esc(it.rail) + ' yet, so no runtime; ' + use + '.' :
           bt.mahUse != null ? ' Runtime: about <b>' + fmtH(bt.runtime) + '</b> typical, <b>' + fmtH(bm.runtime) + '</b> worst case, from ' + use +
             ' at ' + fmtI(bt.iEq) + ' typical' + (bt.drawW > 0 ? ' (power loads taken at ' + tidy(bt.vUsed, 3) + ' V)' : '') + '.' : ' Add a capacity for its runtime.') + '</div>';
@@ -483,7 +516,8 @@
       if (it.conv === 'linear') h += f('Quiescent', inp(id, ii, 'iq', it.iq, { ph: 'Iq', label: 'Quiescent current', scale: 1000 }) + ' µA');
       if (it.b.root) h += f('Input limit', inp(id, ii, 'limit', it.limit, { ph: 'none', label: 'Input limit' }) + ' W', 'the most the board may draw');
       var st = A.typ.byId[id].items[ii], sm = A.max.byId[id].items[ii];
-      h += '<div class="pw-derived">Load now: <b>' + fmtI(st.iout) + '</b>' + (st.util != null ? ' (' + pct(st.util) + ')' : '') + ' typical, <b>' + fmtI(sm.iout) + '</b>' + (sm.util != null ? ' (' + pct(sm.util) + ')' : '') + ' worst case' +
+      h += st.off ? '<div class="pw-derived">Off while running from ' + esc(fromName(A)) + ', so it carries nothing.</div>' :
+        '<div class="pw-derived">Load now: <b>' + fmtI(st.iout) + '</b>' + (st.util != null ? ' (' + pct(st.util) + ')' : '') + ' typical, <b>' + fmtI(sm.iout) + '</b>' + (sm.util != null ? ' (' + pct(sm.util) + ')' : '') + ' worst case' +
         (it.b.root ? '' : '; it loses ' + fmtP(st.loss) + ' and ' + fmtP(sm.loss)) + '.</div>';
     }
     h += '<div class="pw-checks"><label><input type="checkbox" data-act="spec-power-num" data-b="' + esc(id) + '" data-i="' + ii + '" data-k="budget"' + (it.budget ? ' checked' : '') + '> Count in budget</label>' +
@@ -585,7 +619,7 @@
       var r = ty.rails[k], s = ty.srcs(r)[0], sm = s && mx.byId[s.b.id].items[s.ii];
       var sinks = r.sinks.filter(function (x) { return !r.sources.some(function (y) { return y.b === x.b; }); });
       if (!sinks.length) return;
-      var head = s ? 'from ' + esc(s.b.title) + (fmtV(s.vmin, s.vmax) ? ' · ' + esc(fmtV(s.vmin, s.vmax)) : '') + (s.cap != null ? ' · up to ' + esc(fmtI(s.cap)) : '') : 'no block makes it';
+      var head = s ? 'from ' + esc(s.b.title) + (fmtV(s.vmin, s.vmax) ? ' · ' + esc(fmtV(s.vmin, s.vmax)) : '') + (s.cap != null ? ' · up to ' + esc(fmtI(s.cap)) : '') : r.sources.some(function (y) { return y.budget; }) ? 'off while running from ' + esc(fromName(A)) : 'no block makes it';
       rowsH += '<tr class="rail"><td colspan="7">' + esc(r.name) + '<small>' + head + '</small></td></tr>';
       var sum = { it: 0, im: 0, pt: 0, pm: 0 };
       sinks.forEach(function (x) {
@@ -616,7 +650,7 @@
         if (b.root) return;
         any = true;
         var sm = A.max.byId[b.id].items[s.ii];
-        var loads = function (a) { return a.rails[s.r.key].sinks.filter(function (k) { return k.b !== a.byId[b.id] && k.budget && !k.load.missing; }).map(function (k) { return { name: k.b.title, i: (k.load.i || 0) / (a.srcs(k.r).length || 1) }; }); };
+        var loads = function (a) { if (a.byId[b.id].items[s.ii].off) return []; return a.rails[s.r.key].sinks.filter(function (k) { return k.b !== a.byId[b.id] && k.budget && !k.load.missing; }).map(function (k) { return { name: k.b.title, i: (k.load.i || 0) / (a.srcs(k.r).length || 1) }; }); };
         var lt = loads(A.typ), lm = loads(A.max);
         var scale = Math.max(s.cap || 0, sm.iout || 0, s.iout || 0) * 1.12 || 1;
         function row(label, list, tot, util) {
@@ -714,7 +748,7 @@
     var a = A[A.scn], t = a.t, m = A.margin / 100;
     var limCls = t.limit == null ? '' : t.input > t.limit ? ' bad' : t.input > t.limit * (1 - m) ? ' warn' : '';
     var bad = a.issues.filter(function (x) { return x.sev === 'bad'; }).length, warn = a.issues.filter(function (x) { return x.sev === 'warn'; }).length;
-    return '<div class="pw-stat' + limCls + '"><b>' + fmtP(t.input) + '</b><span>Input' + (t.limit != null ? ', limit ' + fmtP(t.limit) : '') + (limCls === ' bad' ? ': over' : '') + '</span></div>' +
+    return '<div class="pw-stat' + limCls + '"><b>' + fmtP(t.input) + '</b><span>Input' + (A.from ? ' from ' + esc(fromName(A)) : '') + (t.limit != null ? ', limit ' + fmtP(t.limit) : '') + (limCls === ' bad' ? ': over' : '') + '</span></div>' +
       '<div class="pw-stat"><b>' + fmtP(t.loads) + '</b><span>To the loads</span></div>' +
       '<div class="pw-stat"><b>' + fmtP(t.losses) + '</b><span>Converter losses</span></div>' +
       '<div class="pw-stat"><b>' + (t.eff != null ? pct(t.eff) : '—') + '</b><span>Overall efficiency</span></div>' +
